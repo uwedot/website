@@ -4,31 +4,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>lua compressor</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&family=IBM+Plex+Sans:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:      #0c0c0e;
-  --panel:   #111113;
-  --surface: #18181c;
-  --line:    #25252b;
-  --dim:     #3e3e4e;
-  --muted:   #666678;
-  --text:    #c2c2d4;
-  --bright:  #e8e8f8;
-  --accent:  #7b8fff;
-  --green:   #52d68a;
-  --amber:   #f5a623;
-  --red:     #ff6b6b;
+  --bg:      #16161d;
+  --panel:   #1e1e27;
+  --surface: #252530;
+  --line:    #2e2e3a;
+  --dim:     #4a4a60;
+  --muted:   #7a7a96;
+  --text:    #c8c8de;
+  --bright:  #eeeef8;
+  --accent:  #818cf8;
+  --accent2: #a78bfa;
+  --green:   #4ade80;
+  --amber:   #fbbf24;
+  --red:     #f87171;
 }
 
-html { font-size: 17px; -webkit-text-size-adjust: 100%; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 300;
   min-height: 100dvh;
   display: flex;
@@ -38,240 +39,323 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--dim) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.07;
+  pointer-events: none;
+  z-index: 0;
+}
+
 header {
+  position: relative;
+  z-index: 1;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  padding: 0 52px;
-  height: 54px;
+  padding: 0 40px;
+  height: 52px;
   display: flex;
   align-items: center;
+  gap: 10px;
   flex-shrink: 0;
 }
 
+.logo-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent2);
+  flex-shrink: 0;
+}
+
+.logo {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.logo em { font-style: normal; color: var(--bright); font-weight: 500; }
+
+.logo-version {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--accent);
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+}
+
+/* ── main layout ── */
 .shell {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   flex-direction: column;
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
-  padding: 48px 52px 84px;
-  gap: 40px;
+  padding: 28px 40px 36px;
+  gap: 16px;
 }
 
-.logo {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 15px;
-  font-weight: 400;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-
-.logo em {
-  font-style: normal;
-  color: var(--bright);
-}
-
-
-
+/* ── editor grid ── */
 .editors {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.25);
   transition: border-color 0.2s;
 }
-
 .editors.drag-over { border-color: var(--accent); }
 
 .ed {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  background: var(--panel);
 }
-
 .ed:first-child { border-right: 1px solid var(--line); }
 
 .ed-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px 12px;
+  padding: 9px 14px;
   flex-shrink: 0;
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
+  gap: 10px;
 }
 
 .ed-label {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--dim);
   user-select: none;
+  flex-shrink: 0;
 }
 
-.upload-btn {
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 12.5px;
-  font-weight: 300;
-  color: var(--dim);
+.ed-actions { display: flex; gap: 2px; align-items: center; }
+
+.action-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
   background: none;
-  border: none;
-  padding: 2px 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 3px 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 5px;
-  transition: color 0.12s;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
   -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
 }
-.upload-btn:hover  { color: var(--muted); }
-.upload-btn:active { opacity: 0.5; }
-.upload-btn:disabled { opacity: 0.25; cursor: not-allowed; pointer-events: none; }
+.action-btn:hover    { color: var(--text); border-color: var(--line); background: var(--panel); }
+.action-btn:active   { opacity: 0.6; }
+.action-btn:disabled { opacity: 0.2; cursor: not-allowed; pointer-events: none; }
 
 textarea {
   flex: 1;
   width: 100%;
-  min-height: 460px;
-  background: var(--surface);
+  background: var(--panel);
   border: none;
   outline: none;
   color: var(--text);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 14.5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
   font-weight: 300;
-  line-height: 1.8;
-  padding: 20px 24px 28px;
+  line-height: 1.75;
+  padding: 16px 18px 20px;
   resize: none;
   tab-size: 2;
   caret-color: var(--accent);
   -webkit-tap-highlight-color: transparent;
+  min-height: 520px;
 }
-
-textarea::placeholder { font-style: italic; color: var(--dim); }
+textarea::placeholder { font-style: italic; color: var(--dim); opacity: 0.6; }
 textarea.out { color: var(--muted); }
 textarea.err { color: var(--red) !important; }
 
+/* ── progress ── */
 .progress {
-  height: 1px;
-  background: var(--line);
+  height: 2px;
+  background: transparent;
   overflow: hidden;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
 }
 .progress.on { opacity: 1; }
 .progress-fill {
   height: 100%;
   width: 0;
-  background: var(--accent);
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ── footer ── */
 footer {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .run-btn {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13.5px;
-  font-weight: 400;
-  color: var(--bg);
-  background: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #0e0e16;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
   border: none;
-  border-radius: 6px;
-  padding: 11px 26px;
+  border-radius: 7px;
+  padding: 10px 26px;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
-  min-height: 44px;
+  min-height: 40px;
+  letter-spacing: 0.03em;
+  box-shadow: 0 2px 12px rgba(129,140,248,0.2);
 }
-.run-btn:hover          { opacity: 0.85; }
-.run-btn:active         { transform: scale(0.97); }
-.run-btn:disabled       { opacity: 0.4; cursor: not-allowed; transform: none; }
-.run-btn.rate-limited   { background: var(--dim); color: var(--muted); cursor: not-allowed; }
+.run-btn:hover        { opacity: 0.9; box-shadow: 0 4px 20px rgba(129,140,248,0.35); transform: translateY(-1px); }
+.run-btn:active       { transform: scale(0.97) translateY(0); box-shadow: none; }
+.run-btn:disabled     { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+.run-btn.rate-limited { background: var(--surface); color: var(--muted); cursor: not-allowed; box-shadow: none; border: 1px solid var(--line); }
 
+/* ── stats ── */
 .stats {
   display: flex;
-  align-items: stretch;
-  gap: 0;
-  flex-wrap: wrap;
-  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
   overflow: hidden;
+  background: var(--surface);
 }
-
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 20px;
+  gap: 2px;
+  padding: 8px 16px;
   border-right: 1px solid var(--line);
 }
-
 .stat:last-child { border-right: none; }
-
 .stat-k {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 9.5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--dim);
 }
-
 .stat-v {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 15px;
-  font-weight: 300;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13.5px;
+  font-weight: 400;
   color: var(--text);
 }
-
 .stat-v.g { color: var(--green); }
 .stat-v.a { color: var(--amber); }
 
-@media (max-width: 680px) {
-  header   { padding: 0 24px; }
-  .shell   { padding: 36px 24px 56px; gap: 26px; }
-  .editors { grid-template-columns: 1fr; }
-  .ed:first-child { border-right: none; border-bottom: 1px solid var(--line); }
-  textarea { min-height: 240px; font-size: 15px; }
-  .run-btn { font-size: 15px; padding: 13px 26px; }
+/* ── info bar ── */
+.info-bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 40px;
+  height: 44px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
 }
 
-@media (max-width: 400px) {
-  header { padding: 0 18px; }
-  .shell { padding: 28px 18px 44px; }
-  textarea { font-size: 14px; }
+.info-item {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+
+.info-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.info-sep {
+  color: var(--line);
+  font-size: 13px;
+  user-select: none;
+}
+
+kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 5px;
+  line-height: 1.6;
+}
+
+@media (max-width: 700px) {
+  header    { padding: 0 20px; }
+  .shell    { padding: 20px 20px 36px; gap: 12px; }
+  .editors  { grid-template-columns: 1fr; flex: none; }
+  .ed:first-child { border-right: none; border-bottom: 1px solid var(--line); }
+  textarea  { min-height: 300px; font-size: 12.5px; }
+  footer    { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 380px) {
+  header { padding: 0 14px; }
+  .shell { padding: 16px 14px 28px; }
+  textarea { font-size: 12px; }
 }
 </style>
 </head>
 <body>
 
 <header>
+  <div class="logo-dot"></div>
   <div class="logo"><em>lua</em> compressor</div>
+  <span class="logo-version">v2.0</span>
 </header>
 
 <div class="shell">
-
-  <div class="progress" id="prog"><div class="progress-fill" id="pf"></div></div>
 
   <div class="editors" id="drop-zone">
     <div class="ed">
       <div class="ed-top">
         <span class="ed-label" id="input-label">input</span>
-        <div style="display:flex;gap:14px;align-items:center">
-          <button class="upload-btn" id="preview-btn" onclick="togglePreview()">preview stripped</button>
-          <button class="upload-btn" onclick="triggerUpload()">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <div class="ed-actions">
+          <button class="action-btn" id="preview-btn" onclick="togglePreview()" disabled>preview stripped</button>
+          <button class="action-btn" onclick="triggerUpload()">
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M5 7V2m-2.5 2L5 2l2.5 2M1 9h8"/>
             </svg>
             upload
@@ -280,20 +364,23 @@ footer {
       </div>
       <textarea id="input-lua" placeholder="paste lua source or drop a file" oninput="resetOutput()"></textarea>
     </div>
-
     <div class="ed">
       <div class="ed-top">
         <span class="ed-label">output</span>
-        <button class="upload-btn" id="dl-btn" onclick="doDownload()" disabled>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 3v5m2.5-2L5 8l-2.5-2M1 9h8"/>
-          </svg>
-          download
-        </button>
+        <div class="ed-actions">
+          <button class="action-btn" id="dl-btn" onclick="doDownload()" disabled>
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 3v5m2.5-2L5 8l-2.5-2M1 9h8"/>
+            </svg>
+            download
+          </button>
+        </div>
       </div>
       <textarea id="output-compressed" class="out" readonly placeholder="compressed output appears here"></textarea>
     </div>
   </div>
+
+  <div class="progress" id="prog"><div class="progress-fill" id="pf"></div></div>
 
   <footer>
     <button class="run-btn" id="run-btn" onclick="doCompress()">compress</button>
@@ -305,6 +392,14 @@ footer {
     </div>
   </footer>
 
+</div>
+
+<div class="info-bar">
+  <span class="info-item"><span class="info-dot"></span>lzw compression</span>
+  <span class="info-sep">·</span>
+  <span class="info-item">base&#8209;89 encoding</span>
+  <span class="info-sep">·</span>
+  <span class="info-item">strips comments</span>
 </div>
 
 <input type="file" id="file-input" accept=".lua,.luau,.txt" style="display:none" onchange="handleFile(event)">
@@ -456,6 +551,7 @@ function resetOutput() {
   outEl.classList.remove('err');
   document.getElementById('stats').style.display = 'none';
   document.getElementById('dl-btn').disabled = true;
+  document.getElementById('preview-btn').disabled = true;
 }
 
 function prog(on) {
@@ -586,6 +682,7 @@ function doCompress() {
 
       outEl.value = result;
       document.getElementById('dl-btn').disabled = false;
+      document.getElementById('preview-btn').disabled = false;
 
       const r  = parseFloat(((1 - result.length / ub) * 100).toFixed(1));
       const re = document.getElementById('s-ratio');
