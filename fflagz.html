@@ -130,6 +130,8 @@
   <div class="bottom">
     <button id="convertBtn" onclick="convert()">Convert</button>
     <button id="copyBtn" onclick="copyOutput()">Copy</button>
+    <button id="uploadBtn" onclick="document.getElementById('fileInput').click()">Upload</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleUpload(event)">
     <span class="error" id="errorMsg"></span>
   </div>
 </div>
@@ -184,46 +186,50 @@ function convert() {
   }
 
   const flagLines = entries.map(([k, v]) => {
-    return `    ["${k}"] = "${capitalizeValue(v)}",`;
+    return '    ["' + k + '"] = "' + capitalizeValue(v) + '",';
   }).join('\n');
 
-  outputArea.value = `local cloneref = cloneref or function(...) return ... end
-local HttpService = cloneref(game:GetService("HttpService"))
-local getgenv = getgenv or _G
+  const lines = [
+    'local cloneref = cloneref or function(...) return ... end',
+    'local HttpService = cloneref(game:GetService("HttpService"))',
+    'local getgenv = getgenv or _G',
+    '',
+    'getgenv().Bloxstrap = {}',
+    'local files = {}',
+    '',
+    'local writefile = writefile or function(name, src)',
+    '    files[name] = src',
+    'end',
+    '',
+    'local isfile = isfile or function(file)',
+    '    return readfile(file) ~= nil and true or false',
+    'end',
+    '',
+    'getgenv().errorlog = getgenv().errorlog or "Bloxstrap/Logs/crashlog" .. HttpService:GenerateGUID(false) .. ".txt"',
+    '',
+    'if not isfile("Bloxstrap/FFlags.json") then',
+    '    writefile("Bloxstrap/FFlags.json", "{}")',
+    'end',
+    '',
+    'Bloxstrap.ToggleFFlag = loadstring(game:HttpGet("https://raw.githubusercontent.com/uwedot/files/refs/heads/main/ToggleFFlag.lua"))()',
+    'Bloxstrap.GetFFlag = loadstring(game:HttpGet("https://raw.githubusercontent.com/uwedot/files/refs/heads/main/GetFFlag.lua"))()',
+    'Bloxstrap.TouchEnabled = cloneref(game:GetService("UserInputService")).TouchEnabled',
+    '',
+    'local flags = {',
+    flagLines,
+    '}',
+    '',
+    'for flag, value in pairs(flags) do',
+    '    local success, err = pcall(function()',
+    '        Bloxstrap.ToggleFFlag(flag, value)',
+    '    end)',
+    '    if not success then',
+    '        warn("Failed to set flag: " .. flag .. " | Error: " .. tostring(err))',
+    '    end',
+    'end'
+  ];
 
-getgenv().Bloxstrap = {}
-local files = {}
-
-local writefile = writefile or function(name, src)
-    files[name] = src
-end
-
-local isfile = isfile or function(file)
-    return readfile(file) ~= nil and true or false
-end
-
-getgenv().errorlog = getgenv().errorlog or "Bloxstrap/Logs/crashlog" .. HttpService:GenerateGUID(false) .. ".txt"
-
-if not isfile("Bloxstrap/FFlags.json") then
-    writefile("Bloxstrap/FFlags.json", "{}")
-end
-
-Bloxstrap.ToggleFFlag = loadstring(game:HttpGet("https://raw.githubusercontent.com/uwedot/files/refs/heads/main/ToggleFFlag.lua"))()
-Bloxstrap.GetFFlag = loadstring(game:HttpGet("https://raw.githubusercontent.com/uwedot/files/refs/heads/main/GetFFlag.lua"))()
-Bloxstrap.TouchEnabled = cloneref(game:GetService("UserInputService")).TouchEnabled
-
-local flags = {
-${flagLines}
-}
-
-for flag, value in pairs(flags) do
-    local success, err = pcall(function()
-        Bloxstrap.ToggleFFlag(flag, value)
-    end)
-    if not success then
-        warn("Failed to set flag: " .. flag .. " | Error: " .. tostring(err))
-    end
-end`;
+  outputArea.value = lines.join('\n');
 }
 
 function copyOutput() {
@@ -243,6 +249,28 @@ function copyOutput() {
   } else {
     fallbackCopy(out, onSuccess);
   }
+}
+
+function handleUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    inputArea.value = e.target.result;
+    outputArea.value = '';
+    errorMsg.textContent = '';
+    const val = inputArea.value.trim();
+    try {
+      const parsed = JSON.parse(val);
+      if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
+        errorMsg.textContent = 'Input must be a JSON object.';
+      }
+    } catch(err) {
+      errorMsg.textContent = 'Invalid JSON.';
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
 }
 
 function fallbackCopy(text, onSuccess) {
