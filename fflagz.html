@@ -128,10 +128,9 @@
   </div>
 
   <div class="bottom">
-    <button id="convertBtn" onclick="convert()">Convert</button>
-    <button id="copyBtn" onclick="copyOutput()">Copy</button>
-    <button id="uploadBtn" onclick="document.getElementById('fileInput').click()">Upload</button>
-    <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleUpload(event)">
+    <button id="convertBtn">Convert</button>
+    <button id="copyBtn">Copy</button>
+
     <span class="error" id="errorMsg"></span>
   </div>
 </div>
@@ -140,6 +139,10 @@
 const inputArea = document.getElementById('inputArea');
 const outputArea = document.getElementById('outputArea');
 const errorMsg = document.getElementById('errorMsg');
+
+document.getElementById('convertBtn').addEventListener('click', convert);
+document.getElementById('copyBtn').addEventListener('click', copyOutput);
+
 
 inputArea.addEventListener('input', () => {
   outputArea.value = '';
@@ -179,7 +182,12 @@ function convert() {
     return;
   }
 
-  const entries = Object.entries(json);
+  const seen = new Set();
+  const entries = Object.entries(json).filter(([k]) => {
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   if (entries.length === 0) {
     errorMsg.textContent = 'No flags found.';
     return;
@@ -249,28 +257,6 @@ function copyOutput() {
   } else {
     fallbackCopy(out, onSuccess);
   }
-}
-
-function handleUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    inputArea.value = e.target.result;
-    outputArea.value = '';
-    errorMsg.textContent = '';
-    const val = inputArea.value.trim();
-    try {
-      const parsed = JSON.parse(val);
-      if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
-        errorMsg.textContent = 'Input must be a JSON object.';
-      }
-    } catch(err) {
-      errorMsg.textContent = 'Invalid JSON.';
-    }
-  };
-  reader.readAsText(file);
-  event.target.value = '';
 }
 
 function fallbackCopy(text, onSuccess) {
