@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FFlags Converter</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0c0c0e;
+    color: #c9c9d0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 16px;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #555;
+    letter-spacing: .04em;
+    margin-bottom: 4px;
+  }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media(max-width: 600px) { .panels { grid-template-columns: 1fr; } }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #444;
+  }
+
+  textarea {
+    width: 100%;
+    height: 360px;
+    background: #111114;
+    border: 1px solid #1e1e24;
+    border-radius: 8px;
+    color: #d0d0d8;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    padding: 14px;
+    resize: vertical;
+    outline: none;
+    transition: border-color .15s;
+  }
+
+  textarea:focus { border-color: #333340; }
+
+  #outputArea { color: #7dbb78; }
+
+  .bottom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  button {
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: 1px solid #222228;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: #16161b;
+    color: #aaa;
+    transition: background .15s, color .15s;
+  }
+
+  button:hover { background: #1e1e25; color: #ddd; }
+  button:active { transform: scale(.98); }
+
+  #convertBtn {
+    background: #1a1a40;
+    border-color: #2a2a60;
+    color: #8888ff;
+  }
+  #convertBtn:hover { background: #20204a; color: #aaaaf8; }
+
+  #copyBtn.copied { background: #0e2018; border-color: #1a3828; color: #5dbb78; }
+
+  .error {
+    font-size: 0.75rem;
+    color: #c06060;
+    margin-left: auto;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>FFlags Converter</h1>
+
+  <div class="panels">
+    <div class="panel">
+      <label>JSON Input</label>
+      <textarea id="inputArea" placeholder='{"FFlagDebugDisplayFPS":"true"}' spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+    </div>
+    <div class="panel">
+      <label>Lua Output</label>
+      <textarea id="outputArea" readonly placeholder="Output will appear here after converting."></textarea>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <button id="convertBtn" onclick="convert()">Convert</button>
+    <button id="copyBtn" onclick="copyOutput()">Copy</button>
+    <span class="error" id="errorMsg"></span>
+  </div>
+</div>
+
+<script>
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+const errorMsg = document.getElementById('errorMsg');
+
+inputArea.addEventListener('input', () => {
+  outputArea.value = '';
+  errorMsg.textContent = '';
+
+  const val = inputArea.value.trim();
+  if (val === '') return;
+
+  try {
+    const parsed = JSON.parse(val);
+    if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
+      errorMsg.textContent = 'Input must be a JSON object.';
+    }
+  } catch(e) {
+    errorMsg.textContent = 'Invalid JSON.';
+  }
+});
+
+function capitalizeValue(val) {
+  if (val === null) return "nil";
+  const s = String(val);
+  if (s.toLowerCase() === 'true') return 'True';
+  if (s.toLowerCase() === 'false') return 'False';
+  if (s.toLowerCase() === 'nil') return 'False';
+  return s;
+}
+
+function convert() {
+  const input = inputArea.value.trim();
+  errorMsg.textContent = '';
+
+  let json;
+  try {
+    json = JSON.parse(input);
+  } catch(e) {
+    errorMsg.textContent = 'Invalid JSON: ' + e.message;
+    return;
+  }
+
+  const entries = Object.entries(json);
+  if (entries.length === 0) {
+    errorMsg.textContent = 'No flags found.';
+    return;
+  }
+
+  const flagLines = entries.map(([k, v]) => {
+    return `    ["${k}"] = "${capitalizeValue(v)}",`;
+  }).join('\n');
+
+  outputArea.value = `local cloneref = cloneref or function(...) return ... end
+local HttpService = cloneref(game:GetService("HttpService"))
+local getgenv = getgenv or _G
+
+getgenv().Bloxstrap = {}
+local files = {}
+
+local writefile = writefile or function(name, src)
+    files[name] = src
+end
+
+local isfile = isfile or function(file)
+    return readfile(file) ~= nil and true or false
+end
+
+getgenv().errorlog = getgenv().errorlog or "Bloxstrap/Logs/crashlog" .. HttpService:GenerateGUID(false) .. ".txt"
+
+if not isfile("Bloxstrap/FFlags.json") then
+    writefile("Bloxstrap/FFlags.json", "{}")
+end
+
+Bloxstrap.ToggleFFlag = loadstring(game:HttpGet("https://raw.githubusercontent.com/uwedot/files/refs/heads/main/ToggleFFlag.lua"))()
+Bloxstrap.GetFFlag = loadstring(game:HttpGet("https://raw.githubusercontent.com/uwedot/files/refs/heads/main/GetFFlag.lua"))()
+Bloxstrap.TouchEnabled = cloneref(game:GetService("UserInputService")).TouchEnabled
+
+local flags = {
+${flagLines}
+}
+
+for flag, value in pairs(flags) do
+    local success, err = pcall(function()
+        Bloxstrap.ToggleFFlag(flag, value)
+    end)
+    if not success then
+        warn("Failed to set flag: " .. flag .. " | Error: " .. tostring(err))
+    end
+end`;
+}
+
+function copyOutput() {
+  const out = outputArea.value;
+  if (!out) return;
+
+  const btn = document.getElementById('copyBtn');
+
+  function onSuccess() {
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(out).then(onSuccess).catch(() => fallbackCopy(out, onSuccess));
+  } else {
+    fallbackCopy(out, onSuccess);
+  }
+}
+
+function fallbackCopy(text, onSuccess) {
+  outputArea.select();
+  outputArea.setSelectionRange(0, 99999);
+  try {
+    document.execCommand('copy');
+    onSuccess();
+  } catch(e) {}
+  window.getSelection().removeAllRanges();
+}
+</script>
+</body>
+</html>
