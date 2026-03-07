@@ -541,6 +541,35 @@ function showErr(msg) {
   msg ? inputPanel.classList.add('error') : inputPanel.classList.remove('error');
 }
 
+// ── strip JSON comments (// and /* */) ──
+function stripComments(str) {
+  let out = '';
+  let i = 0;
+  while (i < str.length) {
+    // inside string — copy verbatim
+    if (str[i] === '"') {
+      out += str[i++];
+      while (i < str.length) {
+        if (str[i] === '\\') { out += str[i++]; out += str[i++]; }
+        else if (str[i] === '"') { out += str[i++]; break; }
+        else { out += str[i++]; }
+      }
+    }
+    // line comment
+    else if (str[i] === '/' && str[i+1] === '/') {
+      while (i < str.length && str[i] !== '\n') i++;
+    }
+    // block comment
+    else if (str[i] === '/' && str[i+1] === '*') {
+      i += 2;
+      while (i < str.length && !(str[i] === '*' && str[i+1] === '/')) i++;
+      i += 2;
+    }
+    else { out += str[i++]; }
+  }
+  return out;
+}
+
 // ── live validation ──
 inputArea.addEventListener('input', () => {
   outputArea.value = ''; refreshOutput();
@@ -548,15 +577,25 @@ inputArea.addEventListener('input', () => {
   showErr(''); refreshInput();
   const val = inputArea.value.trim();
   if (!val) { setInputStat('EMPTY', false); return; }
+  const stripped = stripComments(val).trim();
+  const hasComments = /\/\/|\/\*/.test(val);
   try {
-    const p = JSON.parse(val);
+    const p = JSON.parse(stripped);
     if (typeof p !== 'object' || Array.isArray(p) || p === null) {
       showErr('Input must be a JSON object.'); setInputStat('INVALID', false);
     } else {
       const c = Object.keys(p).length;
       setInputStat(c + ' FLAG' + (c !== 1 ? 'S' : '') + ' FOUND', true);
     }
-  } catch(e) { showErr('Invalid JSON.'); setInputStat('INVALID', false); }
+  } catch(e) {
+    // if the input has comments and stripping still fails, don't cry invalid —
+    // the user may still be typing the comment or the json around it
+    if (!hasComments) {
+      showErr('Invalid JSON.'); setInputStat('INVALID', false);
+    } else {
+      setInputStat('PARSING...', false);
+    }
+  }
 });
 
 // ── upload ──
@@ -591,7 +630,7 @@ document.getElementById('convertBtn').addEventListener('click', () => {
   showErr('');
   if (!input) { showErr('Paste or upload a JSON object first.'); return; }
   let json;
-  try { json = JSON.parse(input); } catch(e) { showErr('Invalid JSON: ' + e.message); return; }
+  try { json = JSON.parse(stripComments(input)); } catch(e) { showErr('Invalid JSON: ' + e.message); return; }
   if (typeof json !== 'object' || Array.isArray(json) || json === null) { showErr('Input must be a JSON object.'); return; }
   const seen = new Set();
   const entries = Object.entries(json).filter(([k]) => { if (seen.has(k)) return false; seen.add(k); return true; });
