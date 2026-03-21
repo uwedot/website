@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Stats Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2a2e42;
+  --accent: #6c8fff;
+  --accent-dim: #6c8fff22;
+  --green: #4ade80;
+  --red: #f87171;
+  --text: #e2e8f0;
+  --sub: #94a3b8;
+  --muted: #475569;
+  --hh: 58px;
+  --sidebar-w: 280px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* HEADER */
+header {
+  height: var(--hh);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  flex-shrink: 0;
+  z-index: 200;
+}
+.logo {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.3px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* SCORE */
+.score-wrap {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.score-wrap.visible { display: flex; }
+.score-input {
+  width: 40px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.score-input::-webkit-inner-spin-button,
+.score-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.score-sep { color: var(--muted); font-size: 13px; font-weight: 600; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: opacity .15s, background .15s;
+  flex-shrink: 0;
+}
+.btn:active { opacity: .7; }
+.btn svg { display: block; flex-shrink: 0; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-ghost { background: var(--surface2); color: var(--sub); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--sub); }
+
+/* APP */
+.app { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100;
+}
+.sidebar-search {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+}
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 0;
+  outline: none;
+  -webkit-appearance: none;
+  width: 100%;
+}
+.search-input::placeholder { color: var(--muted); }
+
+.filter-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--surface2);
+  color: var(--sub);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.chip.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+.player-list { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+.player-list::-webkit-scrollbar { width: 3px; }
+.player-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background .1s;
+}
+.player-row:hover { background: var(--surface2); }
+.player-row.active { background: var(--accent-dim); border-left: 3px solid var(--accent); padding-left: 9px; }
+.avatar {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; flex-shrink: 0;
+  background: var(--surface2); color: var(--muted);
+}
+.player-info { flex: 1; min-width: 0; }
+.player-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-team { font-size: 11px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.empty-msg { color: var(--muted); font-size: 12px; text-align: center; padding: 48px 16px; line-height: 1.7; }
+
+/* MAIN */
+.main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; min-width: 0; }
+.main::-webkit-scrollbar { width: 3px; }
+.main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.main-inner { padding: 16px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+
+/* EMPTY */
+.center-msg {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; padding: 60px 24px; text-align: center; color: var(--muted);
+}
+.center-msg svg { margin-bottom: 4px; }
+.center-msg h2 { font-size: 16px; font-weight: 600; color: var(--sub); }
+.center-msg p { font-size: 12px; line-height: 1.6; }
+
+/* TOOLBAR */
+.toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* PLAYER HEADER */
+.player-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.player-header .avatar { width: 42px; height: 42px; border-radius: 10px; font-size: 18px; }
+.ph-name { font-size: 17px; font-weight: 700; }
+.ph-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* STAT CARD */
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.stat-card-title {
+  padding: 10px 14px;
+  font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--sub); border-bottom: 1px solid var(--border); background: var(--surface2);
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+.stat-cell { background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; }
+.stat-key { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.stat-val {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px; font-weight: 600;
+  width: 100%; outline: none; padding: 1px 0;
+  -webkit-appearance: none; border-radius: 0;
+  transition: border-color .15s, color .15s;
+}
+.stat-val:focus { border-bottom-color: var(--accent); color: #fff; }
+.stat-val.changed { color: var(--accent); border-bottom-color: #6c8fff55; }
+.stat-val[readonly] { opacity: .45; cursor: not-allowed; }
+
+/* EXPORT */
+.export-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.export-card-header {
+  padding: 10px 14px;
+  font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--green); border-bottom: 1px solid var(--border); background: var(--surface2);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.export-ta {
+  background: var(--bg); border: none; color: #86efac;
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+  padding: 12px; width: 100%; height: 110px; resize: vertical; outline: none; line-height: 1.5;
+}
+
+/* TOAST */
+.toast {
+  position: fixed; bottom: 20px; left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 18px; border-radius: 20px;
+  font-size: 13px; font-weight: 500; z-index: 999;
+  opacity: 0; transition: opacity .2s, transform .2s;
+  pointer-events: none; white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* OVERLAY */
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.55); z-index: 90; backdrop-filter: blur(2px);
+}
+
+/* MOBILE */
+@media (max-width: 600px) {
+  .sidebar {
+    position: fixed; top: var(--hh); left: 0; bottom: 0;
+    width: min(100%, 320px);
+    transform: translateX(-110%);
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    border-right: none; box-shadow: 4px 0 32px rgba(0,0,0,.4);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .overlay { display: block; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .main-inner { padding: 12px; gap: 12px; }
+  .logo { font-size: 14px; }
+  .btn svg { display: block; flex-shrink: 0; }
+}
+</style>
+</head>
+<body>
+
+<input type="file" id="fileInput" accept=".txt,.json" style="display:none" onchange="handleFileUpload(this)">
+
+<header>
+  <div class="logo">Stats Editor</div>
+
+  <div class="score-wrap" id="scoreDisplay">
+    <input id="scoreA" class="score-input" type="number" min="0" value="0" onchange="updateScore()">
+    <span class="score-sep">-</span>
+    <input id="scoreB" class="score-input" type="number" min="0" value="0" onchange="updateScore()">
+  </div>
+
+  <button class="btn btn-ghost" id="playersBtn" onclick="toggleSidebar()" style="display:none">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Players
+  </button>
+  <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Upload
+  </button>
+  <button class="btn btn-ghost" onclick="resetAll()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+    Reset
+  </button>
+</header>
+
+<div class="app">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-search">
+      <div class="search-wrap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="search-input" type="text" placeholder="Search players..." oninput="filterPlayers(this.value)">
+      </div>
+      <div class="filter-chips" id="filterRow">
+        <button class="chip active" onclick="setTeamFilter('all',this)">All</button>
+      </div>
+    </div>
+    <div class="player-list" id="playerList">
+      <div class="empty-msg">Upload a file to load players</div>
+    </div>
+  </div>
+  <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+  <div class="main" id="mainPanel">
+    <div class="main-inner">
+      <div class="center-msg">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <h2>No file loaded</h2>
+        <p>Click Upload to load a game data file</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let gameData = null, rawScore = '', selectedId = null;
+let teamFilter = 'all', searchFilter = '', origData = null;
+const TEAM_COLORS = ['#6c8fff','#f87171','#4ade80','#facc15','#a78bfa','#fb923c','#22d3ee'];
+let teams = [];
+
+const SECTIONS = {
+  qb:  { label: 'QB', fields: ['comp','yds','td','int','sack','long','inc','avg','rtng','led'] },
+  wr:  { label: 'WR / Receiver', fields: ['tgt','catch','yds','td','yac','cyds','long','avg','int_allow','rtng','led','cpg'] },
+  rb:  { label: 'RB', fields: ['att','yds','td','ypa','mpa','snk','long','miss','rtng','led'] },
+  db:  { label: 'DB / Coverage', fields: ['tgt','catch_allow','yds_allow','td_allow','defl','int','avg','td','rtng','led'] },
+  def: { label: 'Defense', fields: ['tack','sack','ffum','rec','safe','miss','tpg','rtng','led'] },
+  k:   { label: 'Kicker', fields: ['att','good','avg','long','hard_att','hard_good','hard_avg','pat_att','pat_good','pat_avg','rtng','led'] },
+};
+const OTHER_FIELDS = ['name','display','team','xp','games','allgames','w','mvp','ovrLastSeen'];
+const READONLY_FIELDS = new Set(['name','display']);
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.color = type === 'good' ? 'var(--green)' : type === 'bad' ? 'var(--red)' : 'var(--text)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function handleFileUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => parseRaw(e.target.result.trim());
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function parseRaw(raw) {
+  try {
+    let score = '', jsonStr = '';
+    if (raw.includes('///')) {
+      const sep = raw.indexOf('///');
+      score = raw.slice(0, sep).trim();
+      jsonStr = raw.slice(sep + 3).trim();
+    } else {
+      jsonStr = raw.trim();
+      score = '0 - 0';
+    }
+    const parts = score.split('-').map(s => s.trim());
+    document.getElementById('scoreA').value = parts[0] || 0;
+    document.getElementById('scoreB').value = parts[1] || 0;
+    rawScore = score;
+    gameData = JSON.parse(jsonStr);
+    origData = JSON.parse(jsonStr);
+    document.getElementById('scoreDisplay').classList.add('visible');
+    document.getElementById('playersBtn').style.display = '';
+    buildTeamFilters();
+    renderPlayerList();
+    setMain(`<div class="center-msg"><h2>Select a player</h2><p>Tap a player from the list to edit their stats</p></div>`);
+    toast('Loaded ' + Object.keys(gameData).length + ' players', 'good');
+    if (window.innerWidth <= 600) openSidebar();
+  } catch(e) {
+    toast('Error: ' + e.message, 'bad');
+  }
+}
+
+function setMain(html) {
+  document.getElementById('mainPanel').innerHTML = `<div class="main-inner">${html}</div>`;
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+}
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+function buildTeamFilters() {
+  const seen = new Set();
+  Object.values(gameData).forEach(p => { if (p.other.team) seen.add(p.other.team); });
+  teams = [...seen].sort();
+
+  const getLabel = (t, len) => {
+    if (t === 'nil') return 'Neutral';
+    const words = t.split(/\s+/);
+    return words.map(w => w.slice(0, len)).join('').slice(0, len * words.length).toUpperCase();
+  };
+
+  const teamLabels = {};
+  for (let len = 1; len <= 8; len++) {
+    const labels = teams.map(t => getLabel(t, len));
+    const hasDupe = labels.length !== new Set(labels).size;
+    teams.forEach((t, i) => { teamLabels[t] = labels[i]; });
+    if (!hasDupe) break;
+  }
+
+  const row = document.getElementById('filterRow');
+  row.innerHTML = `<button class="chip active" onclick="setTeamFilter('all',this)">All</button>` +
+    teams.map(t =>
+      `<button class="chip" onclick="setTeamFilter('${t.replace(/'/g,"\\'")}',this)" title="${t}">${teamLabels[t]}</button>`
+    ).join('');
+}
+
+function teamColor(t) {
+  if (!t || t === 'nil') return null;
+  const i = teams.indexOf(t);
+  return TEAM_COLORS[i % TEAM_COLORS.length];
+}
+function teamAbbr(t) {
+  if (!t || t === 'nil') return 'Neutral';
+  return t.split(/\s+/).map(w => w[0]).join('').slice(0,4).toUpperCase();
+}
+function avatarStyle(t) {
+  const c = teamColor(t);
+  return c ? `background:${c}22;color:${c}` : '';
+}
+
+function filterPlayers(q) { searchFilter = q.toLowerCase(); renderPlayerList(); }
+function setTeamFilter(team, btn) {
+  teamFilter = team;
+  document.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPlayerList();
+}
+
+function renderPlayerList() {
+  const list = document.getElementById('playerList');
+  if (!gameData) return;
+  const ids = Object.keys(gameData).filter(id => {
+    const p = gameData[id];
+    const ms = !searchFilter || p.other.display.toLowerCase().includes(searchFilter) || p.other.name.toLowerCase().includes(searchFilter);
+    const mt = teamFilter === 'all' || p.other.team === teamFilter;
+    return ms && mt;
+  });
+  if (!ids.length) { list.innerHTML = '<div class="empty-msg">No players found</div>'; return; }
+  list.innerHTML = ids.map(id => {
+    const p = gameData[id];
+    const letter = (p.other.display || '?')[0].toUpperCase();
+    const style = avatarStyle(p.other.team);
+    return `<div class="player-row${selectedId===id?' active':''}" onclick="selectPlayer('${id}')">
+      <div class="avatar" style="${style}">${letter}</div>
+      <div class="player-info">
+        <div class="player-name">${p.other.display || p.other.name}</div>
+        <div class="player-team">${p.other.team && p.other.team !== 'nil' ? p.other.team : 'Neutral'}</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>`;
+  }).join('');
+}
+
+function selectPlayer(id) {
+  selectedId = id;
+  renderPlayerList();
+  renderEditor();
+  closeSidebar();
+}
+
+function renderEditor() {
+  const p = gameData[selectedId];
+  const aStyle = avatarStyle(p.other.team);
+  const letter = (p.other.display || '?')[0].toUpperCase();
+
+  let html = `
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="saveCurrentPlayer()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Save
+    </button>
+    <button class="btn btn-ghost" onclick="revertPlayer()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Revert
+    </button>
+    <button class="btn btn-ghost" onclick="showExport()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Export
+    </button>
+  </div>
+
+  <div class="player-header">
+    <div class="avatar" style="${aStyle}">${letter}</div>
+    <div>
+      <div class="ph-name">${p.other.display || p.other.name}</div>
+      <div class="ph-sub">${p.other.team && p.other.team !== 'nil' ? p.other.team : 'Neutral'} / ID ${p.other.idstr}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-card-title">Meta</div>
+    <div class="stat-grid">`;
+
+  for (const f of OTHER_FIELDS) {
+    const val = p.other[f] !== undefined ? p.other[f] : '';
+    const ro = READONLY_FIELDS.has(f) ? 'readonly' : '';
+    html += `<div class="stat-cell"><div class="stat-key">${f}</div>
+      <input class="stat-val" inputmode="decimal" data-section="other" data-key="${f}" value="${val}" ${ro} oninput="onFieldChange(this)" onblur="onFieldBlur(this)">
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  for (const [sec, cfg] of Object.entries(SECTIONS)) {
+    html += `<div class="stat-card"><div class="stat-card-title">${cfg.label}</div><div class="stat-grid">`;
+    for (const f of cfg.fields) {
+      const val = p[sec] && p[sec][f] !== undefined ? p[sec][f] : 0;
+      html += `<div class="stat-cell"><div class="stat-key">${f}</div>
+        <input class="stat-val" inputmode="decimal" data-section="${sec}" data-key="${f}" value="${val}" oninput="onFieldChange(this)" onblur="onFieldBlur(this)">
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  html += `<div class="export-card" id="exportBox" style="display:none">
+    <div class="export-card-header"><span>Export</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyExport()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+        <button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="downloadJson()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download JSON
+        </button>
+      </div>
+    </div>
+    <textarea class="export-ta" id="exportOutput" readonly></textarea>
+  </div>`;
+
+  setMain(html);
+  highlightChangedFields();
+}
+
+function onFieldChange(el) {
+  if (el.readOnly) return;
+  el.classList.add('changed');
+}
+function onFieldBlur(el) {
+  if (el.readOnly) return;
+  const sec = el.dataset.section, key = el.dataset.key;
+  let val = el.value;
+  const num = parseFloat(val);
+  if (!isNaN(num) && val.trim() !== '') val = num;
+  gameData[selectedId][sec][key] = val;
+  el.value = val;
+}
+
+function highlightChangedFields() {
+  if (!origData || !selectedId) return;
+  const orig = origData[selectedId];
+  document.querySelectorAll('.stat-val').forEach(el => {
+    if (el.readOnly) return;
+    const sec = el.dataset.section, key = el.dataset.key;
+    if (orig && orig[sec] && orig[sec][key] !== undefined && el.value !== String(orig[sec][key]))
+      el.classList.add('changed');
+  });
+}
+
+function saveCurrentPlayer() {
+  document.querySelectorAll('.stat-val').forEach(el => {
+    if (el.readOnly) return;
+    const sec = el.dataset.section, key = el.dataset.key;
+    let val = el.value;
+    const num = parseFloat(val);
+    if (!isNaN(num) && val.trim() !== '') val = num;
+    gameData[selectedId][sec][key] = val;
+  });
+  renderPlayerList();
+  toast('Saved', 'good');
+}
+
+function revertPlayer() {
+  if (!origData || !gameData || !selectedId) return;
+  gameData[selectedId] = JSON.parse(JSON.stringify(origData[selectedId]));
+  renderEditor();
+  toast('Reverted');
+}
+
+function updateScore() {
+  const a = document.getElementById('scoreA').value;
+  const b = document.getElementById('scoreB').value;
+  rawScore = `${a} - ${b}`;
+}
+
+function showExport() {
+  updateScore();
+  saveCurrentPlayer();
+  const box = document.getElementById('exportBox');
+  if (!box) return;
+  box.style.display = 'block';
+  document.getElementById('exportOutput').value = rawScore + ' /// ' + JSON.stringify(gameData);
+  box.scrollIntoView({ behavior: 'smooth' });
+}
+
+function copyExport() {
+  const val = document.getElementById('exportOutput').value;
+  if (navigator.clipboard) navigator.clipboard.writeText(val).then(() => toast('Copied!', 'good'));
+  else { const ta = document.getElementById('exportOutput'); ta.select(); document.execCommand('copy'); toast('Copied!', 'good'); }
+}
+
+function downloadJson() {
+  updateScore();
+  saveCurrentPlayer();
+  const payload = { score: rawScore, players: gameData };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'stats.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Downloaded!', 'good');
+}
+
+function resetAll() {
+  gameData = origData = null;
+  rawScore = ''; selectedId = null; teams = [];
+  document.getElementById('filterRow').innerHTML = `<button class="chip active" onclick="setTeamFilter('all',this)">All</button>`;
+  document.getElementById('playerList').innerHTML = '<div class="empty-msg">Upload a file to load players</div>';
+  document.getElementById('scoreA').value = 0;
+  document.getElementById('scoreB').value = 0;
+  document.getElementById('scoreDisplay').classList.remove('visible');
+  document.getElementById('playersBtn').style.display = 'none';
+  closeSidebar();
+  setMain(`<div class="center-msg">
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <h2>No file loaded</h2><p>Click Upload to load a game data file</p>
+  </div>`);
+}
+</script>
+</body>
+</html>
