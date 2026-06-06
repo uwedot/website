@@ -105,7 +105,9 @@ body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:
 /* MOBILE */
 @media(max-width:600px){
   .nav{padding:0 16px}
-  .nav-stats{display:none}
+  .nav-logo{font-size:12px}
+  .nav-stat{font-size:10px}
+  .nav-stats{gap:10px}
   .search-wrap{padding:12px 16px 6px}
   .filter-wrap{padding:6px 16px 10px}
   .era-list{padding:6px 16px 40px}
