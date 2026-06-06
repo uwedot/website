@@ -1,15 +1,16 @@
 const SheetId = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
+const FallbackSheetId = '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM';
 
 let AllData = null;
 let CurrentTab = 'all';
 let ActiveQualities = new Set(['high', 'low', 'rec', 'cd', 'lossless']);
 
 const QualityKeys = {
-  high:     L => L.includes('high'),
-  low:      L => L.includes('low') && !L.includes('high'),
-  rec:      L => L.includes('record'),
-  cd:       L => L.includes('cd'),
-  lossless: L => L.includes('lossless'),
+  high:    L => L.includes('high'),
+  low:     L => L.includes('low') && !L.includes('high'),
+  rec:     L => L.includes('record'),
+  cd:      L => L.includes('cd'),
+  lossless:L => L.includes('lossless'),
 };
 
 function QClass(Q) {
@@ -59,12 +60,11 @@ function BuildData(Rows) {
 
   const Header = Rows[0].map(H => H.trim().toLowerCase());
   const Col = {
-    era:     Header.indexOf('era'),
-    name:    Header.indexOf('name'),
-    quality: Header.indexOf('quality'),
-    length:  Header.indexOf('track length'),
-    url:     Header.indexOf('link(s)'),
-    notes:   Header.indexOf('notes'),
+    era:    Header.indexOf('era'),
+    name:   Header.indexOf('name'),
+    quality:Header.indexOf('quality'),
+    url:    Header.indexOf('link(s)'),
+    notes:  Header.indexOf('notes'),
   };
 
   const SummaryPattern = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
@@ -82,7 +82,6 @@ function BuildData(Rows) {
     EraMap[Era].push([
       Name,
       (R[Col.quality] || '').trim(),
-      (R[Col.length]  || '').trim(),
       (R[Col.url]     || '').trim(),
       (R[Col.notes]   || '').trim(),
     ]);
@@ -92,82 +91,49 @@ function BuildData(Rows) {
 }
 
 function EscapeHtml(Str) {
-  return Str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return Str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function ParseSongName(Name) {
-  const All = [];
-  const Base = Name
-    .replace(/\(([^)]+)\)/g, (_, Inner) => { All.push('(' + Inner + ')'); return ' '; })
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-  const Credits = All.filter(P => /feat\.|ft\.|prod\./i.test(P));
-  const Rest    = All.filter(P => !/feat\.|ft\.|prod\./i.test(P));
-  const Subs = [];
-  if (Credits.length) Subs.push(Credits.join(' '));
-  Subs.push(...Rest);
-  return { Base, Subs };
-}
-
-function MakeSongEl(Name, Quality, Length, Url, Notes, Num) {
+function MakeSongEl(Name, Quality, Url, Notes, Num) {
   const HasNote = Notes.trim() !== '';
   const HasUrl  = !!(Url && /^https?:/i.test(Url.trim()));
-  const { Base, Subs } = ParseSongName(Name);
 
   const El = document.createElement('div');
   El.className = 'song-item' + (HasNote ? ' has-note' : '');
 
-  const SubHtml = Subs
-    .map(S => `<div class="song-sub-line">${EscapeHtml(S)}</div>`)
-    .join('');
-
   El.innerHTML =
     `<div class="song-num">${Num}</div>` +
-    `<div class="song-main">` +
-      `<div class="song-name" title="${EscapeHtml(Name)}">${EscapeHtml(Base)}</div>` +
-      (Subs.length ? `<div class="song-subs">${SubHtml}</div>` : '') +
-    `</div>` +
-    (Quality ? `<div class="song-quality ${QClass(Quality)}">${EscapeHtml(Quality)}</div>` : '') +
-    (Length  ? `<div class="song-len">${EscapeHtml(Length)}</div>` : '') +
-    (HasUrl  ? `<a class="song-link-btn" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer" aria-label="Open link for ${EscapeHtml(Base)}">open</a>` : '') +
-    (HasNote ? `<button type="button" class="note-toggle" aria-label="Show note for ${EscapeHtml(Base)}" aria-expanded="false">+</button>` : '');
+    `<div class="song-name" title="${EscapeHtml(Name)}">${EscapeHtml(Name)}</div>` +
+    `<div class="song-actions">` +
+      `<div class="song-actions-left">` +
+        (Quality ? `<div class="song-quality ${QClass(Quality)}">${EscapeHtml(Quality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
+      `</div>` +
+      `<div class="song-actions-right">` +
+        (HasUrl  ? `<a class="song-link-btn" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">open</a>` : `<div class="song-link-placeholder"></div>`) +
+        (HasNote ? `<div class="note-toggle" aria-label="Show note">+</div>` : `<div class="note-toggle-placeholder"></div>`) +
+      `</div>` +
+    `</div>`;
 
   if (HasNote) {
     const NoteEl = document.createElement('div');
     NoteEl.className = 'song-note';
-    NoteEl.setAttribute('role', 'note');
     NoteEl.textContent = Notes;
     El.querySelector('.note-toggle').addEventListener('click', Ev => {
       Ev.stopPropagation();
       const IsExp = El.classList.toggle('expanded');
-      Ev.currentTarget.textContent = IsExp ? '\u2212' : '+';
-      Ev.currentTarget.setAttribute('aria-expanded', String(IsExp));
-      Ev.currentTarget.setAttribute('aria-label', (IsExp ? 'Hide' : 'Show') + ` note for ${Base}`);
+      Ev.currentTarget.textContent = IsExp ? '-' : '+';
+      Ev.currentTarget.setAttribute('aria-label', IsExp ? 'Hide note' : 'Show note');
     });
     return [El, NoteEl];
   }
   return [El];
 }
 
-function ShowError(Msg) {
-  const El = document.createElement('div');
-  El.className = 'no-results load-error';
-  El.setAttribute('role', 'alert');
-  El.innerHTML =
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>` +
-    `<span>${EscapeHtml(Msg)}</span>`;
-  document.getElementById('era-list').replaceChildren(El);
-}
-
 function RenderEras(EraObj, Filter = '') {
   const List = document.getElementById('era-list');
   const F = Filter.trim().toLowerCase();
 
-  const TabEmoji = CurrentTab === 'best' ? '\u2b50' : CurrentTab === 'special' ? '\u2728' : null;
+  const TabEmoji = CurrentTab === 'best' ? '⭐' : CurrentTab === 'special' ? '✨' : null;
 
   const Filtered = {};
   for (const [Era, Songs] of Object.entries(EraObj)) {
@@ -189,7 +155,6 @@ function RenderEras(EraObj, Filter = '') {
   if (EraKeys.length === 0) {
     const El = document.createElement('div');
     El.className = 'no-results';
-    El.setAttribute('role', 'status');
     El.textContent = 'no results found';
     Frag.appendChild(El);
     List.replaceChildren(Frag);
@@ -207,18 +172,15 @@ function RenderEras(EraObj, Filter = '') {
     Row.setAttribute('role', 'button');
     Row.setAttribute('tabindex', '0');
     Row.setAttribute('aria-expanded', 'false');
-    Row.setAttribute('aria-label', `${Era}, ${Songs.length} songs`);
     Row.innerHTML =
       `<div class="era-row-name">${EscapeHtml(Era)}</div>` +
       `<div class="era-row-right">` +
-        `<div class="era-pill" aria-hidden="true">${Songs.length} Songs</div>` +
+        `<div class="era-pill">${Songs.length} Songs</div>` +
         `<svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>` +
       `</div>`;
 
     const Panel = document.createElement('div');
     Panel.className = 'songs-panel';
-    Panel.setAttribute('role', 'region');
-    Panel.setAttribute('aria-label', `${Era} songs`);
     const Inner = document.createElement('div');
     Inner.className = 'songs-inner';
     Panel.appendChild(Inner);
@@ -241,8 +203,8 @@ function RenderEras(EraObj, Filter = '') {
         if (!Inner.dataset.loaded) {
           Inner.dataset.loaded = '1';
           const SongFrag = document.createDocumentFragment();
-          Songs.forEach(([Name, Quality, Length, Url, Notes], I) => {
-            MakeSongEl(Name, Quality, Length, Url, Notes, I + 1).forEach(Node => SongFrag.appendChild(Node));
+          Songs.forEach(([Name, Quality, Url, Notes], I) => {
+            MakeSongEl(Name, Quality, Url, Notes, I + 1).forEach(Node => SongFrag.appendChild(Node));
           });
           Inner.appendChild(SongFrag);
           requestAnimationFrame(() => Row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
@@ -251,9 +213,7 @@ function RenderEras(EraObj, Filter = '') {
     }
 
     Row.addEventListener('click', Toggle);
-    Row.addEventListener('keydown', E => {
-      if (E.key === 'Enter' || E.key === ' ') { E.preventDefault(); Toggle(); }
-    });
+    Row.addEventListener('keydown', E => { if (E.key === 'Enter' || E.key === ' ') { E.preventDefault(); Toggle(); } });
 
     Wrap.appendChild(Row);
     Wrap.appendChild(Panel);
@@ -315,17 +275,27 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   (async () => {
-    try {
-      const Res = await fetch(`https://docs.google.com/spreadsheets/d/${SheetId}/export?format=csv`);
+    async function FetchSheet(Id) {
+      const Res = await fetch(`https://docs.google.com/spreadsheets/d/${Id}/export?format=csv`);
       if (!Res.ok) throw new Error(`HTTP ${Res.status}`);
-      const Text = await Res.text();
-      if (!Text.trim()) throw new Error('Empty response from sheet');
-      AllData = BuildData(ParseCsv(Text));
-      if (Object.keys(AllData).length === 0) throw new Error('No data found - check sheet permissions');
+      return Res.text();
+    }
+
+    try {
+      let CsvText;
+      try {
+        CsvText = await FetchSheet(SheetId);
+      } catch {
+        CsvText = await FetchSheet(FallbackSheetId);
+      }
+      AllData = BuildData(ParseCsv(CsvText));
       RenderEras(AllData);
     } catch (Err) {
-      console.error('Failed to load sheet data:', Err);
-      ShowError(Err.message || 'Failed to load data');
+      const El = document.createElement('div');
+      El.className = 'no-results';
+      El.style.color = '#c0392b';
+      El.textContent = 'failed to load data — check sheet permissions';
+      document.getElementById('era-list').replaceChildren(El);
     }
   })();
 });
