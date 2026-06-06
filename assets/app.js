@@ -96,7 +96,7 @@ function EscapeHtml(Str) {
 
 function MakeSongEl(Name, Quality, Length, Url, Notes, Num) {
   const HasNote = !!(Notes && Notes.trim());
-  const HasUrl  = !!(Url && Url.trim());
+  const HasUrl  = !!(Url && /^https?:/i.test(Url.trim()));
 
   const El = document.createElement('div');
   El.className = 'song-item' + (HasNote ? ' has-note' : '');
