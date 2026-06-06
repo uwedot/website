@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YE Vault</title>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">YE VAULT</div>
+  <div class="nav-stats">
+    <div class="nav-stat"><span id="nav-eras">—</span> eras</div>
+    <div class="nav-stat"><span id="nav-songs">—</span> songs</div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div id="hero-bg"></div>
+  <div class="hero-title">YE VAULT</div>
+  <div class="hero-sub">a collection of Ye's unreleased discography</div>
+</div>
+
+<div class="search-wrap">
+  <input id="search-box" class="search-box" type="text" placeholder="search songs or eras... (press / to focus)" oninput="OnSearch(this.value)" autocomplete="off" spellcheck="false">
+</div>
+
+<div class="era-list" id="era-list"></div>
+
+<footer class="footer">
+  <div class="footer-version">YE VAULT v3.2.0</div>
+  <div class="footer-credits">a fan-made archive · not affiliated with Ye or any label</div>
+</footer>
+
+<button class="scroll-top" id="scroll-top" onclick="GoToTop()" title="Back to top">
+  <svg viewBox="0 0 24 24" stroke-width="2"><polyline points="18,15 12,9 6,15"></polyline></svg>
+</button>
+
+<script src="assets/app.js"></script>
+
+</body></html>
