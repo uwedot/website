@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="dns-prefetch" href="//docs.google.com">
+  <link rel="preconnect" href="https://docs.google.com" crossorigin>
   <meta name="description" content="A fan-made archive of Ye's unreleased discography.">
   <meta name="theme-color" content="#0b0b0c">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -99,12 +101,54 @@
 </button>
 
 <div id="global-player" class="global-player">
+  <audio id="main-audio" preload="none"></audio>
+
   <div class="player-info">
     <span id="player-track-name" class="player-track-name"></span>
+    <div class="player-track-times">
+      <span id="player-track-current" class="player-track-current">0:00</span>
+      <span class="player-track-sep">/</span>
+      <span id="player-track-length" class="player-track-length">0:00</span>
+    </div>
   </div>
-  <audio id="main-audio" controls></audio>
+
+  <div class="player-controls">
+    <button type="button" id="player-play-btn" class="player-btn player-play" aria-label="Play">
+      <svg id="player-play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      <svg id="player-pause-icon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+    </button>
+  </div>
+
+  <div class="player-scrubber-wrap">
+    <span id="player-current" class="player-time">0:00</span>
+    <div class="player-scrubber" id="player-scrubber">
+      <div class="player-scrubber-track">
+        <div class="player-scrubber-fill" id="player-fill"></div>
+        <div class="player-scrubber-thumb" id="player-thumb"></div>
+      </div>
+    </div>
+    <span id="player-duration" class="player-time">0:00</span>
+  </div>
+
+  <div class="player-volume-wrap">
+    <svg class="player-vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/>
+      <path id="vol-wave-1" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+      <path id="vol-wave-2" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+    </svg>
+    <div class="player-volume" id="player-volume">
+      <div class="player-scrubber-track">
+        <div class="player-scrubber-fill" id="player-vol-fill"></div>
+        <div class="player-scrubber-thumb" id="player-vol-thumb"></div>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" id="player-close-btn" class="player-btn player-close" aria-label="Close player">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
 </div>
 
-<script src="app.js"></script>
+<script src="app.js" defer></script>
 </body>
 </html>

@@ -1,9 +1,9 @@
-const SheetId = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
+const SheetId         = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
 const FallbackSheetId = '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM';
 
-let AllData = null;
-let CurrentTab = 'all';
-let ActiveQualities = new Set(['high', 'low', 'rec', 'cd', 'lossless']);
+let AllData       = null;
+let CurrentTab    = 'all';
+let ActiveQualities = new Set(['high','low','rec','cd','lossless']);
 
 const QualityKeys = {
   high:    L => L.includes('high'),
@@ -24,6 +24,19 @@ function QClass(Q) {
   return 'q-other';
 }
 
+function TClass(T) {
+  if (!T) return 'tl-other';
+  const L = T.toLowerCase();
+  if (L.includes('og'))      return 'tl-og';
+  if (L.includes('stem'))    return 'tl-stem';
+  if (L.includes('full'))    return 'tl-full';
+  if (L.includes('tagged'))  return 'tl-tagged';
+  if (L.includes('partial')) return 'tl-partial';
+  if (L.includes('snippet')) return 'tl-snippet';
+  if (L.includes('unavail')) return 'tl-unavail';
+  return 'tl-other';
+}
+
 function QualityAllowed(Quality) {
   if (!Quality) return false;
   const L = Quality.toLowerCase();
@@ -34,12 +47,11 @@ function QualityAllowed(Quality) {
   return false;
 }
 
-function UpdatePlayButtonsState() {
-  const Audio = document.getElementById('main-audio');
+function UpdatePlayButtonsState(Audio) {
   if (!Audio) return;
   document.querySelectorAll('.play-btn').forEach(Btn => {
     try {
-      const IsCurrent = Audio.src && (new URL(Audio.src).href === new URL(Btn.dataset.url, window.location.href).href);
+      const IsCurrent = Audio.src && (new URL(Audio.src).href === new URL(Btn.dataset.url, location.href).href);
       Btn.textContent = (IsCurrent && !Audio.paused) ? 'Pause' : 'Play';
     } catch {
       Btn.textContent = 'Play';
@@ -61,8 +73,8 @@ function ParseCsv(Text) {
       else if (Ch === '"') InQuote = false;
       else Field += Ch;
     } else {
-      if (Ch === '"') InQuote = true;
-      else if (Ch === ',') { Row.push(Field); Field = ''; }
+      if (Ch === '"')       InQuote = true;
+      else if (Ch === ',')  { Row.push(Field); Field = ''; }
       else if (Ch === '\n') { Row.push(Field); Rows.push(Row); Row = []; Field = ''; }
       else if (Ch !== '\r') Field += Ch;
     }
@@ -81,7 +93,7 @@ function BuildData(Rows) {
   if (LeakDateIdx === -1) LeakDateIdx = Header.findIndex(H => H.includes('date'));
 
   let UrlIdx = Header.indexOf('link(s)');
-  if (UrlIdx === -1) UrlIdx = Header.findIndex(H => h => h.includes('link'));
+  if (UrlIdx === -1) UrlIdx = Header.findIndex(H => H.includes('link'));
 
   const Col = {
     era:      Header.indexOf('era'),
@@ -122,82 +134,49 @@ function EscapeHtml(Str) {
   return Str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function TClass(T) {
-  if (!T) return 'tl-other';
-  const L = T.toLowerCase();
-  if (L.includes('og'))      return 'tl-og';
-  if (L.includes('stem'))    return 'tl-stem';
-  if (L.includes('full'))    return 'tl-full';
-  if (L.includes('tagged'))  return 'tl-tagged';
-  if (L.includes('partial')) return 'tl-partial';
-  if (L.includes('snippet')) return 'tl-snippet';
-  if (L.includes('unavail')) return 'tl-unavail';
-  return 'tl-other';
-}
-
 function PositionDropdown(Btn, Menu) {
-  Menu.style.visibility = 'hidden';
-  Menu.style.display = 'flex';
+  Menu.style.cssText = 'visibility:hidden;display:flex';
   const MenuH = Menu.offsetHeight;
   const MenuW = Menu.offsetWidth;
-  Menu.style.display = '';
-  Menu.style.visibility = '';
+  Menu.style.cssText = '';
 
-  const Rect = Btn.getBoundingClientRect();
+  const Rect       = Btn.getBoundingClientRect();
   const SpaceBelow = window.innerHeight - Rect.bottom;
-
-  const Left = Math.max(4, Math.min(Rect.right - MenuW, window.innerWidth - MenuW - 4));
-
-  if (SpaceBelow < MenuH + 8) {
-    Menu.style.top = (Rect.top - MenuH - 4) + 'px';
-  } else {
-    Menu.style.top = (Rect.bottom + 4) + 'px';
-  }
-  Menu.style.left = Left + 'px';
+  const Left       = Math.max(4, Math.min(Rect.right - MenuW, window.innerWidth - MenuW - 4));
+  Menu.style.top   = (SpaceBelow < MenuH + 8 ? Rect.top - MenuH - 4 : Rect.bottom + 4) + 'px';
+  Menu.style.left  = Left + 'px';
   Menu.style.right = '';
 }
 
-function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType = '') {
+function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType, Audio) {
   const HasNote = Notes.trim() !== '';
-
   const UrlList = Url ? Url.split(/[\s,\n\r]+/).map(U => U.trim()).filter(U => /^https?:/i.test(U)) : [];
-  const HasUrl = UrlList.length > 0;
-
+  const HasUrl  = UrlList.length > 0;
   const DisplayQuality = HasUrl ? Quality : 'Unavailable';
 
   const PillowsUrl = UrlList.find(U => U.includes('pillows.su/f/'));
   let PlayBtnHtml = '';
   if (PillowsUrl) {
     const DownloadUrl = PillowsUrl.replace('pillows.su/f/', 'api.pillows.su/api/download/');
-    const Audio = document.getElementById('main-audio');
     let BtnText = 'Play';
-    if (Audio && Audio.src) {
-      try {
-        if (new URL(Audio.src).href === new URL(DownloadUrl, window.location.href).href && !Audio.paused) {
-          BtnText = 'Pause';
-        }
-      } catch {}
+    if (Audio?.src) {
+      try { if (new URL(Audio.src).href === new URL(DownloadUrl, location.href).href && !Audio.paused) BtnText = 'Pause'; } catch {}
     }
     PlayBtnHtml = `<button type="button" class="song-play-btn play-btn" data-url="${EscapeHtml(DownloadUrl)}" data-name="${EscapeHtml(Name)}">${BtnText}</button>`;
   }
 
   let LinksHtml = '';
   if (UrlList.length > 1) {
-    let ItemsHtml = '';
-    UrlList.forEach((U, Idx) => {
-      ItemsHtml += `<a class="song-dropdown-item" href="${EscapeHtml(U)}" target="_blank" rel="noopener noreferrer">View ${Idx + 1}</a>`;
-    });
+    const ItemsHtml = UrlList.map((U, I) =>
+      `<a class="song-dropdown-item" href="${EscapeHtml(U)}" target="_blank" rel="noopener noreferrer">Link ${I + 1}</a>`
+    ).join('');
     LinksHtml =
       `<div class="song-dropdown">` +
         `<button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false">` +
           `<span>Links</span>` +
-          `<svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">` +
-            `<polyline points="6,9 12,15 18,9"/>` +
-          `</svg>` +
+          `<svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>` +
         `</button>` +
-        `<div class="song-dropdown-menu" role="menu">` +
-          ItemsHtml +
-        `</div>` +
+        `<div class="song-dropdown-menu" role="menu">${ItemsHtml}</div>` +
       `</div>`;
   } else if (UrlList.length === 1) {
     LinksHtml = `<a class="song-link-btn" href="${EscapeHtml(UrlList[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
@@ -206,8 +185,7 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType = '') {
   }
 
   const ActionsRightHtml =
-    PlayBtnHtml +
-    LinksHtml +
+    PlayBtnHtml + LinksHtml +
     (HasNote ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note">＋</div>` : `<div class="note-toggle-placeholder"></div>`);
 
   const El = document.createElement('div');
@@ -218,17 +196,18 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType = '') {
     `<div class="song-actions">` +
       `<div class="song-actions-left">` +
         (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
-        (TrackType      ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>`            : `<div class="song-type-placeholder"></div>`) +
+        (TrackType      ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>`             : `<div class="song-type-placeholder"></div>`) +
       `</div>` +
-      `<div class="song-actions-right">` +
-        ActionsRightHtml +
-      `</div>` +
+      `<div class="song-actions-right">${ActionsRightHtml}</div>` +
+    `</div>` +
+    `<div class="song-pills">` +
+      (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : '') +
+      (TrackType      ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>`             : '') +
     `</div>`;
 
   if (UrlList.length > 1) {
-    const DropBtn = El.querySelector('.song-dropdown-btn');
+    const DropBtn  = El.querySelector('.song-dropdown-btn');
     const DropMenu = El.querySelector('.song-dropdown-menu');
-
     DropBtn.addEventListener('click', Ev => {
       Ev.stopPropagation();
       const IsOpen = DropMenu.classList.contains('open');
@@ -246,15 +225,13 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType = '') {
     PlayBtn.addEventListener('click', Ev => {
       Ev.stopPropagation();
       CloseAllSongDropdowns();
-      const TrackUrl = new URL(PlayBtn.dataset.url, window.location.href).href;
-      const Player = document.getElementById('global-player');
-      const Audio  = document.getElementById('main-audio');
-      const NameEl = document.getElementById('player-track-name');
+      const TrackUrl = new URL(PlayBtn.dataset.url, location.href).href;
+      const Player   = document.getElementById('global-player');
       const IsCurrent = Audio.src && (new URL(Audio.src).href === TrackUrl);
       if (IsCurrent) {
         Audio.paused ? Audio.play().catch(() => {}) : Audio.pause();
       } else {
-        NameEl.textContent = PlayBtn.dataset.name;
+        document.getElementById('player-track-name').textContent = PlayBtn.dataset.name;
         Audio.src = TrackUrl;
         Player.classList.add('active');
         Audio.play().catch(() => {});
@@ -263,7 +240,7 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType = '') {
   }
 
   if (HasNote) {
-    const NoteEl = document.createElement('div');
+    const NoteEl     = document.createElement('div');
     NoteEl.className = 'song-note';
     NoteEl.textContent = Notes;
     const NoteToggle = El.querySelector('.note-toggle');
@@ -283,11 +260,10 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType = '') {
 
 function GetDateValue(Str) {
   if (!Str) return 0;
-  const Num = Date.parse(Str);
-  if (!isNaN(Num)) return Num;
-  const YearMatch = Str.match(/\b(19|20)\d{2}\b/);
-  if (YearMatch) return new Date(YearMatch[0], 0, 1).getTime();
-  return 0;
+  const N = Date.parse(Str);
+  if (!isNaN(N)) return N;
+  const M = Str.match(/\b(19|20)\d{2}\b/);
+  return M ? new Date(M[0], 0, 1).getTime() : 0;
 }
 
 function CollapseAllPanels() {
@@ -298,10 +274,9 @@ function CollapseAllPanels() {
   });
 }
 
-function RenderEras(Filter = '') {
+function RenderEras(Filter, Audio) {
   const List = document.getElementById('era-list');
-  const F = Filter.trim().toLowerCase();
-
+  const F    = (Filter || '').trim().toLowerCase();
   if (!AllData) return;
 
   CollapseAllPanels();
@@ -313,7 +288,7 @@ function RenderEras(Filter = '') {
   if (CurrentTab === 'recent') {
     const AllSongs = [];
     for (const [Era, Songs] of Object.entries(AllData)) {
-      Songs.filter(([, Quality]) => QualityAllowed(Quality)).forEach(Song => {
+      Songs.filter(([, Q]) => QualityAllowed(Q)).forEach(Song => {
         if (!F || Song[0].toLowerCase().includes(F) || Era.toLowerCase().includes(F)) {
           AllSongs.push({ era: Era, name: Song[0], quality: Song[1], url: Song[2], notes: Song[3], dateStr: Song[4] || '', trackType: Song[5] || '' });
         }
@@ -321,7 +296,7 @@ function RenderEras(Filter = '') {
     }
     AllSongs.sort((A, B) => GetDateValue(B.dateStr) - GetDateValue(A.dateStr));
     const RecentSongs = AllSongs.slice(0, 200);
-    if (RecentSongs.length > 0) {
+    if (RecentSongs.length) {
       Filtered['Recent Leaks'] = RecentSongs.map(S => [
         `[${S.era}] ${S.name}${S.dateStr ? ` (${S.dateStr})` : ''}`,
         S.quality, S.url, S.notes, S.dateStr, S.trackType,
@@ -329,23 +304,23 @@ function RenderEras(Filter = '') {
     }
   } else {
     for (const [Era, Songs] of Object.entries(AllData)) {
-      let Matched = Songs.filter(([, Quality]) => QualityAllowed(Quality));
-      if (TabEmoji) Matched = Matched.filter(([Name]) => Name.includes(TabEmoji));
-      if (F) Matched = Matched.filter(([Name]) => Name.toLowerCase().includes(F) || Era.toLowerCase().includes(F));
+      let Matched = Songs.filter(([, Q]) => QualityAllowed(Q));
+      if (TabEmoji) Matched = Matched.filter(([N]) => N.includes(TabEmoji));
+      if (F)        Matched = Matched.filter(([N]) => N.toLowerCase().includes(F) || Era.toLowerCase().includes(F));
       if (Matched.length) Filtered[Era] = Matched;
     }
   }
 
-  const EraKeys = Object.keys(Filtered);
+  const EraKeys   = Object.keys(Filtered);
   const TotalSongs = EraKeys.reduce((S, K) => S + Filtered[K].length, 0);
-  document.getElementById('nav-eras').textContent = EraKeys.length;
+  document.getElementById('nav-eras').textContent  = EraKeys.length;
   document.getElementById('nav-songs').textContent = TotalSongs.toLocaleString();
 
   const Frag = document.createDocumentFragment();
 
-  if (EraKeys.length === 0) {
+  if (!EraKeys.length) {
     const El = document.createElement('div');
-    El.className = 'no-results';
+    El.className   = 'no-results';
     El.textContent = 'No results found.';
     Frag.appendChild(El);
     List.replaceChildren(Frag);
@@ -354,8 +329,7 @@ function RenderEras(Filter = '') {
 
   for (const Era of EraKeys) {
     const Songs = Filtered[Era];
-
-    const Wrap = document.createElement('div');
+    const Wrap  = document.createElement('div');
     Wrap.className = 'era-wrap';
 
     const Row = document.createElement('div');
@@ -366,7 +340,7 @@ function RenderEras(Filter = '') {
     Row.innerHTML =
       `<div class="era-row-name">${EscapeHtml(Era)}</div>` +
       `<div class="era-row-right">` +
-        `<div class="era-pill">${Songs.length} Songs</div>` +
+        `<div class="era-pill">${Songs.length}</div>` +
         `<svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>` +
       `</div>`;
 
@@ -390,11 +364,11 @@ function RenderEras(Filter = '') {
         if (!Inner.dataset.loaded) {
           Inner.dataset.loaded = '1';
           const SongFrag = document.createDocumentFragment();
-          Songs.forEach(([Name, Quality, Url, Notes, , TrackType], I) => {
-            MakeSongEl(Name, Quality, Url, Notes, I + 1, TrackType || '').forEach(Node => SongFrag.appendChild(Node));
+          Songs.forEach(([N, Q, U, No, , TT], I) => {
+            MakeSongEl(N, Q, U, No, I + 1, TT || '', Audio).forEach(Node => SongFrag.appendChild(Node));
           });
           Inner.appendChild(SongFrag);
-          UpdatePlayButtonsState();
+          UpdatePlayButtonsState(Audio);
         }
         requestAnimationFrame(() => Row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
       }
@@ -412,10 +386,6 @@ function RenderEras(Filter = '') {
 }
 
 let SearchTimer;
-function OnSearch(Val) {
-  clearTimeout(SearchTimer);
-  SearchTimer = setTimeout(() => { if (AllData) RenderEras(Val); }, 180);
-}
 
 document.addEventListener('DOMContentLoaded', () => {
   const SearchBox  = document.getElementById('search-box');
@@ -425,14 +395,120 @@ document.addEventListener('DOMContentLoaded', () => {
   const NavBtn     = document.getElementById('nav-tab-btn');
   const NavMenu    = document.getElementById('nav-tab-menu');
   const NavText    = document.getElementById('nav-btn-text');
-  const MainAudio  = document.getElementById('main-audio');
+  const Audio      = document.getElementById('main-audio');
+  const Player     = document.getElementById('global-player');
 
-  SearchBox.addEventListener('input', E => OnSearch(E.target.value));
+  SearchBox.addEventListener('input', E => {
+    clearTimeout(SearchTimer);
+    SearchTimer = setTimeout(() => { if (AllData) RenderEras(E.target.value, Audio); }, 180);
+  });
 
-  if (MainAudio) {
-    MainAudio.addEventListener('play',  UpdatePlayButtonsState);
-    MainAudio.addEventListener('pause', UpdatePlayButtonsState);
-    MainAudio.addEventListener('ended', UpdatePlayButtonsState);
+  if (Audio) {
+    const PlayIcon       = document.getElementById('player-play-icon');
+    const PauseIcon      = document.getElementById('player-pause-icon');
+    const PlayBtn        = document.getElementById('player-play-btn');
+    const CloseBtn       = document.getElementById('player-close-btn');
+    const CurrentEl      = document.getElementById('player-current');
+    const DurationEl     = document.getElementById('player-duration');
+    const TrackLengthEl  = document.getElementById('player-track-length');
+    const TrackCurrentEl = document.getElementById('player-track-current');
+    const Fill           = document.getElementById('player-fill');
+    const Thumb          = document.getElementById('player-thumb');
+    const VolFill        = document.getElementById('player-vol-fill');
+    const VolThumb       = document.getElementById('player-vol-thumb');
+    const Scrubber       = document.getElementById('player-scrubber');
+    const VolSlider      = document.getElementById('player-volume');
+
+    const FormatTime = Secs => {
+      if (!isFinite(Secs) || Secs < 0) return '0:00';
+      return `${Math.floor(Secs / 60)}:${String(Math.floor(Secs % 60)).padStart(2, '0')}`;
+    };
+
+    const SetPlayState = Playing => {
+      PlayIcon.style.display  = Playing ? 'none' : '';
+      PauseIcon.style.display = Playing ? ''     : 'none';
+      PlayBtn.setAttribute('aria-label', Playing ? 'Pause' : 'Play');
+    };
+
+    const SetProgress = Pct => {
+      const P       = Math.max(0, Math.min(100, Pct));
+      Fill.style.width = Thumb.style.left = P + '%';
+    };
+
+    const SetVolume = Pct => {
+      const P            = Math.max(0, Math.min(100, Pct));
+      VolFill.style.width = VolThumb.style.left = P + '%';
+      Audio.volume       = P / 100;
+    };
+
+    const ScrubberPct = (Ev, El) => {
+      const R = El.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (Ev.clientX - R.left) / R.width));
+    };
+
+    const SetTime = T => {
+      CurrentEl.textContent = TrackCurrentEl.textContent = T;
+    };
+
+    const SetDuration = T => {
+      DurationEl.textContent = TrackLengthEl.textContent = T;
+    };
+
+    Audio.addEventListener('play',  () => { SetPlayState(true);  UpdatePlayButtonsState(Audio); });
+    Audio.addEventListener('pause', () => { SetPlayState(false); UpdatePlayButtonsState(Audio); });
+    Audio.addEventListener('ended', () => {
+      SetPlayState(false); SetProgress(0); SetTime('0:00');
+      UpdatePlayButtonsState(Audio);
+    });
+    Audio.addEventListener('timeupdate', () => {
+      if (!Audio.duration) return;
+      SetProgress((Audio.currentTime / Audio.duration) * 100);
+      SetTime(FormatTime(Audio.currentTime));
+    });
+    Audio.addEventListener('durationchange', () => SetDuration(FormatTime(Audio.duration)));
+    Audio.addEventListener('loadedmetadata', () => SetDuration(FormatTime(Audio.duration)));
+
+    PlayBtn.addEventListener('click', () => {
+      Audio.paused ? Audio.play().catch(() => {}) : Audio.pause();
+    });
+
+    CloseBtn.addEventListener('click', () => {
+      Audio.pause();
+      Audio.src = '';
+      Player.classList.remove('active');
+      SetPlayState(false);
+      SetProgress(0);
+      SetTime('0:00');
+      SetDuration('0:00');
+      UpdatePlayButtonsState(Audio);
+    });
+
+    let ScrubDragging = false, VolDragging = false;
+
+    Scrubber.addEventListener('mousedown', Ev => {
+      ScrubDragging = true;
+      if (Audio.duration) Audio.currentTime = ScrubberPct(Ev, Scrubber) * Audio.duration;
+    });
+    VolSlider.addEventListener('mousedown', Ev => {
+      VolDragging = true;
+      SetVolume(ScrubberPct(Ev, VolSlider) * 100);
+    });
+    window.addEventListener('mousemove', Ev => {
+      if (ScrubDragging && Audio.duration) Audio.currentTime = ScrubberPct(Ev, Scrubber) * Audio.duration;
+      if (VolDragging) SetVolume(ScrubberPct(Ev, VolSlider) * 100);
+    });
+    window.addEventListener('mouseup', () => { ScrubDragging = false; VolDragging = false; });
+
+    Scrubber.addEventListener('touchstart', Ev => {
+      if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration;
+    }, { passive: true });
+    Scrubber.addEventListener('touchmove', Ev => {
+      if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration;
+    }, { passive: true });
+    VolSlider.addEventListener('touchstart', Ev => SetVolume(ScrubberPct(Ev.touches[0], VolSlider) * 100), { passive: true });
+    VolSlider.addEventListener('touchmove',  Ev => SetVolume(ScrubberPct(Ev.touches[0], VolSlider) * 100), { passive: true });
+
+    SetVolume(80);
   }
 
   NavBtn.addEventListener('click', E => {
@@ -449,15 +525,12 @@ document.addEventListener('DOMContentLoaded', () => {
       CurrentTab = Item.dataset.tab;
       NavText.textContent = Item.textContent.trim();
       document.querySelectorAll('.nav-dropdown-item').forEach(I => I.classList.toggle('active', I === Item));
-      if (AllData) RenderEras(SearchBox.value);
+      if (AllData) RenderEras(SearchBox.value, Audio);
     });
   });
 
   document.addEventListener('keydown', E => {
-    if (E.key === '/' && document.activeElement !== SearchBox) {
-      E.preventDefault();
-      SearchBox.focus();
-    }
+    if (E.key === '/' && document.activeElement !== SearchBox) { E.preventDefault(); SearchBox.focus(); }
     if (E.key === 'Escape') {
       SearchBox.blur();
       FilterMenu.classList.remove('open');
@@ -468,11 +541,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.addEventListener('scroll', () => {
-    ScrollBtn.classList.toggle('visible', window.scrollY > 400);
+    ScrollBtn.classList.toggle('visible', scrollY > 400);
     CloseAllSongDropdowns();
   }, { passive: true });
 
-  ScrollBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  ScrollBtn.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
 
   FilterBtn.addEventListener('click', E => {
     E.stopPropagation();
@@ -502,25 +575,24 @@ document.addEventListener('DOMContentLoaded', () => {
       Item.classList.add('active');
       Item.setAttribute('aria-checked', 'true');
     }
-    if (AllData) RenderEras(SearchBox.value);
+    if (AllData) RenderEras(SearchBox.value, Audio);
   });
 
   (async () => {
-    async function FetchSheet(Id) {
+    const FetchCsv = async Id => {
       const Res = await fetch(`https://docs.google.com/spreadsheets/d/${Id}/export?format=csv`);
       if (!Res.ok) throw new Error(`HTTP ${Res.status}`);
       return Res.text();
-    }
-
+    };
     try {
       let Csv;
-      try { Csv = await FetchSheet(SheetId); }
-      catch { Csv = await FetchSheet(FallbackSheetId); }
+      try       { Csv = await FetchCsv(SheetId); }
+      catch     { Csv = await FetchCsv(FallbackSheetId); }
       AllData = BuildData(ParseCsv(Csv));
-      RenderEras();
+      RenderEras('', Audio);
     } catch {
       const El = document.createElement('div');
-      El.className = 'no-results';
+      El.className   = 'no-results';
       El.style.color = 'var(--red)';
       El.textContent = 'Failed to load data. Check sheet permissions.';
       document.getElementById('era-list').replaceChildren(El);
