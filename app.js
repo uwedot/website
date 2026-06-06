@@ -34,6 +34,23 @@ function QualityAllowed(Quality) {
   return false;
 }
 
+function UpdatePlayButtonsState() {
+  const Audio = document.getElementById('main-audio');
+  if (!Audio) return;
+  document.querySelectorAll('.play-btn').forEach(Btn => {
+    try {
+      const IsCurrent = Audio.src && (new URL(Audio.src).href === new URL(Btn.dataset.url, window.location.href).href);
+      if (IsCurrent && !Audio.paused) {
+        Btn.textContent = 'Stop';
+      } else {
+        Btn.textContent = 'Play';
+      }
+    } catch (e) {
+      Btn.textContent = 'Play';
+    }
+  });
+}
+
 function ParseCsv(Text) {
   const Rows = [];
   let Field = '', Row = [], InQuote = false;
@@ -59,12 +76,18 @@ function BuildData(Rows) {
   if (Rows.length < 2) return EraMap;
 
   const Header = Rows[0].map(H => H.trim().toLowerCase());
+  let LeakDateIdx = Header.indexOf('leak date');
+  if (LeakDateIdx === -1) {
+    LeakDateIdx = Header.findIndex(H => H.includes('date'));
+  }
+
   const Col = {
     era:    Header.indexOf('era'),
     name:   Header.indexOf('name'),
     quality:Header.indexOf('quality'),
     url:    Header.indexOf('link(s)'),
     notes:  Header.indexOf('notes'),
+    leakDate: LeakDateIdx,
   };
 
   const SummaryPattern = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
@@ -84,6 +107,7 @@ function BuildData(Rows) {
       (R[Col.quality] || '').trim(),
       (R[Col.url]     || '').trim(),
       (R[Col.notes]   || '').trim(),
+      Col.leakDate !== -1 ? (R[Col.leakDate] || '').trim() : '',
     ]);
   }
 
@@ -105,18 +129,31 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
     DisplayQuality = 'Unavailable';
   }
 
-  let ActionsRightHtml = '';
+  const PillowsUrl = UrlList.find(u => u.includes('pillows.su/f/'));
+  let PlayBtnHtml = '';
+  if (PillowsUrl) {
+    const DownloadUrl = PillowsUrl.replace('pillows.su/f/', 'api.pillows.su/api/download/');
+    const Audio = document.getElementById('main-audio');
+    let BtnText = 'Play';
+    if (Audio && Audio.src) {
+      try {
+        const IsCurrent = new URL(Audio.src).href === new URL(DownloadUrl, window.location.href).href;
+        if (IsCurrent && !Audio.paused) {
+          BtnText = 'Stop';
+        }
+      } catch (e) {}
+    }
+    PlayBtnHtml = `<button type="button" class="song-play-btn play-btn" data-url="${EscapeHtml(DownloadUrl)}" data-name="${EscapeHtml(Name)}">${BtnText}</button>`;
+  }
+
+  let LinksHtml = '';
   if (UrlList.length > 1) {
     let ItemsHtml = '';
     UrlList.forEach((u, index) => {
       ItemsHtml += `<a class="song-dropdown-item" href="${EscapeHtml(u)}" target="_blank" rel="noopener noreferrer">View ${index + 1}</a>`;
-      if (u.includes('pillows.su/f/')) {
-        const DownloadUrl = u.replace('pillows.su/f/', 'api.pillows.su/api/download/');
-        ItemsHtml += `<a class="song-dropdown-item" href="${EscapeHtml(DownloadUrl)}" target="_blank" rel="noopener noreferrer">Download ${index + 1}</a>`;
-      }
     });
 
-    ActionsRightHtml = 
+    LinksHtml = 
       `<div class="song-dropdown">` +
         `<button type="button" class="song-dropdown-btn">` +
           `<span>Links</span>` +
@@ -129,30 +166,12 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
         `</div>` +
       `</div>`;
   } else if (UrlList.length === 1) {
-    const SingleUrl = UrlList[0];
-    const HasDownload = SingleUrl.includes('pillows.su/f/');
-    if (HasDownload) {
-      const DownloadUrl = SingleUrl.replace('pillows.su/f/', 'api.pillows.su/api/download/');
-      ActionsRightHtml = 
-        `<div class="song-dropdown">` +
-          `<button type="button" class="song-dropdown-btn">` +
-            `<span>Links</span>` +
-            `<svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">` +
-              `<polyline points="6,9 12,15 18,9"/>` +
-            `</svg>` +
-          `</button>` +
-          `<div class="song-dropdown-menu" role="menu">` +
-            `<a class="song-dropdown-item" href="${EscapeHtml(SingleUrl)}" target="_blank" rel="noopener noreferrer">View</a>` +
-            `<a class="song-dropdown-item" href="${EscapeHtml(DownloadUrl)}" target="_blank" rel="noopener noreferrer">Download</a>` +
-          `</div>` +
-        `</div>`;
-    } else {
-      ActionsRightHtml = `<a class="song-link-btn" href="${EscapeHtml(SingleUrl)}" target="_blank" rel="noopener noreferrer">View</a>`;
-    }
+    LinksHtml = `<a class="song-link-btn" href="${EscapeHtml(UrlList[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
   } else {
-    ActionsRightHtml = `<div class="song-link-placeholder"></div>`;
+    LinksHtml = `<div class="song-link-placeholder"></div>`;
   }
 
+  let ActionsRightHtml = PlayBtnHtml + LinksHtml;
   ActionsRightHtml += HasNote ? `<div class="note-toggle" aria-label="Show note">＋</div>` : `<div class="note-toggle-placeholder"></div>`;
 
   const El = document.createElement('div');
@@ -170,7 +189,7 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
       `</div>` +
     `</div>`;
 
-  if (UrlList.length > 1 || (UrlList.length === 1 && UrlList[0].includes('pillows.su/f/'))) {
+  if (UrlList.length > 1) {
     const DropBtn = El.querySelector('.song-dropdown-btn');
     const DropMenu = El.querySelector('.song-dropdown-menu');
     DropBtn.addEventListener('click', Ev => {
@@ -180,6 +199,38 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
         if (M !== DropMenu) M.classList.remove('open');
       });
       DropMenu.classList.toggle('open', !IsOpen);
+    });
+  }
+
+  const PlayBtn = El.querySelector('.play-btn');
+  if (PlayBtn) {
+    PlayBtn.addEventListener('click', Ev => {
+      Ev.stopPropagation();
+      try {
+        const TrackUrl = new URL(PlayBtn.dataset.url, window.location.href).href;
+        const TrackName = PlayBtn.dataset.name;
+        
+        const Player = document.getElementById('global-player');
+        const Audio = document.getElementById('main-audio');
+        const NameEl = document.getElementById('player-track-name');
+        
+        const IsCurrent = Audio.src && (new URL(Audio.src).href === TrackUrl);
+        
+        if (IsCurrent) {
+          if (Audio.paused) {
+            Audio.play();
+          } else {
+            Audio.pause();
+          }
+        } else {
+          NameEl.textContent = TrackName;
+          Audio.src = TrackUrl;
+          Player.classList.add('active');
+          Audio.play();
+        }
+      } catch (err) {}
+
+      document.querySelectorAll('.song-dropdown-menu.open').forEach(M => M.classList.remove('open'));
     });
   }
 
@@ -198,6 +249,15 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
   return [El];
 }
 
+function GetDateValue(Str) {
+  if (!Str) return 0;
+  const Num = Date.parse(Str);
+  if (!isNaN(Num)) return Num;
+  const YearMatch = Str.match(/\b(19|20)\d{2}\b/);
+  if (YearMatch) return new Date(YearMatch[0], 0, 1).getTime();
+  return 0;
+}
+
 function RenderEras(Filter = '') {
   const List = document.getElementById('era-list');
   const F = Filter.trim().toLowerCase();
@@ -207,13 +267,52 @@ function RenderEras(Filter = '') {
   const TabEmoji = CurrentTab === 'best' ? '⭐' : CurrentTab === 'special' ? '✨' : null;
 
   const Filtered = {};
-  for (const [Era, Songs] of Object.entries(AllData)) {
-    let Matched = Songs.filter(([, Quality]) => QualityAllowed(Quality));
-    if (TabEmoji) Matched = Matched.filter(([Name]) => Name.includes(TabEmoji));
-    if (F) Matched = Matched.filter(([Name]) =>
-      Name.toLowerCase().includes(F) || Era.toLowerCase().includes(F)
-    );
-    if (Matched.length) Filtered[Era] = Matched;
+
+  if (CurrentTab === 'recent') {
+    const AllSongs = [];
+    for (const [Era, Songs] of Object.entries(AllData)) {
+      let Matched = Songs.filter(([, Quality]) => QualityAllowed(Quality));
+      if (F) {
+        Matched = Matched.filter(([Name]) =>
+          Name.toLowerCase().includes(F) || Era.toLowerCase().includes(F)
+        );
+      }
+      Matched.forEach(Song => {
+        AllSongs.push({
+          era: Era,
+          name: Song[0],
+          quality: Song[1],
+          url: Song[2],
+          notes: Song[3],
+          dateStr: Song[4] || ''
+        });
+      });
+    }
+
+    AllSongs.sort((A, B) => GetDateValue(B.dateStr) - GetDateValue(A.dateStr));
+
+    const RecentSongs = AllSongs.slice(0, 200);
+
+    if (RecentSongs.length > 0) {
+      Filtered['Recent Leaks'] = RecentSongs.map(S => {
+        const DateTag = S.dateStr ? ` (${S.dateStr})` : '';
+        return [
+          `[${S.era}] ${S.name}${DateTag}`,
+          S.quality,
+          S.url,
+          S.notes
+        ];
+      });
+    }
+  } else {
+    for (const [Era, Songs] of Object.entries(AllData)) {
+      let Matched = Songs.filter(([, Quality]) => QualityAllowed(Quality));
+      if (TabEmoji) Matched = Matched.filter(([Name]) => Name.includes(TabEmoji));
+      if (F) Matched = Matched.filter(([Name]) =>
+        Name.toLowerCase().includes(F) || Era.toLowerCase().includes(F)
+      );
+      if (Matched.length) Filtered[Era] = Matched;
+    }
   }
 
   const EraKeys = Object.keys(Filtered);
@@ -278,6 +377,7 @@ function RenderEras(Filter = '') {
             MakeSongEl(Name, Quality, Url, Notes, I + 1).forEach(Node => SongFrag.appendChild(Node));
           });
           Inner.appendChild(SongFrag);
+          UpdatePlayButtonsState();
           requestAnimationFrame(() => Row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
         }
       }
@@ -308,8 +408,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const NavBtn     = document.getElementById('nav-tab-btn');
   const NavMenu    = document.getElementById('nav-tab-menu');
   const NavText    = document.getElementById('nav-btn-text');
+  const MainAudio  = document.getElementById('main-audio');
 
   SearchBox.addEventListener('input', E => OnSearch(E.target.value));
+
+  if (MainAudio) {
+    MainAudio.addEventListener('play', UpdatePlayButtonsState);
+    MainAudio.addEventListener('pause', UpdatePlayButtonsState);
+    MainAudio.addEventListener('ended', UpdatePlayButtonsState);
+  }
 
   NavBtn.addEventListener('click', E => {
     E.stopPropagation();
