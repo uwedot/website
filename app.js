@@ -279,6 +279,7 @@ function buildSongElement(songName, quality, linkString, notes, trackNumber, ava
       } else {
         document.getElementById('player-track-name').textContent = playButton.dataset.name;
         audioElement.src = trackUrl;
+        audioElement.load();
         player.removeAttribute('hidden');
         audioElement.play().catch(() => {});
       }
@@ -529,9 +530,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     audioElement.addEventListener('durationchange', () => setDuration(formatTime(audioElement.duration)));
     audioElement.addEventListener('loadedmetadata', () => setDuration(formatTime(audioElement.duration)));
-    audioElement.addEventListener('error', () => {
+    audioElement.addEventListener('error', (e) => {
       setPlayState(false);
-      document.getElementById('player-track-name').textContent = 'Failed to load track';
+      document.getElementById('player-track-name').textContent = 'Playback error: Format not supported';
+      console.error('Audio playback error:', e);
     });
 
     playPauseBtn.addEventListener('click', () => {
