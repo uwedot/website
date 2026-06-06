@@ -13,14 +13,12 @@ const QualityKeys = {
 };
 
 function QClass(Q) {
-  if (!Q) return 'q-na';
+  if (!Q) return 'q-other';
   const L = Q.toLowerCase();
-  if (L.includes('high'))                              return 'q-high';
-  if (L.includes('cd'))                                return 'q-cd';
-  if (L.includes('low'))                               return 'q-low';
-  if (L.includes('record'))                            return 'q-rec';
-  if (L.includes('confirm'))                           return 'q-conf';
-  if (L.includes('not avail') || L.includes('unavail'))return 'q-na';
+  if (L.includes('high'))   return 'q-high';
+  if (L.includes('cd'))     return 'q-cd';
+  if (L.includes('low'))    return 'q-low';
+  if (L.includes('record')) return 'q-rec';
   return 'q-other';
 }
 
