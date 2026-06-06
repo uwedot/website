@@ -1,8 +1,8 @@
 const SheetId         = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
 const FallbackSheetId = '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM';
 
-let AllData       = null;
-let CurrentTab    = 'all';
+let AllData         = null;
+let CurrentTab      = 'all';
 let ActiveQualities = new Set(['high','low','rec','cd','lossless']);
 
 const QualityKeys = {
@@ -180,30 +180,25 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType, Audio) {
       `</div>`;
   } else if (UrlList.length === 1) {
     LinksHtml = `<a class="song-link-btn" href="${EscapeHtml(UrlList[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
-  } else {
-    LinksHtml = `<div class="song-link-placeholder"></div>`;
   }
 
-  const ActionsRightHtml =
-    PlayBtnHtml + LinksHtml +
-    (HasNote ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note">＋</div>` : `<div class="note-toggle-placeholder"></div>`);
+  const NoteHtml = HasNote
+    ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note">＋</div>`
+    : '';
 
+  const PillsHtml =
+    (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : '') +
+    (TrackType      ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>`             : '');
+
+  // Flat structure: num | name | pills | buttons
+  // CSS grid handles layout per breakpoint — no nested wrapper divs
   const El = document.createElement('div');
   El.className = 'song-item';
   El.innerHTML =
     `<div class="song-num">${Num}</div>` +
     `<div class="song-name" title="${EscapeHtml(Name)}">${EscapeHtml(Name)}</div>` +
-    `<div class="song-actions">` +
-      `<div class="song-actions-left">` +
-        (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
-        (TrackType      ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>`             : `<div class="song-type-placeholder"></div>`) +
-      `</div>` +
-      `<div class="song-actions-right">${ActionsRightHtml}</div>` +
-    `</div>` +
-    `<div class="song-pills">` +
-      (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : '') +
-      (TrackType      ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>`             : '') +
-    `</div>`;
+    `<div class="song-pills">${PillsHtml}</div>` +
+    `<div class="song-btns">${PlayBtnHtml}${LinksHtml}${NoteHtml}</div>`;
 
   if (UrlList.length > 1) {
     const DropBtn  = El.querySelector('.song-dropdown-btn');
@@ -225,8 +220,8 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType, Audio) {
     PlayBtn.addEventListener('click', Ev => {
       Ev.stopPropagation();
       CloseAllSongDropdowns();
-      const TrackUrl = new URL(PlayBtn.dataset.url, location.href).href;
-      const Player   = document.getElementById('global-player');
+      const TrackUrl  = new URL(PlayBtn.dataset.url, location.href).href;
+      const Player    = document.getElementById('global-player');
       const IsCurrent = Audio.src && (new URL(Audio.src).href === TrackUrl);
       if (IsCurrent) {
         Audio.paused ? Audio.play().catch(() => {}) : Audio.pause();
@@ -240,10 +235,10 @@ function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType, Audio) {
   }
 
   if (HasNote) {
-    const NoteEl     = document.createElement('div');
-    NoteEl.className = 'song-note';
+    const NoteEl       = document.createElement('div');
+    NoteEl.className   = 'song-note';
     NoteEl.textContent = Notes;
-    const NoteToggle = El.querySelector('.note-toggle');
+    const NoteToggle   = El.querySelector('.note-toggle');
     NoteToggle.addEventListener('click', Ev => {
       Ev.stopPropagation();
       const IsExp = El.classList.toggle('expanded');
@@ -311,7 +306,7 @@ function RenderEras(Filter, Audio) {
     }
   }
 
-  const EraKeys   = Object.keys(Filtered);
+  const EraKeys    = Object.keys(Filtered);
   const TotalSongs = EraKeys.reduce((S, K) => S + Filtered[K].length, 0);
   document.getElementById('nav-eras').textContent  = EraKeys.length;
   document.getElementById('nav-songs').textContent = TotalSongs.toLocaleString();
@@ -431,14 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const SetProgress = Pct => {
-      const P       = Math.max(0, Math.min(100, Pct));
+      const P = Math.max(0, Math.min(100, Pct));
       Fill.style.width = Thumb.style.left = P + '%';
     };
 
     const SetVolume = Pct => {
-      const P            = Math.max(0, Math.min(100, Pct));
+      const P = Math.max(0, Math.min(100, Pct));
       VolFill.style.width = VolThumb.style.left = P + '%';
-      Audio.volume       = P / 100;
+      Audio.volume = P / 100;
     };
 
     const ScrubberPct = (Ev, El) => {
@@ -446,65 +441,36 @@ document.addEventListener('DOMContentLoaded', () => {
       return Math.max(0, Math.min(1, (Ev.clientX - R.left) / R.width));
     };
 
-    const SetTime = T => {
-      CurrentEl.textContent = TrackCurrentEl.textContent = T;
-    };
-
-    const SetDuration = T => {
-      DurationEl.textContent = TrackLengthEl.textContent = T;
-    };
+    const SetTime     = T => { CurrentEl.textContent = TrackCurrentEl.textContent = T; };
+    const SetDuration = T => { DurationEl.textContent = TrackLengthEl.textContent = T; };
 
     Audio.addEventListener('play',  () => { SetPlayState(true);  UpdatePlayButtonsState(Audio); });
     Audio.addEventListener('pause', () => { SetPlayState(false); UpdatePlayButtonsState(Audio); });
-    Audio.addEventListener('ended', () => {
-      SetPlayState(false); SetProgress(0); SetTime('0:00');
-      UpdatePlayButtonsState(Audio);
-    });
-    Audio.addEventListener('timeupdate', () => {
-      if (!Audio.duration) return;
-      SetProgress((Audio.currentTime / Audio.duration) * 100);
-      SetTime(FormatTime(Audio.currentTime));
-    });
+    Audio.addEventListener('ended', () => { SetPlayState(false); SetProgress(0); SetTime('0:00'); UpdatePlayButtonsState(Audio); });
+    Audio.addEventListener('timeupdate',     () => { if (!Audio.duration) return; SetProgress((Audio.currentTime / Audio.duration) * 100); SetTime(FormatTime(Audio.currentTime)); });
     Audio.addEventListener('durationchange', () => SetDuration(FormatTime(Audio.duration)));
     Audio.addEventListener('loadedmetadata', () => SetDuration(FormatTime(Audio.duration)));
 
-    PlayBtn.addEventListener('click', () => {
-      Audio.paused ? Audio.play().catch(() => {}) : Audio.pause();
-    });
+    PlayBtn.addEventListener('click', () => { Audio.paused ? Audio.play().catch(() => {}) : Audio.pause(); });
 
     CloseBtn.addEventListener('click', () => {
-      Audio.pause();
-      Audio.src = '';
+      Audio.pause(); Audio.src = '';
       Player.classList.remove('active');
-      SetPlayState(false);
-      SetProgress(0);
-      SetTime('0:00');
-      SetDuration('0:00');
+      SetPlayState(false); SetProgress(0); SetTime('0:00'); SetDuration('0:00');
       UpdatePlayButtonsState(Audio);
     });
 
     let ScrubDragging = false, VolDragging = false;
-
-    Scrubber.addEventListener('mousedown', Ev => {
-      ScrubDragging = true;
-      if (Audio.duration) Audio.currentTime = ScrubberPct(Ev, Scrubber) * Audio.duration;
-    });
-    VolSlider.addEventListener('mousedown', Ev => {
-      VolDragging = true;
-      SetVolume(ScrubberPct(Ev, VolSlider) * 100);
-    });
+    Scrubber.addEventListener('mousedown', Ev => { ScrubDragging = true; if (Audio.duration) Audio.currentTime = ScrubberPct(Ev, Scrubber) * Audio.duration; });
+    VolSlider.addEventListener('mousedown', Ev => { VolDragging = true; SetVolume(ScrubberPct(Ev, VolSlider) * 100); });
     window.addEventListener('mousemove', Ev => {
       if (ScrubDragging && Audio.duration) Audio.currentTime = ScrubberPct(Ev, Scrubber) * Audio.duration;
       if (VolDragging) SetVolume(ScrubberPct(Ev, VolSlider) * 100);
     });
     window.addEventListener('mouseup', () => { ScrubDragging = false; VolDragging = false; });
 
-    Scrubber.addEventListener('touchstart', Ev => {
-      if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration;
-    }, { passive: true });
-    Scrubber.addEventListener('touchmove', Ev => {
-      if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration;
-    }, { passive: true });
+    Scrubber.addEventListener('touchstart', Ev => { if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration; }, { passive: true });
+    Scrubber.addEventListener('touchmove',  Ev => { if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration; }, { passive: true });
     VolSlider.addEventListener('touchstart', Ev => SetVolume(ScrubberPct(Ev.touches[0], VolSlider) * 100), { passive: true });
     VolSlider.addEventListener('touchmove',  Ev => SetVolume(ScrubberPct(Ev.touches[0], VolSlider) * 100), { passive: true });
 
@@ -540,24 +506,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  window.addEventListener('scroll', () => {
-    ScrollBtn.classList.toggle('visible', scrollY > 400);
-    CloseAllSongDropdowns();
-  }, { passive: true });
-
+  window.addEventListener('scroll', () => { ScrollBtn.classList.toggle('visible', scrollY > 400); CloseAllSongDropdowns(); }, { passive: true });
   ScrollBtn.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
 
-  FilterBtn.addEventListener('click', E => {
-    E.stopPropagation();
-    FilterMenu.classList.toggle('open');
-  });
+  FilterBtn.addEventListener('click', E => { E.stopPropagation(); FilterMenu.classList.toggle('open'); });
 
   document.addEventListener('click', E => {
     if (!FilterMenu.contains(E.target) && E.target !== FilterBtn) FilterMenu.classList.remove('open');
-    if (!NavMenu.contains(E.target) && !NavBtn.contains(E.target)) {
-      NavMenu.classList.remove('open');
-      NavBtn.setAttribute('aria-expanded', 'false');
-    }
+    if (!NavMenu.contains(E.target) && !NavBtn.contains(E.target)) { NavMenu.classList.remove('open'); NavBtn.setAttribute('aria-expanded', 'false'); }
     if (!E.target.closest('.song-dropdown')) CloseAllSongDropdowns();
   });
 
@@ -586,8 +542,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     try {
       let Csv;
-      try       { Csv = await FetchCsv(SheetId); }
-      catch     { Csv = await FetchCsv(FallbackSheetId); }
+      try   { Csv = await FetchCsv(SheetId); }
+      catch { Csv = await FetchCsv(FallbackSheetId); }
       AllData = BuildData(ParseCsv(Csv));
       RenderEras('', Audio);
     } catch {
