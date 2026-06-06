@@ -99,7 +99,7 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
   const HasUrl  = !!(Url && /^https?:/i.test(Url.trim()));
 
   const El = document.createElement('div');
-  El.className = 'song-item' + (HasNote ? ' has-note' : '');
+  El.className = 'song-item';
 
   El.innerHTML =
     `<div class="song-num">${Num}</div>` +
@@ -109,8 +109,8 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
         (Quality ? `<div class="song-quality ${QClass(Quality)}">${EscapeHtml(Quality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
       `</div>` +
       `<div class="song-actions-right">` +
-        (HasUrl  ? `<a class="song-link-btn" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">open</a>` : `<div class="song-link-placeholder"></div>`) +
-        (HasNote ? `<div class="note-toggle" aria-label="Show note">+</div>` : `<div class="note-toggle-placeholder"></div>`) +
+        (HasUrl  ? `<a class="song-link-btn" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">View</a>` : `<div class="song-link-placeholder"></div>`) +
+        (HasNote ? `<div class="note-toggle" aria-label="Show note">＋</div>` : `<div class="note-toggle-placeholder"></div>`) +
       `</div>` +
     `</div>`;
 
@@ -121,7 +121,7 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
     El.querySelector('.note-toggle').addEventListener('click', Ev => {
       Ev.stopPropagation();
       const IsExp = El.classList.toggle('expanded');
-      Ev.currentTarget.textContent = IsExp ? '-' : '+';
+      Ev.currentTarget.textContent = IsExp ? '－' : '＋';
       Ev.currentTarget.setAttribute('aria-label', IsExp ? 'Hide note' : 'Show note');
     });
     return [El, NoteEl];
@@ -231,7 +231,8 @@ function OnSearch(Val) {
 
 document.addEventListener('DOMContentLoaded', () => {
   const SearchBox  = document.getElementById('search-box');
-  const FilterWrap = document.getElementById('filter-wrap');
+  const FilterBtn  = document.getElementById('filter-btn');
+  const FilterMenu = document.getElementById('filter-menu');
   const ScrollBtn  = document.getElementById('scroll-top');
 
   SearchBox.addEventListener('input', E => OnSearch(E.target.value));
@@ -250,7 +251,10 @@ document.addEventListener('DOMContentLoaded', () => {
       E.preventDefault();
       SearchBox.focus();
     }
-    if (E.key === 'Escape') SearchBox.blur();
+    if (E.key === 'Escape') {
+      SearchBox.blur();
+      FilterMenu.classList.remove('open');
+    }
   });
 
   window.addEventListener('scroll', () => {
@@ -259,17 +263,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   ScrollBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
-  FilterWrap.addEventListener('click', E => {
-    const Chip = E.target.closest('.filter-chip');
-    if (!Chip) return;
-    const Key = Chip.dataset.quality;
+  FilterBtn.addEventListener('click', E => {
+    E.stopPropagation();
+    FilterMenu.classList.toggle('open');
+  });
+
+  document.addEventListener('click', E => {
+    if (!FilterMenu.contains(E.target) && E.target !== FilterBtn) {
+      FilterMenu.classList.remove('open');
+    }
+  });
+
+  FilterMenu.addEventListener('click', E => {
+    const Item = E.target.closest('.filter-item');
+    if (!Item) return;
+    
+    const Key = Item.dataset.quality;
+
     if (ActiveQualities.has(Key)) {
       if (ActiveQualities.size === 1) return;
       ActiveQualities.delete(Key);
-      Chip.classList.remove('active');
+      Item.classList.remove('active');
     } else {
       ActiveQualities.add(Key);
-      Chip.classList.add('active');
+      Item.classList.add('active');
     }
     if (AllData) RenderEras(AllData, SearchBox.value);
   });

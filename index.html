@@ -4,50 +4,63 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="A fan-made archive of Ye's unreleased discography.">
-  <meta name="theme-color" content="#080808">
+  <meta name="theme-color" content="#0b0b0c">
   <meta property="og:title" content="YE VAULT">
   <meta property="og:description" content="A fan-made archive of Ye's unreleased discography.">
   <meta property="og:type" content="website">
   <link rel="icon" href="data:,">
   <title>YE VAULT</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <nav class="nav" aria-label="Site navigation">
-  <div class="nav-logo">YE VAULT</div>
+  <div class="nav-logo">Ye Vault</div>
   <div class="nav-tabs">
     <button type="button" class="nav-tab active" data-tab="all">Unreleased</button>
-    <button type="button" class="nav-tab" data-tab="best">⭐ Best Of</button>
-    <button type="button" class="nav-tab" data-tab="special">✨ Special</button>
+    <button type="button" class="nav-tab" data-tab="best">Best Of</button>
+    <button type="button" class="nav-tab" data-tab="special">Special</button>
   </div>
-  <div class="nav-stats" aria-live="polite">
-    <div class="nav-stat"><span id="nav-eras">—</span> eras</div>
-    <div class="nav-stat"><span id="nav-songs">—</span> songs</div>
+  <div class="nav-stats">
+    <div class="nav-stat">Eras: <span id="nav-eras">0</span></div>
+    <div class="nav-stat">Songs: <span id="nav-songs">0</span></div>
   </div>
 </nav>
 
-<div class="hero" aria-hidden="true">
-  <div id="hero-bg"></div>
-  <div class="hero-title">YE VAULT</div>
-  <div class="hero-sub">Ye's unreleased discography</div>
-</div>
+<header class="hero">
+  <div class="hero-label">Archive Collection</div>
+  <h1 class="hero-title">YE VAULT</h1>
+  <p class="hero-sub">Ye's unreleased discography</p>
+</header>
 
 <main>
-  <div class="search-wrap">
-    <label for="search-box" class="sr-only">Search songs or eras</label>
-    <input id="search-box" class="search-box" type="search" placeholder="search songs or eras... (press / to focus)" autocomplete="off" spellcheck="false">
-  </div>
+  <div class="controls-row">
+    <div class="search-wrap">
+      <label for="search-box" class="sr-only">Search songs or eras</label>
+      <div class="search-inner">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input id="search-box" class="search-box" type="search" placeholder="Search songs or eras…" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
 
-  <div class="filter-wrap" id="filter-wrap" role="group" aria-label="Filter by quality">
-    <button type="button" class="filter-chip active" data-quality="high">High Quality</button>
-    <button type="button" class="filter-chip active" data-quality="low">Low Quality</button>
-    <button type="button" class="filter-chip active" data-quality="rec">Recording</button>
-    <button type="button" class="filter-chip active" data-quality="cd">CD Quality</button>
-    <button type="button" class="filter-chip active" data-quality="lossless">Lossless</button>
+    <div class="filter-dropdown-container">
+      <button type="button" id="filter-btn" class="filter-dropdown-btn">
+        Filter Quality
+        <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <polyline points="6,9 12,15 18,9"/>
+        </svg>
+      </button>
+      <div id="filter-menu" class="filter-dropdown-menu" role="menu">
+        <div class="filter-item active" data-quality="high" role="menuitemcheckbox" aria-checked="true">High Quality</div>
+        <div class="filter-item active" data-quality="low" role="menuitemcheckbox" aria-checked="true">Low Quality</div>
+        <div class="filter-item active" data-quality="rec" role="menuitemcheckbox" aria-checked="true">Recording</div>
+        <div class="filter-item active" data-quality="cd" role="menuitemcheckbox" aria-checked="true">CD Quality</div>
+        <div class="filter-item active" data-quality="lossless" role="menuitemcheckbox" aria-checked="true">Lossless</div>
+      </div>
+    </div>
   </div>
 
   <div class="era-list" id="era-list" aria-live="polite">
@@ -62,15 +75,16 @@
 </main>
 
 <footer class="footer">
-  <div class="footer-version">YE VAULT v3.2.0</div>
-  <div class="footer-credits">a fan-made archive - not affiliated with YZY</div>
+  <p class="footer-text">Not affiliated with Yeezy LLC</p>
 </footer>
 
-<button type="button" class="scroll-top" id="scroll-top" aria-label="Back to top">
-  <svg viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><polyline points="18,15 12,9 6,15"></polyline></svg>
+<button type="button" id="scroll-top" class="scroll-top" aria-label="Scroll to top">
+  <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+    <line x1="12" y1="19" x2="12" y2="5"/>
+    <polyline points="5,12 12,5 19,12"/>
+  </svg>
 </button>
 
-<script src="app.js" defer></script>
-
+<script src="app.js"></script>
 </body>
 </html>
