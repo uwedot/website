@@ -1,17 +1,16 @@
-/* Fonts loaded via <link> in HTML — no @import needed here */
-
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:#d0d0d0;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 /* NAV */
-.nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:rgba(8,8,8,0.85);backdrop-filter:blur(12px);border-bottom:1px solid #111;animation:fadeUp 0.4s ease both}
+.nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:rgba(8,8,8,0.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid #111;animation:fadeUp 0.4s ease both}
 .nav-logo{font-family:'Unbounded',sans-serif;font-size:15px;font-weight:600;letter-spacing:0.15em;color:#fff}
 .nav-tabs{display:flex;gap:4px}
 .nav-tab{padding:5px 12px;border-radius:20px;border:none;background:transparent;color:#555;font-size:11px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;letter-spacing:0.04em;transition:background 0.2s,color 0.2s;white-space:nowrap}
 .nav-tab.active{background:#ffffff12;color:#fff}
 .nav-tab:hover:not(.active){color:#aaa}
+.nav-tab:focus-visible{outline:2px solid #7c5cbf;outline-offset:2px;border-radius:20px}
 .nav-stats{display:flex;gap:16px;align-items:center}
 .nav-stat{font-size:11px;color:#333;letter-spacing:0.1em}
 .nav-stat span{color:#7c5cbf;font-weight:500}
@@ -25,8 +24,8 @@ body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:
 
 /* SEARCH */
 .search-wrap{padding:16px 20px 8px;max-width:760px;margin:0 auto;width:100%;animation:fadeUp 0.5s 0.1s ease both}
-.search-box{width:100%;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 16px 10px 40px;color:#e0e0e0;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.2s;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23444' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:14px center}
-.search-box:focus{border-color:#2e2e2e}
+.search-box{width:100%;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 16px 10px 40px;color:#e0e0e0;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.2s,box-shadow 0.2s;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23444' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:14px center}
+.search-box:focus{border-color:#3a2a5a;box-shadow:0 0 0 2px #7c5cbf22}
 .search-box::placeholder{color:#333}
 
 /* FILTER CHIPS */
@@ -34,6 +33,7 @@ body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:
 .filter-chip{padding:5px 14px;border-radius:20px;border:1px solid #1e1e1e;background:transparent;color:#444;font-size:11px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;letter-spacing:0.05em;transition:border-color 0.2s,color 0.2s,background 0.2s;white-space:nowrap}
 .filter-chip.active{background:#ffffff08;border-color:#3a2a5a;color:#9c78ff}
 .filter-chip:hover:not(.active){border-color:#2e2e2e;color:#777}
+.filter-chip:focus-visible{outline:2px solid #7c5cbf;outline-offset:2px}
 
 /* ERA LIST */
 .era-list{padding:8px 20px 40px;max-width:760px;margin:0 auto;width:100%;animation:fadeUp 0.5s 0.15s ease both}
@@ -57,11 +57,18 @@ body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:
 .songs-inner{padding:4px 0 8px;border:1px solid #161616;border-top:none;border-radius:0 0 10px 10px;background:#0a0a0a;opacity:0;transform:translateY(-6px);transition:opacity 0.2s ease,transform 0.2s ease;overflow:hidden}
 .songs-panel.open .songs-inner{opacity:1;transform:translateY(0);border-color:#3a2a5a}
 
-.song-item{display:flex;align-items:center;gap:12px;padding:9px 18px;transition:background 0.1s;color:inherit}
+/* SONG ROWS */
+.song-item{display:flex;align-items:center;gap:12px;padding:9px 18px;transition:background 0.1s;color:inherit;min-width:0}
 .song-item:hover{background:#0f0f0f}
-.song-num{font-size:11px;color:#2a2a2a;min-width:24px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
-.song-name{flex:1;font-size:13px;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
+.song-num{font-size:11px;color:#2a2a2a;min-width:24px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums;align-self:flex-start;padding-top:2px}
+.song-main{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;overflow:hidden}
+.song-name{font-size:13px;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
 .song-item:hover .song-name{color:#ddd}
+.song-subs{display:flex;flex-direction:column;gap:1px}
+.song-sub-line{font-size:10px;color:#333;letter-spacing:0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4}
+.song-item:hover .song-sub-line{color:#444}
+
+/* QUALITY BADGE */
 .song-quality{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;letter-spacing:0.04em;flex-shrink:0;white-space:nowrap}
 .q-high{background:#0d2a0d;color:#4caf50;border:1px solid #1a4a1a}
 .q-cd{background:#0d1e2a;color:#4a9eff;border:1px solid #1a3a4a}
@@ -71,17 +78,25 @@ body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:
 .q-other{background:#150d2a;color:#9c88ff;border:1px solid #2a1a4a}
 .song-len{font-size:11px;color:#2a2a2a;min-width:36px;text-align:right;flex-shrink:0}
 
-/* SONG LINK BUTTON */
+/* OPEN LINK BUTTON */
 .song-link-btn{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;border:1px solid #2a2a2a;background:transparent;color:#666;font-size:11px;font-family:'DM Sans',sans-serif;font-weight:500;text-decoration:none;letter-spacing:0.04em;flex-shrink:0;transition:border-color 0.15s,color 0.15s,background 0.15s}
 .song-link-btn:hover{border-color:#7c5cbf;color:#c0a8ff;background:#1a1230}
+.song-link-btn:focus-visible{outline:2px solid #7c5cbf;outline-offset:2px}
 
-/* SONG NOTES */
-.song-note{font-size:11px;color:#333;line-height:1.5;padding:4px 18px 10px 62px;display:none}
-.song-item.expanded + .song-note{display:block}
+/* NOTE TOGGLE */
+.note-toggle{width:16px;height:16px;border-radius:50%;border:1px solid #1e1e1e;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color 0.15s,color 0.15s,background 0.15s;font-size:9px;color:#2a2a2a;line-height:1;cursor:pointer;font-family:'DM Sans',sans-serif;padding:0}
 .song-item.has-note{cursor:pointer}
-.note-toggle{width:16px;height:16px;border-radius:50%;border:1px solid #1e1e1e;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color 0.15s,color 0.15s,background 0.15s;font-size:9px;color:#2a2a2a;line-height:1}
 .song-item.has-note:hover .note-toggle{border-color:#3a2a5a;color:#7c5cbf}
 .song-item.expanded .note-toggle{background:#1a1230;border-color:#3a2a5a;color:#9c78ff}
+.note-toggle:focus-visible{outline:2px solid #7c5cbf;outline-offset:2px}
+
+/* NOTE BODY */
+.song-note{font-size:11px;color:#333;line-height:1.6;padding:4px 18px 10px 62px;display:none}
+.song-item.expanded + .song-note{display:block}
+
+/* ERROR STATE */
+.load-error{display:flex;align-items:center;justify-content:center;gap:8px;color:#c0392b}
+.load-error svg{width:16px;height:16px;flex-shrink:0;stroke:#c0392b}
 
 /* SKELETON */
 .skeleton-wrap{display:flex;flex-direction:column;gap:6px}
@@ -95,6 +110,7 @@ body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:
 .scroll-top{position:fixed;bottom:28px;right:24px;width:38px;height:38px;border-radius:50%;background:#111;border:1px solid #222;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;transition:opacity 0.2s,border-color 0.2s,background 0.2s;z-index:100}
 .scroll-top.visible{opacity:1;pointer-events:auto}
 .scroll-top:hover{background:#1a1a2a;border-color:#3a2a5a}
+.scroll-top:focus-visible{outline:2px solid #7c5cbf;outline-offset:2px}
 .scroll-top svg{width:14px;height:14px;stroke:#666;fill:none;transition:stroke 0.2s}
 .scroll-top:hover svg{stroke:#9c78ff}
 
@@ -122,4 +138,10 @@ body{background:#080808;min-height:100vh;font-family:'DM Sans',sans-serif;color:
   .song-name{font-size:12px}
   .song-quality{display:none}
   .hero-title{font-size:clamp(32px,10vw,60px)}
+  .song-note{padding-left:46px}
+  .scroll-top{bottom:20px;right:16px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:0.01ms !important;transition-duration:0.01ms !important}
 }
