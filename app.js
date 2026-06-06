@@ -16,7 +16,7 @@ const QUALITY_MATCHERS = {
   rec:      label => label.includes('record'),
   cd:       label => label.includes('cd'),
   lossless: label => label.includes('lossless'),
-  unavail:  label => label.includes('not avail') || label.includes('unavail'),
+  unavail:  label => label.includes('not avail') || label.includes('unavail')
 };
 
 const TYPE_MATCHERS = {
@@ -29,7 +29,7 @@ const TYPE_MATCHERS = {
   unavail:   label => label.includes('unavail'),
   confirmed: label => label.includes('confirmed'),
   rumored:   label => label.includes('rumored'),
-  vox:       label => label.includes('vox'),
+  vox:       label => label.includes('vox')
 };
 
 function getQualityClass(quality) {
@@ -87,7 +87,9 @@ function escapeHtml(str) {
 
 function parseCsv(text) {
   const rows = [];
-  let field = '', row = [], insideQuotes = false;
+  let field = '';
+  let row = [];
+  let insideQuotes = false;
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     if (insideQuotes) {
@@ -124,7 +126,7 @@ function buildVaultData(rows) {
     link:            linkIndex,
     notes:           headers.indexOf('notes'),
     leakDate:        leakDateIndex,
-    availableLength: headers.findIndex(h => h.includes('available length')),
+    availableLength: headers.findIndex(h => h.includes('available length'))
   };
 
   const summaryRowPattern = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
@@ -145,7 +147,7 @@ function buildVaultData(rows) {
       columns.link            !== -1 ? (row[columns.link]            || '').trim() : '',
       (row[columns.notes]    || '').trim(),
       columns.leakDate        !== -1 ? (row[columns.leakDate]        || '').trim() : '',
-      columns.availableLength !== -1 ? (row[columns.availableLength] || '').trim() : '',
+      columns.availableLength !== -1 ? (row[columns.availableLength] || '').trim() : ''
     ]);
   }
   return eraMap;
@@ -202,10 +204,12 @@ function buildSongElement(songName, quality, linkString, notes, trackNumber, ava
   const availableLengthLower = availableLength.toLowerCase();
   const isRumoredOrConfirmed = availableLengthLower.includes('rumored') || availableLengthLower.includes('confirmed');
   const displayQuality = (hasLinks || isRumoredOrConfirmed) ? quality : 'Unavailable';
+  const isQualityUnavailable = !displayQuality || displayQuality.toLowerCase().includes('unavail') || displayQuality.toLowerCase().includes('not avail');
 
   const pillowsLink = links.find(url => url.includes('pillows.su/f/'));
   let playButtonHtml = '';
-  if (pillowsLink) {
+  
+  if (pillowsLink && !isQualityUnavailable) {
     const downloadUrl = pillowsLink.replace('pillows.su/f/', 'api.pillows.su/api/download/');
     let buttonLabel = 'Play';
     if (audioElement?.src) {
@@ -340,7 +344,7 @@ function renderEras(searchFilter, audioElement) {
             link:            song[2],
             notes:           song[3],
             leakDate:        song[4] || '',
-            availableLength: song[5] || '',
+            availableLength: song[5] || ''
           });
         }
       });
@@ -350,7 +354,7 @@ function renderEras(searchFilter, audioElement) {
     if (recentSongs.length) {
       visibleEras['Recent Leaks'] = recentSongs.map(song => [
         `[${song.era}] ${song.name}${song.leakDate ? ` (${song.leakDate})` : ''}`,
-        song.quality, song.link, song.notes, song.leakDate, song.availableLength,
+        song.quality, song.link, song.notes, song.leakDate, song.availableLength
       ]);
     }
   } else {
@@ -709,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Failed to load vault data:', error);
       const errorMessage = document.createElement('div');
       errorMessage.className = 'error-msg';
-      errorMessage.textContent = 'Failed to load data — check your connection or sheet permissions.';
+      errorMessage.textContent = 'Failed to load data, check your connection or sheet permissions.';
       document.getElementById('era-list').replaceChildren(errorMessage);
     }
   })();
