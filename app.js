@@ -96,18 +96,64 @@ function EscapeHtml(Str) {
 
 function MakeSongEl(Name, Quality, Url, Notes, Num) {
   const HasNote = Notes.trim() !== '';
-  const HasUrl  = !!(Url && /^https?:/i.test(Url.trim()));
+  
+  const UrlList = Url ? Url.split(/[\s,\n\r]+/).map(u => u.trim()).filter(u => /^https?:/i.test(u)) : [];
+  const HasUrl = UrlList.length > 0;
 
   let DisplayQuality = Quality;
   if (!HasUrl) {
     DisplayQuality = 'Unavailable';
   }
 
-  let DownloadHtml = '';
-  if (HasUrl && Url.includes('pillows.su/f/')) {
-    const DownloadUrl = Url.replace('pillows.su/f/', 'api.pillows.su/api/download/');
-    DownloadHtml = `<a class="song-link-btn" href="${EscapeHtml(DownloadUrl)}" target="_blank" rel="noopener noreferrer">Download</a>`;
+  let ActionsRightHtml = '';
+  if (UrlList.length > 1) {
+    let ItemsHtml = '';
+    UrlList.forEach((u, index) => {
+      ItemsHtml += `<a class="song-dropdown-item" href="${EscapeHtml(u)}" target="_blank" rel="noopener noreferrer">View ${index + 1}</a>`;
+      if (u.includes('pillows.su/f/')) {
+        const DownloadUrl = u.replace('pillows.su/f/', 'api.pillows.su/api/download/');
+        ItemsHtml += `<a class="song-dropdown-item" href="${EscapeHtml(DownloadUrl)}" target="_blank" rel="noopener noreferrer">Download ${index + 1}</a>`;
+      }
+    });
+
+    ActionsRightHtml = 
+      `<div class="song-dropdown">` +
+        `<button type="button" class="song-dropdown-btn">` +
+          `<span>Links</span>` +
+          `<svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">` +
+            `<polyline points="6,9 12,15 18,9"/>` +
+          `</svg>` +
+        `</button>` +
+        `<div class="song-dropdown-menu" role="menu">` +
+          ItemsHtml +
+        `</div>` +
+      `</div>`;
+  } else if (UrlList.length === 1) {
+    const SingleUrl = UrlList[0];
+    const HasDownload = SingleUrl.includes('pillows.su/f/');
+    if (HasDownload) {
+      const DownloadUrl = SingleUrl.replace('pillows.su/f/', 'api.pillows.su/api/download/');
+      ActionsRightHtml = 
+        `<div class="song-dropdown">` +
+          `<button type="button" class="song-dropdown-btn">` +
+            `<span>Links</span>` +
+            `<svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">` +
+              `<polyline points="6,9 12,15 18,9"/>` +
+            `</svg>` +
+          `</button>` +
+          `<div class="song-dropdown-menu" role="menu">` +
+            `<a class="song-dropdown-item" href="${EscapeHtml(SingleUrl)}" target="_blank" rel="noopener noreferrer">View</a>` +
+            `<a class="song-dropdown-item" href="${EscapeHtml(DownloadUrl)}" target="_blank" rel="noopener noreferrer">Download</a>` +
+          `</div>` +
+        `</div>`;
+    } else {
+      ActionsRightHtml = `<a class="song-link-btn" href="${EscapeHtml(SingleUrl)}" target="_blank" rel="noopener noreferrer">View</a>`;
+    }
+  } else {
+    ActionsRightHtml = `<div class="song-link-placeholder"></div>`;
   }
+
+  ActionsRightHtml += HasNote ? `<div class="note-toggle" aria-label="Show note">＋</div>` : `<div class="note-toggle-placeholder"></div>`;
 
   const El = document.createElement('div');
   El.className = 'song-item';
@@ -120,11 +166,22 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
         (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
       `</div>` +
       `<div class="song-actions-right">` +
-        (HasUrl  ? `<a class="song-link-btn" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">View</a>` : `<div class="song-link-placeholder"></div>`) +
-        DownloadHtml +
-        (HasNote ? `<div class="note-toggle" aria-label="Show note">＋</div>` : `<div class="note-toggle-placeholder"></div>`) +
+        ActionsRightHtml +
       `</div>` +
     `</div>`;
+
+  if (UrlList.length > 1 || (UrlList.length === 1 && UrlList[0].includes('pillows.su/f/'))) {
+    const DropBtn = El.querySelector('.song-dropdown-btn');
+    const DropMenu = El.querySelector('.song-dropdown-menu');
+    DropBtn.addEventListener('click', Ev => {
+      Ev.stopPropagation();
+      const IsOpen = DropMenu.classList.contains('open');
+      document.querySelectorAll('.song-dropdown-menu.open').forEach(M => {
+        if (M !== DropMenu) M.classList.remove('open');
+      });
+      DropMenu.classList.toggle('open', !IsOpen);
+    });
+  }
 
   if (HasNote) {
     const NoteEl = document.createElement('div');
@@ -282,6 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
       SearchBox.blur();
       FilterMenu.classList.remove('open');
       NavMenu.classList.remove('open');
+      document.querySelectorAll('.song-dropdown-menu.open').forEach(M => M.classList.remove('open'));
     }
   });
 
@@ -302,6 +360,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!NavMenu.contains(E.target) && !NavBtn.contains(E.target)) {
       NavMenu.classList.remove('open');
+    }
+    if (!E.target.closest('.song-dropdown')) {
+      document.querySelectorAll('.song-dropdown-menu.open').forEach(M => M.classList.remove('open'));
     }
   });
 
