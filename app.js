@@ -41,7 +41,7 @@ function UpdatePlayButtonsState() {
     try {
       const IsCurrent = Audio.src && (new URL(Audio.src).href === new URL(Btn.dataset.url, window.location.href).href);
       if (IsCurrent && !Audio.paused) {
-        Btn.textContent = 'Stop';
+        Btn.textContent = 'Pause';
       } else {
         Btn.textContent = 'Play';
       }
@@ -88,6 +88,7 @@ function BuildData(Rows) {
     url:    Header.indexOf('link(s)'),
     notes:  Header.indexOf('notes'),
     leakDate: LeakDateIdx,
+    type:   Header.findIndex(H => H.includes('available length')),
   };
 
   const SummaryPattern = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
@@ -104,10 +105,11 @@ function BuildData(Rows) {
     if (!EraMap[Era]) EraMap[Era] = [];
     EraMap[Era].push([
       Name,
-      (R[Col.quality] || '').trim(),
-      (R[Col.url]     || '').trim(),
-      (R[Col.notes]   || '').trim(),
+      (R[Col.quality]  || '').trim(),
+      (R[Col.url]      || '').trim(),
+      (R[Col.notes]    || '').trim(),
       Col.leakDate !== -1 ? (R[Col.leakDate] || '').trim() : '',
+      Col.type     !== -1 ? (R[Col.type]     || '').trim() : '',
     ]);
   }
 
@@ -118,7 +120,20 @@ function EscapeHtml(Str) {
   return Str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function MakeSongEl(Name, Quality, Url, Notes, Num) {
+function TClass(T) {
+  if (!T) return 'tl-other';
+  const L = T.toLowerCase();
+  if (L.includes('og'))      return 'tl-og';
+  if (L.includes('stem'))    return 'tl-stem';
+  if (L.includes('full'))    return 'tl-full';
+  if (L.includes('tagged'))  return 'tl-tagged';
+  if (L.includes('partial')) return 'tl-partial';
+  if (L.includes('snippet')) return 'tl-snippet';
+  if (L.includes('unavail')) return 'tl-unavail';
+  return 'tl-other';
+}
+
+function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType = '') {
   const HasNote = Notes.trim() !== '';
   
   const UrlList = Url ? Url.split(/[\s,\n\r]+/).map(u => u.trim()).filter(u => /^https?:/i.test(u)) : [];
@@ -139,7 +154,7 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
       try {
         const IsCurrent = new URL(Audio.src).href === new URL(DownloadUrl, window.location.href).href;
         if (IsCurrent && !Audio.paused) {
-          BtnText = 'Stop';
+          BtnText = 'Pause';
         }
       } catch (e) {}
     }
@@ -183,6 +198,7 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
     `<div class="song-actions">` +
       `<div class="song-actions-left">` +
         (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
+        (TrackType ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>` : `<div class="song-type-placeholder"></div>`) +
       `</div>` +
       `<div class="song-actions-right">` +
         ActionsRightHtml +
@@ -284,7 +300,8 @@ function RenderEras(Filter = '') {
           quality: Song[1],
           url: Song[2],
           notes: Song[3],
-          dateStr: Song[4] || ''
+          dateStr: Song[4] || '',
+          trackType: Song[5] || ''
         });
       });
     }
@@ -300,7 +317,9 @@ function RenderEras(Filter = '') {
           `[${S.era}] ${S.name}${DateTag}`,
           S.quality,
           S.url,
-          S.notes
+          S.notes,
+          S.dateStr,
+          S.trackType || ''
         ];
       });
     }
@@ -355,26 +374,21 @@ function RenderEras(Filter = '') {
     Inner.className = 'songs-inner';
     Panel.appendChild(Inner);
 
-    let CloseTimer = null;
-
     function Toggle() {
       const IsOpen = Panel.classList.contains('open');
       if (IsOpen) {
         Panel.classList.remove('open');
         Row.classList.remove('active');
         Row.setAttribute('aria-expanded', 'false');
-        CloseTimer = setTimeout(() => { Panel.style.display = 'none'; CloseTimer = null; }, 200);
       } else {
-        if (CloseTimer) { clearTimeout(CloseTimer); CloseTimer = null; }
-        Panel.style.display = 'block';
-        requestAnimationFrame(() => requestAnimationFrame(() => Panel.classList.add('open')));
+        Panel.classList.add('open');
         Row.classList.add('active');
         Row.setAttribute('aria-expanded', 'true');
         if (!Inner.dataset.loaded) {
           Inner.dataset.loaded = '1';
           const SongFrag = document.createDocumentFragment();
-          Songs.forEach(([Name, Quality, Url, Notes], I) => {
-            MakeSongEl(Name, Quality, Url, Notes, I + 1).forEach(Node => SongFrag.appendChild(Node));
+          Songs.forEach(([Name, Quality, Url, Notes, , TrackType], I) => {
+            MakeSongEl(Name, Quality, Url, Notes, I + 1, TrackType || '').forEach(Node => SongFrag.appendChild(Node));
           });
           Inner.appendChild(SongFrag);
           UpdatePlayButtonsState();
@@ -510,7 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (Err) {
       const El = document.createElement('div');
       El.className = 'no-results';
-      El.style.color = '#c0392b';
+      El.style.color = 'var(--red)';
       El.textContent = 'failed to load data, check sheet permissions';
       document.getElementById('era-list').replaceChildren(El);
     }

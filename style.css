@@ -244,10 +244,9 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
   border: 1px solid transparent;
 }
 .filter-item:not(.active) {
-  border-color: var(--text-3);
+  border-color: rgba(255,255,255,0.1);
   border-style: dashed;
-  text-decoration: line-through dashed;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 .filter-item:hover {
   background: var(--surface-3);
@@ -295,9 +294,15 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
 }
 .era-row.active .era-chevron{transform:rotate(180deg)}
 
-.songs-panel{display:none;background:var(--bg)}
-.songs-panel.open{display:block}
-.songs-inner{border-top:1px solid var(--border)}
+.songs-panel{
+  display:grid;
+  grid-template-rows:0fr;
+  transition:grid-template-rows 0.2s ease;
+  background:var(--bg);
+}
+.songs-panel.open{grid-template-rows:1fr}
+.songs-inner{overflow:hidden}
+.songs-inner{border-top:1px solid var(--border);min-height:0}
 
 .song-item{
   display:flex;align-items:center;gap:16px;
@@ -330,25 +335,47 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
 .song-actions{
   display:flex;align-items:center;
   justify-content:space-between;
-  width:240px;
+  flex-shrink:0;
+  width:300px;
 }
-.song-actions-left{display:flex;align-items:center}
+.song-actions-left{display:flex;align-items:center;gap:8px}
 .song-actions-right{display:flex;align-items:center;gap:8px}
 
 .song-quality-placeholder{width:70px}
+.song-type-placeholder{width:70px}
 .song-link-placeholder{width:52px;height:24px}
 .note-toggle-placeholder{width:16px}
 
 .song-quality{
   font-size:11px;font-weight:500;
   width:70px;text-align:center;
+  padding:2px 7px;border-radius:4px;
+  border:1px solid transparent;
+  letter-spacing:0.01em;
 }
-.q-high    {color:var(--green)}
-.q-cd      {color:var(--accent)}
-.q-low     {color:var(--red)}
-.q-rec     {color:var(--yellow)}
-.q-lossless{color:var(--cyan)}
-.q-other   {color:var(--purple)}
+.song-type{
+  font-size:11px;font-weight:500;
+  width:70px;text-align:center;
+  padding:2px 7px;border-radius:4px;
+  border:1px solid transparent;
+  letter-spacing:0.01em;
+}
+
+.q-high    {color:var(--green);   background:rgba(48,209,88,0.12); border-color:rgba(48,209,88,0.25)}
+.q-cd      {color:var(--cyan);    background:rgba(90,200,250,0.12); border-color:rgba(90,200,250,0.25)}
+.q-low     {color:var(--red);     background:rgba(255,69,58,0.12);  border-color:rgba(255,69,58,0.25)}
+.q-rec     {color:var(--yellow);  background:rgba(255,214,10,0.12); border-color:rgba(255,214,10,0.25)}
+.q-lossless{color:var(--purple);  background:rgba(191,90,242,0.12); border-color:rgba(191,90,242,0.25)}
+.q-other   {color:var(--text-3);  background:var(--surface-2);      border-color:var(--border)}
+
+.tl-og     {color:#ff6b81;background:rgba(255,107,129,0.12); border-color:rgba(255,107,129,0.25)}
+.tl-stem   {color:#2dd4bf;background:rgba(45,212,191,0.12); border-color:rgba(45,212,191,0.25)}
+.tl-full   {color:var(--accent);  background:rgba(10,132,255,0.12); border-color:rgba(10,132,255,0.25)}
+.tl-tagged {color:#ff9f0a;background:rgba(255,159,10,0.10); border-color:rgba(255,159,10,0.20)}
+.tl-partial{color:#fb923c;background:rgba(251,146,60,0.12); border-color:rgba(251,146,60,0.25)}
+.tl-snippet{color:#a3e635;background:rgba(163,230,53,0.12); border-color:rgba(163,230,53,0.25)}
+.tl-unavail{color:var(--text-3);  background:var(--surface-2);      border-color:var(--border)}
+.tl-other  {color:var(--text-3);  background:var(--surface-2);      border-color:var(--border)}
 
 .song-link-btn{
   display:inline-flex;align-items:center;
@@ -423,6 +450,7 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
   transition:opacity 0.15s;
 }
 .scroll-top.visible{opacity:1;pointer-events:auto}
+.scroll-top:hover{background:var(--surface-3);border-color:var(--border-hover)}
 .scroll-top svg{width:12px;height:12px;stroke:var(--text-2);fill:none}
 
 .footer{
@@ -571,7 +599,9 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
   .song-name{font-size:13px;white-space:normal;overflow:visible;text-overflow:unset;padding-left:6px;line-height:1.4;flex:1}
   .song-actions{width:100%;padding-left:22px;justify-content:space-between}
   .song-quality{font-size:11px;width:auto;text-align:left}
+  .song-type{font-size:11px;width:auto;text-align:left}
   .song-quality-placeholder{display:none}
+  .song-type-placeholder{display:none}
   .song-link-placeholder{display:none}
   .note-toggle-placeholder{display:none}
   .song-note{padding-left:36px}
