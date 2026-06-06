@@ -20,7 +20,7 @@ const QUALITY_MATCHERS = {
 };
 
 const TYPE_MATCHERS = {
-  og:        label => label.includes('og'),
+  og:        label => /\bog\b/.test(label),
   stem:      label => label.includes('stem'),
   full:      label => label.includes('full'),
   tagged:    label => label.includes('tagged'),
@@ -35,33 +35,34 @@ const TYPE_MATCHERS = {
 function getQualityClass(quality) {
   if (!quality) return 'q-other';
   const lower = quality.toLowerCase();
+  if (lower.includes('lossless')) return 'q-lossless';
   if (lower.includes('high'))     return 'q-high';
   if (lower.includes('cd'))       return 'q-cd';
   if (lower.includes('low'))      return 'q-low';
   if (lower.includes('record'))   return 'q-rec';
-  if (lower.includes('lossless')) return 'q-lossless';
   return 'q-other';
 }
 
 function getAvailableLengthClass(availableLength) {
   if (!availableLength) return 'tl-other';
   const lower = availableLength.toLowerCase();
-  if (lower.includes('og'))        return 'tl-og';
-  if (lower.includes('stem'))      return 'tl-stem';
-  if (lower.includes('full'))      return 'tl-full';
-  if (lower.includes('tagged'))    return 'tl-tagged';
-  if (lower.includes('partial'))   return 'tl-partial';
-  if (lower.includes('snippet'))   return 'tl-snippet';
-  if (lower.includes('unavail'))   return 'tl-unavail';
+  if (/\bog\b/.test(lower))       return 'tl-og';
+  if (lower.includes('lossless')) return 'tl-other';
+  if (lower.includes('stem'))     return 'tl-stem';
+  if (lower.includes('full'))     return 'tl-full';
+  if (lower.includes('tagged'))   return 'tl-tagged';
+  if (lower.includes('partial'))  return 'tl-partial';
+  if (lower.includes('snippet'))  return 'tl-snippet';
+  if (lower.includes('unavail'))  return 'tl-unavail';
   if (lower.includes('confirmed')) return 'tl-confirmed';
-  if (lower.includes('rumored'))   return 'tl-rumored';
-  if (lower.includes('vox'))       return 'tl-vox';
+  if (lower.includes('rumored'))  return 'tl-rumored';
+  if (lower.includes('vox'))      return 'tl-vox';
   return 'tl-other';
 }
 
 function isQualityVisible(quality) {
-  if (!quality) return false;
-  const lower = quality.toLowerCase();
+  const lower = (quality || '').toLowerCase();
+  if (!lower) return activeQualities.has('unavail');
   for (const key of activeQualities) {
     if (QUALITY_MATCHERS[key](lower)) return true;
   }
@@ -83,6 +84,15 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function SetMediaSession(TrackName) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title:  TrackName,
+    artist: 'YE VAULT',
+    album:  'Ye Vault'
+  });
 }
 
 function parseCsv(text) {
@@ -162,18 +172,19 @@ function parseDateToTimestamp(dateString) {
 }
 
 function positionFloatingDropdown(triggerButton, dropdownMenu) {
-  dropdownMenu.style.cssText = 'visibility:hidden;display:flex';
+  dropdownMenu.style.visibility = 'hidden';
+  dropdownMenu.style.display    = 'flex';
   const menuHeight = dropdownMenu.offsetHeight;
   const menuWidth  = dropdownMenu.offsetWidth;
-  dropdownMenu.style.cssText = '';
+  dropdownMenu.style.visibility = '';
+  dropdownMenu.style.display    = '';
 
-  const triggerRect = triggerButton.getBoundingClientRect();
-  const spaceBelow  = window.innerHeight - triggerRect.bottom;
+  const triggerRect  = triggerButton.getBoundingClientRect();
+  const spaceBelow   = window.innerHeight - triggerRect.bottom;
   const leftPosition = Math.max(4, Math.min(triggerRect.right - menuWidth, window.innerWidth - menuWidth - 4));
 
-  dropdownMenu.style.top   = (spaceBelow < menuHeight + 8 ? triggerRect.top - menuHeight - 4 : triggerRect.bottom + 4) + 'px';
-  dropdownMenu.style.left  = leftPosition + 'px';
-  dropdownMenu.style.right = '';
+  dropdownMenu.style.top  = (spaceBelow < menuHeight + 8 ? triggerRect.top - menuHeight - 4 : triggerRect.bottom + 4) + 'px';
+  dropdownMenu.style.left = leftPosition + 'px';
 }
 
 function syncPlayButtonStates(audioElement) {
@@ -193,7 +204,7 @@ function closeAllLinkDropdowns() {
   document.querySelectorAll('.song-dropdown-menu.open').forEach(menu => menu.classList.remove('open'));
 }
 
-function buildSongElement(songName, quality, linkString, notes, trackNumber, availableLength, audioElement) {
+function buildSongElement(songName, quality, linkString, notes, trackNumber, availableLength, audioElement, rawName) {
   const hasNotes = notes.trim() !== '';
 
   const links = linkString
@@ -208,7 +219,7 @@ function buildSongElement(songName, quality, linkString, notes, trackNumber, ava
 
   const pillowsLink = links.find(url => url.includes('pillows.su/f/'));
   let playButtonHtml = '';
-  
+
   if (pillowsLink && !isQualityUnavailable) {
     const downloadUrl = pillowsLink.replace('pillows.su/f/', 'api.pillows.su/api/download/');
     let buttonLabel = 'Play';
@@ -218,7 +229,7 @@ function buildSongElement(songName, quality, linkString, notes, trackNumber, ava
           buttonLabel = 'Pause';
       } catch {}
     }
-    playButtonHtml = `<button type="button" class="song-play-btn play-btn" data-url="${escapeHtml(downloadUrl)}" data-name="${escapeHtml(songName)}">${buttonLabel}</button>`;
+    playButtonHtml = `<button type="button" class="song-play-btn play-btn" data-url="${escapeHtml(downloadUrl)}" data-name="${escapeHtml(rawName || songName)}">${buttonLabel}</button>`;
   }
 
   let linksHtml = '';
@@ -282,6 +293,7 @@ function buildSongElement(songName, quality, linkString, notes, trackNumber, ava
         audioElement.paused ? audioElement.play().catch(() => {}) : audioElement.pause();
       } else {
         document.getElementById('player-track-name').textContent = playButton.dataset.name;
+        SetMediaSession(playButton.dataset.name);
         audioElement.src = trackUrl;
         audioElement.load();
         player.removeAttribute('hidden');
@@ -354,7 +366,8 @@ function renderEras(searchFilter, audioElement) {
     if (recentSongs.length) {
       visibleEras['Recent Leaks'] = recentSongs.map(song => [
         `[${song.era}] ${song.name}${song.leakDate ? ` (${song.leakDate})` : ''}`,
-        song.quality, song.link, song.notes, song.leakDate, song.availableLength
+        song.quality, song.link, song.notes, song.leakDate, song.availableLength,
+        song.name
       ]);
     }
   } else {
@@ -419,6 +432,7 @@ function renderEras(searchFilter, audioElement) {
     const songsInner = document.createElement('div');
     songsInner.className = 'songs-inner';
     songsInner.setAttribute('role', 'list');
+    songsInner.setAttribute('aria-label', era + ' songs');
     songsPanel.appendChild(songsInner);
 
     const togglePanel = () => {
@@ -435,8 +449,8 @@ function renderEras(searchFilter, audioElement) {
         if (!songsInner.dataset.loaded) {
           songsInner.dataset.loaded = '1';
           const songFragment = document.createDocumentFragment();
-          songs.forEach(([name, quality, link, notes, , availableLength], index) => {
-            buildSongElement(name, quality, link, notes, index + 1, availableLength || '', audioElement)
+          songs.forEach(([name, quality, link, notes, , availableLength, rawName], index) => {
+            buildSongElement(name, quality, link, notes, index + 1, availableLength || '', audioElement, rawName)
               .forEach(node => songFragment.appendChild(node));
           });
           songsInner.appendChild(songFragment);
@@ -531,6 +545,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!audioElement.duration) return;
       setProgress((audioElement.currentTime / audioElement.duration) * 100);
       setCurrentTime(formatTime(audioElement.currentTime));
+      if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && audioElement.duration > 0) {
+        navigator.mediaSession.setPositionState({
+          duration:     audioElement.duration,
+          playbackRate: audioElement.playbackRate,
+          position:     audioElement.currentTime
+        });
+      }
     });
     audioElement.addEventListener('durationchange', () => setDuration(formatTime(audioElement.duration)));
     audioElement.addEventListener('loadedmetadata', () => setDuration(formatTime(audioElement.duration)));
@@ -540,6 +561,26 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Audio playback error:', e);
     });
 
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play',  () => audioElement.play().catch(() => {}));
+      navigator.mediaSession.setActionHandler('pause', () => audioElement.pause());
+      navigator.mediaSession.setActionHandler('stop',  () => {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      });
+      navigator.mediaSession.setActionHandler('seekto', Details => {
+        if (Details.seekTime !== undefined && audioElement.duration) {
+          audioElement.currentTime = Details.seekTime;
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekbackward', Details => {
+        audioElement.currentTime = Math.max(0, audioElement.currentTime - (Details.seekOffset || 10));
+      });
+      navigator.mediaSession.setActionHandler('seekforward', Details => {
+        audioElement.currentTime = Math.min(audioElement.duration || 0, audioElement.currentTime + (Details.seekOffset || 10));
+      });
+    }
+
     playPauseBtn.addEventListener('click', () => {
       audioElement.paused ? audioElement.play().catch(() => {}) : audioElement.pause();
     });
@@ -548,6 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
       audioElement.pause();
       audioElement.src = '';
       playerEl.setAttribute('hidden', '');
+      if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
       setPlayState(false); setProgress(0); setCurrentTime('0:00'); setDuration('0:00');
       syncPlayButtonStates(audioElement);
     });
