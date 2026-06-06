@@ -4,20 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="A fan-made archive of Ye's unreleased discography.">
+  <meta name="theme-color" content="#080808">
+  <meta property="og:title" content="YE VAULT">
+  <meta property="og:description" content="A fan-made archive of Ye's unreleased discography.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:,">
   <title>YE VAULT</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <nav class="nav" aria-label="Site navigation">
   <div class="nav-logo">YE VAULT</div>
   <div class="nav-tabs">
-    <button class="nav-tab active" data-tab="all">Unreleased</button>
-    <button class="nav-tab" data-tab="best">⭐ Best Of</button>
-    <button class="nav-tab" data-tab="special">✨ Special</button>
+    <button type="button" class="nav-tab active" data-tab="all">Unreleased</button>
+    <button type="button" class="nav-tab" data-tab="best">⭐ Best Of</button>
+    <button type="button" class="nav-tab" data-tab="special">✨ Special</button>
   </div>
   <div class="nav-stats" aria-live="polite">
     <div class="nav-stat"><span id="nav-eras">—</span> eras</div>
@@ -38,11 +43,11 @@
   </div>
 
   <div class="filter-wrap" id="filter-wrap" role="group" aria-label="Filter by quality">
-    <button class="filter-chip active" data-quality="high">High Quality</button>
-    <button class="filter-chip active" data-quality="low">Low Quality</button>
-    <button class="filter-chip active" data-quality="rec">Recording</button>
-    <button class="filter-chip active" data-quality="cd">CD Quality</button>
-    <button class="filter-chip active" data-quality="lossless">Lossless</button>
+    <button type="button" class="filter-chip active" data-quality="high">High Quality</button>
+    <button type="button" class="filter-chip active" data-quality="low">Low Quality</button>
+    <button type="button" class="filter-chip active" data-quality="rec">Recording</button>
+    <button type="button" class="filter-chip active" data-quality="cd">CD Quality</button>
+    <button type="button" class="filter-chip active" data-quality="lossless">Lossless</button>
   </div>
 
   <div class="era-list" id="era-list" aria-live="polite">
@@ -61,11 +66,11 @@
   <div class="footer-credits">a fan-made archive - not affiliated with YZY</div>
 </footer>
 
-<button class="scroll-top" id="scroll-top" aria-label="Back to top">
+<button type="button" class="scroll-top" id="scroll-top" aria-label="Back to top">
   <svg viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><polyline points="18,15 12,9 6,15"></polyline></svg>
 </button>
 
-<script src="assets/app.js" defer></script>
+<script src="app.js" defer></script>
 
 </body>
 </html>
