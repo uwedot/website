@@ -1,57 +1,83 @@
 'use strict';
 
-const SHEET_ID          = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
-const SHEET_ID_FALLBACK = '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM';
-const RECENT_LIMIT      = 200;
+const PRIMARY_SHEET_ID  = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
+const FALLBACK_SHEET_ID = '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM';
+const RECENT_SONGS_LIMIT = 200;
 
-let allData        = null;
-let currentTab     = 'all';
-let activeQualities = new Set(['high', 'low', 'rec', 'cd', 'lossless']);
-let searchTimer    = null;
+let vaultData        = null;
+let currentTab       = 'all';
+let activeQualities  = new Set(['high', 'low', 'rec', 'cd', 'lossless', 'unavail']);
+let activeTypes      = new Set(['og', 'full', 'partial', 'snippet', 'stem', 'vox', 'tagged', 'confirmed', 'rumored', 'unavail']);
+let searchDebounce   = null;
 
-const QUALITY_CHECKS = {
-  high:    L => L.includes('high'),
-  low:     L => L.includes('low') && !L.includes('high'),
-  rec:     L => L.includes('record'),
-  cd:      L => L.includes('cd'),
-  lossless:L => L.includes('lossless'),
+const QUALITY_MATCHERS = {
+  high:     label => label.includes('high'),
+  low:      label => label.includes('low') && !label.includes('high'),
+  rec:      label => label.includes('record'),
+  cd:       label => label.includes('cd'),
+  lossless: label => label.includes('lossless'),
+  unavail:  label => label.includes('not avail') || label.includes('unavail'),
 };
 
-function qualityClass(q) {
-  if (!q) return 'q-other';
-  const l = q.toLowerCase();
-  if (l.includes('high'))    return 'q-high';
-  if (l.includes('cd'))      return 'q-cd';
-  if (l.includes('low'))     return 'q-low';
-  if (l.includes('record'))  return 'q-rec';
-  if (l.includes('lossless'))return 'q-lossless';
+const TYPE_MATCHERS = {
+  og:        label => label.includes('og'),
+  stem:      label => label.includes('stem'),
+  full:      label => label.includes('full'),
+  tagged:    label => label.includes('tagged'),
+  partial:   label => label.includes('partial'),
+  snippet:   label => label.includes('snippet'),
+  unavail:   label => label.includes('unavail'),
+  confirmed: label => label.includes('confirmed'),
+  rumored:   label => label.includes('rumored'),
+  vox:       label => label.includes('vox'),
+};
+
+function getQualityClass(quality) {
+  if (!quality) return 'q-other';
+  const lower = quality.toLowerCase();
+  if (lower.includes('high'))     return 'q-high';
+  if (lower.includes('cd'))       return 'q-cd';
+  if (lower.includes('low'))      return 'q-low';
+  if (lower.includes('record'))   return 'q-rec';
+  if (lower.includes('lossless')) return 'q-lossless';
   return 'q-other';
 }
 
-function typeClass(t) {
-  if (!t) return 'tl-other';
-  const l = t.toLowerCase();
-  if (l.includes('og'))      return 'tl-og';
-  if (l.includes('stem'))    return 'tl-stem';
-  if (l.includes('full'))    return 'tl-full';
-  if (l.includes('tagged'))  return 'tl-tagged';
-  if (l.includes('partial')) return 'tl-partial';
-  if (l.includes('snippet')) return 'tl-snippet';
-  if (l.includes('unavail')) return 'tl-unavail';
+function getAvailableLengthClass(availableLength) {
+  if (!availableLength) return 'tl-other';
+  const lower = availableLength.toLowerCase();
+  if (lower.includes('og'))        return 'tl-og';
+  if (lower.includes('stem'))      return 'tl-stem';
+  if (lower.includes('full'))      return 'tl-full';
+  if (lower.includes('tagged'))    return 'tl-tagged';
+  if (lower.includes('partial'))   return 'tl-partial';
+  if (lower.includes('snippet'))   return 'tl-snippet';
+  if (lower.includes('unavail'))   return 'tl-unavail';
+  if (lower.includes('confirmed')) return 'tl-confirmed';
+  if (lower.includes('rumored'))   return 'tl-rumored';
+  if (lower.includes('vox'))       return 'tl-vox';
   return 'tl-other';
 }
 
-function qualityAllowed(quality) {
+function isQualityVisible(quality) {
   if (!quality) return false;
-  const l = quality.toLowerCase();
-  if (l.includes('not avail') || l.includes('unavail')) return false;
+  const lower = quality.toLowerCase();
   for (const key of activeQualities) {
-    if (QUALITY_CHECKS[key](l)) return true;
+    if (QUALITY_MATCHERS[key](lower)) return true;
   }
   return false;
 }
 
-function escHtml(str) {
+function isAvailableLengthVisible(availableLength) {
+  if (!availableLength) return true;
+  const lower = availableLength.toLowerCase();
+  for (const key of activeTypes) {
+    if (TYPE_MATCHERS[key](lower)) return true;
+  }
+  return false;
+}
+
+function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -61,259 +87,284 @@ function escHtml(str) {
 
 function parseCsv(text) {
   const rows = [];
-  let field = '', row = [], inQuote = false;
+  let field = '', row = [], insideQuotes = false;
   for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuote) {
-      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (ch === '"') inQuote = false;
-      else field += ch;
+    const char = text[i];
+    if (insideQuotes) {
+      if (char === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (char === '"') insideQuotes = false;
+      else field += char;
     } else {
-      if (ch === '"')  inQuote = true;
-      else if (ch === ',') { row.push(field); field = ''; }
-      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-      else if (ch !== '\r') field += ch;
+      if (char === '"')  insideQuotes = true;
+      else if (char === ',') { row.push(field); field = ''; }
+      else if (char === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (char !== '\r') field += char;
     }
   }
   if (field || row.length) { row.push(field); rows.push(row); }
   return rows;
 }
 
-function buildData(rows) {
-  const map = {};
-  if (rows.length < 2) return map;
-  const header = rows[0].map(h => h.trim().toLowerCase());
-  let leakDateIdx = header.indexOf('leak date');
-  if (leakDateIdx === -1) leakDateIdx = header.findIndex(h => h.includes('date'));
-  let urlIdx = header.indexOf('link(s)');
-  if (urlIdx === -1) urlIdx = header.findIndex(h => h.includes('link'));
-  const col = {
-    era:     header.indexOf('era'),
-    name:    header.indexOf('name'),
-    quality: header.indexOf('quality'),
-    url:     urlIdx,
-    notes:   header.indexOf('notes'),
-    date:    leakDateIdx,
-    type:    header.findIndex(h => h.includes('available length')),
+function buildVaultData(rows) {
+  const eraMap = {};
+  if (rows.length < 2) return eraMap;
+
+  const headers = rows[0].map(h => h.trim().toLowerCase());
+
+  let leakDateIndex = headers.indexOf('leak date');
+  if (leakDateIndex === -1) leakDateIndex = headers.findIndex(h => h.includes('date'));
+
+  let linkIndex = headers.indexOf('link(s)');
+  if (linkIndex === -1) linkIndex = headers.findIndex(h => h.includes('link'));
+
+  const columns = {
+    era:             headers.indexOf('era'),
+    name:            headers.indexOf('name'),
+    quality:         headers.indexOf('quality'),
+    link:            linkIndex,
+    notes:           headers.indexOf('notes'),
+    leakDate:        leakDateIndex,
+    availableLength: headers.findIndex(h => h.includes('available length')),
   };
-  const summaryRe = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r || r.every(c => !c.trim())) continue;
-    const era  = (r[col.era]  || '').trim();
-    const name = (r[col.name] || '').trim();
+
+  const summaryRowPattern = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
+
+  for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
+    if (!row || row.every(cell => !cell.trim())) continue;
+
+    const era  = (row[columns.era]  || '').trim();
+    const name = (row[columns.name] || '').trim();
     if (!era || !name) continue;
-    if (summaryRe.test(name) || summaryRe.test(era)) continue;
-    if (!map[era]) map[era] = [];
-    map[era].push([
+    if (summaryRowPattern.test(name) || summaryRowPattern.test(era)) continue;
+
+    if (!eraMap[era]) eraMap[era] = [];
+    eraMap[era].push([
       name,
-      (r[col.quality] || '').trim(),
-      col.url  !== -1 ? (r[col.url]  || '').trim() : '',
-      (r[col.notes]   || '').trim(),
-      col.date !== -1 ? (r[col.date] || '').trim() : '',
-      col.type !== -1 ? (r[col.type] || '').trim() : '',
+      (row[columns.quality] || '').trim(),
+      columns.link            !== -1 ? (row[columns.link]            || '').trim() : '',
+      (row[columns.notes]    || '').trim(),
+      columns.leakDate        !== -1 ? (row[columns.leakDate]        || '').trim() : '',
+      columns.availableLength !== -1 ? (row[columns.availableLength] || '').trim() : '',
     ]);
   }
-  return map;
+  return eraMap;
 }
 
-function getDateValue(str) {
-  if (!str) return 0;
-  const n = Date.parse(str);
-  if (!isNaN(n)) return n;
-  const m = str.match(/\b(19|20)\d{2}\b/);
-  return m ? new Date(m[0], 0, 1).getTime() : 0;
+function parseDateToTimestamp(dateString) {
+  if (!dateString) return 0;
+  const parsed = Date.parse(dateString);
+  if (!isNaN(parsed)) return parsed;
+  const yearMatch = dateString.match(/\b(19|20)\d{2}\b/);
+  return yearMatch ? new Date(yearMatch[0], 0, 1).getTime() : 0;
 }
 
-function positionDropdown(btn, menu) {
-  menu.style.cssText = 'visibility:hidden;display:flex';
-  const mh = menu.offsetHeight;
-  const mw = menu.offsetWidth;
-  menu.style.cssText = '';
-  const rect = btn.getBoundingClientRect();
-  const spaceBelow = window.innerHeight - rect.bottom;
-  const left = Math.max(4, Math.min(rect.right - mw, window.innerWidth - mw - 4));
-  menu.style.top  = (spaceBelow < mh + 8 ? rect.top - mh - 4 : rect.bottom + 4) + 'px';
-  menu.style.left = left + 'px';
-  menu.style.right = '';
+function positionFloatingDropdown(triggerButton, dropdownMenu) {
+  dropdownMenu.style.cssText = 'visibility:hidden;display:flex';
+  const menuHeight = dropdownMenu.offsetHeight;
+  const menuWidth  = dropdownMenu.offsetWidth;
+  dropdownMenu.style.cssText = '';
+
+  const triggerRect = triggerButton.getBoundingClientRect();
+  const spaceBelow  = window.innerHeight - triggerRect.bottom;
+  const leftPosition = Math.max(4, Math.min(triggerRect.right - menuWidth, window.innerWidth - menuWidth - 4));
+
+  dropdownMenu.style.top   = (spaceBelow < menuHeight + 8 ? triggerRect.top - menuHeight - 4 : triggerRect.bottom + 4) + 'px';
+  dropdownMenu.style.left  = leftPosition + 'px';
+  dropdownMenu.style.right = '';
 }
 
-function updatePlayButtons(audio) {
-  if (!audio) return;
-  document.querySelectorAll('.play-btn').forEach(btn => {
+function syncPlayButtonStates(audioElement) {
+  if (!audioElement) return;
+  document.querySelectorAll('.play-btn').forEach(button => {
     try {
-      const isCurrent = audio.src &&
-        new URL(audio.src).href === new URL(btn.dataset.url, location.href).href;
-      btn.textContent = (isCurrent && !audio.paused) ? 'Pause' : 'Play';
+      const isCurrentTrack = audioElement.src &&
+        new URL(audioElement.src).href === new URL(button.dataset.url, location.href).href;
+      button.textContent = (isCurrentTrack && !audioElement.paused) ? 'Pause' : 'Play';
     } catch {
-      btn.textContent = 'Play';
+      button.textContent = 'Play';
     }
   });
 }
 
-function closeAllSongDropdowns() {
-  document.querySelectorAll('.song-dropdown-menu.open').forEach(m => m.classList.remove('open'));
+function closeAllLinkDropdowns() {
+  document.querySelectorAll('.song-dropdown-menu.open').forEach(menu => menu.classList.remove('open'));
 }
 
-function makeSongEl(name, quality, url, notes, num, trackType, audio) {
-  const hasNote = notes.trim() !== '';
-  const urlList = url
-    ? url.split(/[\s,\n\r]+/).map(u => u.trim()).filter(u => /^https?:/i.test(u))
-    : [];
-  const hasUrl = urlList.length > 0;
-  const displayQuality = hasUrl ? quality : 'Unavailable';
+function buildSongElement(songName, quality, linkString, notes, trackNumber, availableLength, audioElement) {
+  const hasNotes = notes.trim() !== '';
 
-  const pillowsUrl = urlList.find(u => u.includes('pillows.su/f/'));
-  let playBtnHtml = '';
-  if (pillowsUrl) {
-    const dlUrl = pillowsUrl.replace('pillows.su/f/', 'api.pillows.su/api/download/');
-    let btnText = 'Play';
-    if (audio?.src) {
+  const links = linkString
+    ? linkString.split(/[\s,\n\r]+/).map(url => url.trim()).filter(url => /^https?:/i.test(url))
+    : [];
+  const hasLinks = links.length > 0;
+
+  const availableLengthLower = availableLength.toLowerCase();
+  const isRumoredOrConfirmed = availableLengthLower.includes('rumored') || availableLengthLower.includes('confirmed');
+  const displayQuality = (hasLinks || isRumoredOrConfirmed) ? quality : 'Unavailable';
+
+  const pillowsLink = links.find(url => url.includes('pillows.su/f/'));
+  let playButtonHtml = '';
+  if (pillowsLink) {
+    const downloadUrl = pillowsLink.replace('pillows.su/f/', 'api.pillows.su/api/download/');
+    let buttonLabel = 'Play';
+    if (audioElement?.src) {
       try {
-        if (new URL(audio.src).href === new URL(dlUrl, location.href).href && !audio.paused)
-          btnText = 'Pause';
+        if (new URL(audioElement.src).href === new URL(downloadUrl, location.href).href && !audioElement.paused)
+          buttonLabel = 'Pause';
       } catch {}
     }
-    playBtnHtml = `<button type="button" class="song-play-btn play-btn" data-url="${escHtml(dlUrl)}" data-name="${escHtml(name)}">${btnText}</button>`;
+    playButtonHtml = `<button type="button" class="song-play-btn play-btn" data-url="${escapeHtml(downloadUrl)}" data-name="${escapeHtml(songName)}">${buttonLabel}</button>`;
   }
 
   let linksHtml = '';
-  if (urlList.length > 1) {
-    const items = urlList.map((u, i) =>
-      `<a class="song-dropdown-item" href="${escHtml(u)}" target="_blank" rel="noopener noreferrer">Link ${i + 1}</a>`
+  if (links.length > 1) {
+    const linkItems = links.map((url, index) =>
+      `<a class="song-dropdown-item" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Link ${index + 1}</a>`
     ).join('');
     linksHtml = `<div class="song-dropdown">
       <button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false">
         <span>Links</span>
         <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
       </button>
-      <div class="song-dropdown-menu" role="menu">${items}</div>
+      <div class="song-dropdown-menu" role="menu">${linkItems}</div>
     </div>`;
-  } else if (urlList.length === 1) {
-    linksHtml = `<a class="song-link-btn" href="${escHtml(urlList[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
+  } else if (links.length === 1) {
+    linksHtml = `<a class="song-link-btn" href="${escapeHtml(links[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
   }
 
-  const noteHtml = hasNote
+  const noteToggleHtml = hasNotes
     ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note">＋</div>`
     : '';
-  const pillsHtml =
-    (displayQuality ? `<div class="song-quality ${qualityClass(displayQuality)}">${escHtml(displayQuality)}</div>` : '') +
-    (trackType      ? `<div class="song-type ${typeClass(trackType)}">${escHtml(trackType)}</div>` : '');
 
-  const el = document.createElement('div');
-  el.className = 'song-item';
-  el.setAttribute('role', 'listitem');
-  el.innerHTML = `
-    <div class="song-num">${num}</div>
-    <div class="song-name" title="${escHtml(name)}">${escHtml(name)}</div>
+  const pillsHtml =
+    (displayQuality    ? `<div class="song-quality ${getQualityClass(displayQuality)}">${escapeHtml(displayQuality)}</div>` : '') +
+    (availableLength   ? `<div class="song-type ${getAvailableLengthClass(availableLength)}">${escapeHtml(availableLength)}</div>` : '');
+
+  const songEl = document.createElement('div');
+  songEl.className = 'song-item';
+  songEl.setAttribute('role', 'listitem');
+  songEl.innerHTML = `
+    <div class="song-num">${trackNumber}</div>
+    <div class="song-name" title="${escapeHtml(songName)}">${escapeHtml(songName)}</div>
     <div class="song-pills">${pillsHtml}</div>
-    <div class="song-btns">${playBtnHtml}${linksHtml}${noteHtml}</div>
+    <div class="song-btns">${playButtonHtml}${linksHtml}${noteToggleHtml}</div>
   `;
 
-  if (urlList.length > 1) {
-    const dropBtn  = el.querySelector('.song-dropdown-btn');
-    const dropMenu = el.querySelector('.song-dropdown-menu');
-    dropBtn.addEventListener('click', ev => {
-      ev.stopPropagation();
-      const isOpen = dropMenu.classList.contains('open');
-      closeAllSongDropdowns();
-      if (!isOpen) {
-        positionDropdown(dropBtn, dropMenu);
-        dropMenu.classList.add('open');
-        dropBtn.setAttribute('aria-expanded', 'true');
+  if (links.length > 1) {
+    const dropdownButton = songEl.querySelector('.song-dropdown-btn');
+    const dropdownMenu   = songEl.querySelector('.song-dropdown-menu');
+    dropdownButton.addEventListener('click', event => {
+      event.stopPropagation();
+      const wasOpen = dropdownMenu.classList.contains('open');
+      closeAllLinkDropdowns();
+      if (!wasOpen) {
+        positionFloatingDropdown(dropdownButton, dropdownMenu);
+        dropdownMenu.classList.add('open');
+        dropdownButton.setAttribute('aria-expanded', 'true');
       }
     });
   }
 
-  const playBtn = el.querySelector('.play-btn');
-  if (playBtn) {
-    playBtn.addEventListener('click', ev => {
-      ev.stopPropagation();
-      closeAllSongDropdowns();
-      const trackUrl = new URL(playBtn.dataset.url, location.href).href;
-      const player   = document.getElementById('global-player');
-      const isCurrent = audio.src && new URL(audio.src).href === trackUrl;
-      if (isCurrent) {
-        audio.paused ? audio.play().catch(() => {}) : audio.pause();
+  const playButton = songEl.querySelector('.play-btn');
+  if (playButton) {
+    playButton.addEventListener('click', event => {
+      event.stopPropagation();
+      closeAllLinkDropdowns();
+      const trackUrl   = new URL(playButton.dataset.url, location.href).href;
+      const player     = document.getElementById('global-player');
+      const isCurrentTrack = audioElement.src && new URL(audioElement.src).href === trackUrl;
+      if (isCurrentTrack) {
+        audioElement.paused ? audioElement.play().catch(() => {}) : audioElement.pause();
       } else {
-        document.getElementById('player-track-name').textContent = playBtn.dataset.name;
-        audio.src = trackUrl;
+        document.getElementById('player-track-name').textContent = playButton.dataset.name;
+        audioElement.src = trackUrl;
         player.removeAttribute('hidden');
-        audio.play().catch(() => {});
+        audioElement.play().catch(() => {});
       }
     });
   }
 
-  if (hasNote) {
+  if (hasNotes) {
     const noteEl     = document.createElement('div');
     noteEl.className = 'song-note';
     noteEl.textContent = notes;
-    const noteToggle = el.querySelector('.note-toggle');
-    const toggleNote = () => {
-      const expanded = el.classList.toggle('expanded');
-      noteToggle.textContent = expanded ? '－' : '＋';
-      noteToggle.setAttribute('aria-label', expanded ? 'Hide note' : 'Show note');
+
+    const noteToggle = songEl.querySelector('.note-toggle');
+    const toggleNoteVisibility = () => {
+      const isExpanded = songEl.classList.toggle('expanded');
+      noteToggle.textContent = isExpanded ? '－' : '＋';
+      noteToggle.setAttribute('aria-label', isExpanded ? 'Hide note' : 'Show note');
     };
-    noteToggle.addEventListener('click', ev => { ev.stopPropagation(); toggleNote(); });
-    noteToggle.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleNote(); }
+    noteToggle.addEventListener('click', event => { event.stopPropagation(); toggleNoteVisibility(); });
+    noteToggle.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleNoteVisibility(); }
     });
-    return [el, noteEl];
+    return [songEl, noteEl];
   }
 
-  return [el];
+  return [songEl];
 }
 
-function collapseAllPanels() {
+function collapseAllEraPanels() {
   document.querySelectorAll('.songs-panel.open').forEach(panel => {
     panel.classList.remove('open');
-    const row = panel.previousElementSibling;
-    if (row) { row.classList.remove('active'); row.setAttribute('aria-expanded', 'false'); }
+    const eraRow = panel.previousElementSibling;
+    if (eraRow) { eraRow.classList.remove('active'); eraRow.setAttribute('aria-expanded', 'false'); }
   });
 }
 
-function renderEras(filter, audio) {
-  const list = document.getElementById('era-list');
-  const f    = (filter || '').trim().toLowerCase();
-  if (!allData) return;
+function renderEras(searchFilter, audioElement) {
+  const eraList     = document.getElementById('era-list');
+  const filterLower = (searchFilter || '').trim().toLowerCase();
+  if (!vaultData) return;
 
-  collapseAllPanels();
-  closeAllSongDropdowns();
+  collapseAllEraPanels();
+  closeAllLinkDropdowns();
 
-  const tabEmoji = currentTab === 'best' ? '⭐' : currentTab === 'special' ? '✨' : null;
-  const filtered = {};
+  const tabMarker  = currentTab === 'best' ? '⭐' : currentTab === 'special' ? '✨' : null;
+  const visibleEras = {};
 
   if (currentTab === 'recent') {
-    const allSongs = [];
-    for (const [era, songs] of Object.entries(allData)) {
-      songs.filter(([, q]) => qualityAllowed(q)).forEach(song => {
-        if (!f || song[0].toLowerCase().includes(f) || era.toLowerCase().includes(f)) {
-          allSongs.push({
-            era, name: song[0], quality: song[1], url: song[2],
-            notes: song[3], dateStr: song[4] || '', trackType: song[5] || '',
+    const flatSongs = [];
+    for (const [era, songs] of Object.entries(vaultData)) {
+      songs.filter(([, quality, , , , availableLength]) =>
+        isQualityVisible(quality) && isAvailableLengthVisible(availableLength)
+      ).forEach(song => {
+        if (!filterLower || song[0].toLowerCase().includes(filterLower) || era.toLowerCase().includes(filterLower)) {
+          flatSongs.push({
+            era,
+            name:            song[0],
+            quality:         song[1],
+            link:            song[2],
+            notes:           song[3],
+            leakDate:        song[4] || '',
+            availableLength: song[5] || '',
           });
         }
       });
     }
-    allSongs.sort((a, b) => getDateValue(b.dateStr) - getDateValue(a.dateStr));
-    const recent = allSongs.slice(0, RECENT_LIMIT);
-    if (recent.length) {
-      filtered['Recent Leaks'] = recent.map(s => [
-        `[${s.era}] ${s.name}${s.dateStr ? ` (${s.dateStr})` : ''}`,
-        s.quality, s.url, s.notes, s.dateStr, s.trackType,
+    flatSongs.sort((songA, songB) => parseDateToTimestamp(songB.leakDate) - parseDateToTimestamp(songA.leakDate));
+    const recentSongs = flatSongs.slice(0, RECENT_SONGS_LIMIT);
+    if (recentSongs.length) {
+      visibleEras['Recent Leaks'] = recentSongs.map(song => [
+        `[${song.era}] ${song.name}${song.leakDate ? ` (${song.leakDate})` : ''}`,
+        song.quality, song.link, song.notes, song.leakDate, song.availableLength,
       ]);
     }
   } else {
-    for (const [era, songs] of Object.entries(allData)) {
-      let matched = songs.filter(([, q]) => qualityAllowed(q));
-      if (tabEmoji) matched = matched.filter(([n]) => n.includes(tabEmoji));
-      if (f)        matched = matched.filter(([n]) => n.toLowerCase().includes(f) || era.toLowerCase().includes(f));
-      if (matched.length) filtered[era] = matched;
+    for (const [era, songs] of Object.entries(vaultData)) {
+      let matched = songs.filter(([, quality, , , , availableLength]) =>
+        isQualityVisible(quality) && isAvailableLengthVisible(availableLength)
+      );
+      if (tabMarker)   matched = matched.filter(([name]) => name.includes(tabMarker));
+      if (filterLower) matched = matched.filter(([name]) => name.toLowerCase().includes(filterLower) || era.toLowerCase().includes(filterLower));
+      if (matched.length) visibleEras[era] = matched;
     }
   }
 
-  const eraKeys   = Object.keys(filtered);
-  const totalSongs = eraKeys.reduce((s, k) => s + filtered[k].length, 0);
+  const eraKeys    = Object.keys(visibleEras);
+  const totalSongs = eraKeys.reduce((sum, key) => sum + visibleEras[key].length, 0);
 
   const erasStat = document.getElementById('stat-eras');
   if (currentTab === 'recent') {
@@ -324,31 +375,31 @@ function renderEras(filter, audio) {
   }
   document.getElementById('nav-songs').textContent = totalSongs.toLocaleString();
 
-  const frag = document.createDocumentFragment();
+  const fragment = document.createDocumentFragment();
 
   if (!eraKeys.length) {
-    const el = document.createElement('div');
-    el.className = 'no-results';
-    el.textContent = 'No results found.';
-    frag.appendChild(el);
-    list.replaceChildren(frag);
+    const emptyMessage = document.createElement('div');
+    emptyMessage.className = 'no-results';
+    emptyMessage.textContent = 'No results found.';
+    fragment.appendChild(emptyMessage);
+    eraList.replaceChildren(fragment);
     return;
   }
 
   for (const era of eraKeys) {
-    const songs = filtered[era];
+    const songs = visibleEras[era];
 
-    const wrap = document.createElement('div');
-    wrap.className = 'era-wrap';
-    wrap.setAttribute('role', 'listitem');
+    const eraWrap = document.createElement('div');
+    eraWrap.className = 'era-wrap';
+    eraWrap.setAttribute('role', 'listitem');
 
-    const row = document.createElement('div');
-    row.className = 'era-row';
-    row.setAttribute('role', 'button');
-    row.setAttribute('tabindex', '0');
-    row.setAttribute('aria-expanded', 'false');
-    row.innerHTML = `
-      <div class="era-row-name">${escHtml(era)}</div>
+    const eraRow = document.createElement('div');
+    eraRow.className = 'era-row';
+    eraRow.setAttribute('role', 'button');
+    eraRow.setAttribute('tabindex', '0');
+    eraRow.setAttribute('aria-expanded', 'false');
+    eraRow.innerHTML = `
+      <div class="era-row-name">${escapeHtml(era)}</div>
       <div class="era-row-right">
         <div class="era-pill">${songs.length}</div>
         <svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -357,200 +408,212 @@ function renderEras(filter, audio) {
       </div>
     `;
 
-    const panel = document.createElement('div');
-    panel.className = 'songs-panel';
+    const songsPanel = document.createElement('div');
+    songsPanel.className = 'songs-panel';
 
-    const inner = document.createElement('div');
-    inner.className = 'songs-inner';
-    inner.setAttribute('role', 'list');
-    panel.appendChild(inner);
+    const songsInner = document.createElement('div');
+    songsInner.className = 'songs-inner';
+    songsInner.setAttribute('role', 'list');
+    songsPanel.appendChild(songsInner);
 
-    const toggle = () => {
-      const isOpen = panel.classList.contains('open');
-      closeAllSongDropdowns();
+    const togglePanel = () => {
+      const isOpen = songsPanel.classList.contains('open');
+      closeAllLinkDropdowns();
       if (isOpen) {
-        panel.classList.remove('open');
-        row.classList.remove('active');
-        row.setAttribute('aria-expanded', 'false');
+        songsPanel.classList.remove('open');
+        eraRow.classList.remove('active');
+        eraRow.setAttribute('aria-expanded', 'false');
       } else {
-        panel.classList.add('open');
-        row.classList.add('active');
-        row.setAttribute('aria-expanded', 'true');
-        if (!inner.dataset.loaded) {
-          inner.dataset.loaded = '1';
-          const songFrag = document.createDocumentFragment();
-          songs.forEach(([n, q, u, no, , tt], i) => {
-            makeSongEl(n, q, u, no, i + 1, tt || '', audio)
-              .forEach(node => songFrag.appendChild(node));
+        songsPanel.classList.add('open');
+        eraRow.classList.add('active');
+        eraRow.setAttribute('aria-expanded', 'true');
+        if (!songsInner.dataset.loaded) {
+          songsInner.dataset.loaded = '1';
+          const songFragment = document.createDocumentFragment();
+          songs.forEach(([name, quality, link, notes, , availableLength], index) => {
+            buildSongElement(name, quality, link, notes, index + 1, availableLength || '', audioElement)
+              .forEach(node => songFragment.appendChild(node));
           });
-          inner.appendChild(songFrag);
-          updatePlayButtons(audio);
+          songsInner.appendChild(songFragment);
+          syncPlayButtonStates(audioElement);
         }
       }
     };
 
-    row.addEventListener('click', toggle);
-    row.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
+    eraRow.addEventListener('click', togglePanel);
+    eraRow.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); togglePanel(); }
     });
 
-    wrap.appendChild(row);
-    wrap.appendChild(panel);
-    frag.appendChild(wrap);
+    eraWrap.appendChild(eraRow);
+    eraWrap.appendChild(songsPanel);
+    fragment.appendChild(eraWrap);
   }
 
-  list.replaceChildren(frag);
+  eraList.replaceChildren(fragment);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const searchBox = document.getElementById('search-box');
-  const filterBtn = document.getElementById('filter-btn');
-  const filterMenu= document.getElementById('filter-menu');
-  const scrollBtn = document.getElementById('scroll-top');
-  const navBtn    = document.getElementById('nav-tab-btn');
-  const navMenu   = document.getElementById('nav-tab-menu');
-  const navText   = document.getElementById('nav-btn-text');
-  const audio     = document.getElementById('main-audio');
-  const player    = document.getElementById('global-player');
+  const searchBox        = document.getElementById('search-box');
+  const qualityFilterBtn = document.getElementById('quality-filter-btn');
+  const qualityFilterMenu= document.getElementById('quality-filter-menu');
+  const lengthFilterBtn  = document.getElementById('length-filter-btn');
+  const lengthFilterMenu = document.getElementById('length-filter-menu');
+  const scrollTopBtn     = document.getElementById('scroll-top');
+  const navTabBtn        = document.getElementById('nav-tab-btn');
+  const navTabMenu       = document.getElementById('nav-tab-menu');
+  const navBtnLabel      = document.getElementById('nav-btn-text');
+  const audioElement     = document.getElementById('main-audio');
+  const playerEl         = document.getElementById('global-player');
 
-  searchBox.addEventListener('input', ev => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => { if (allData) renderEras(ev.target.value, audio); }, 180);
+  searchBox.addEventListener('input', event => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => { if (vaultData) renderEras(event.target.value, audioElement); }, 180);
   });
 
-  if (audio) {
-    const playIcon    = document.getElementById('player-play-icon');
-    const pauseIcon   = document.getElementById('player-pause-icon');
-    const playBtn     = document.getElementById('player-play-btn');
-    const closeBtn    = document.getElementById('player-close-btn');
-    const currentEl   = document.getElementById('player-current');
-    const durationEl  = document.getElementById('player-duration');
-    const trackCurEl  = document.getElementById('player-track-current');
-    const trackLenEl  = document.getElementById('player-track-length');
-    const fill        = document.getElementById('player-fill');
-    const thumb       = document.getElementById('player-thumb');
-    const volFill     = document.getElementById('player-vol-fill');
-    const volThumb    = document.getElementById('player-vol-thumb');
-    const scrubber    = document.getElementById('player-scrubber');
-    const volSlider   = document.getElementById('player-volume');
+  if (audioElement) {
+    const playIcon       = document.getElementById('player-play-icon');
+    const pauseIcon      = document.getElementById('player-pause-icon');
+    const playPauseBtn   = document.getElementById('player-play-btn');
+    const closeBtn       = document.getElementById('player-close-btn');
+    const currentTimeEl  = document.getElementById('player-current');
+    const durationEl     = document.getElementById('player-duration');
+    const trackCurrentEl = document.getElementById('player-track-current');
+    const trackLengthEl  = document.getElementById('player-track-length');
+    const progressFill   = document.getElementById('player-fill');
+    const progressThumb  = document.getElementById('player-thumb');
+    const volumeFill     = document.getElementById('player-vol-fill');
+    const volumeThumb    = document.getElementById('player-vol-thumb');
+    const scrubberEl     = document.getElementById('player-scrubber');
+    const volumeSlider   = document.getElementById('player-volume');
 
-    const fmtTime = s => {
-      if (!isFinite(s) || s < 0) return '0:00';
-      return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    const formatTime = seconds => {
+      if (!isFinite(seconds) || seconds < 0) return '0:00';
+      return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
     };
-    const setPlayState = playing => {
-      playIcon.style.display  = playing ? 'none' : '';
-      pauseIcon.style.display = playing ? '' : 'none';
-      playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-    };
-    const setProgress = pct => {
-      const p = Math.max(0, Math.min(100, pct));
-      fill.style.width = thumb.style.left = p + '%';
-      scrubber.setAttribute('aria-valuenow', Math.round(p));
-    };
-    const setVolume = pct => {
-      const p = Math.max(0, Math.min(100, pct));
-      volFill.style.width = volThumb.style.left = p + '%';
-      audio.volume = p / 100;
-      volSlider.setAttribute('aria-valuenow', Math.round(p));
-    };
-    const pctFromEvent = (ev, el) => {
-      const r = el.getBoundingClientRect();
-      return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
-    };
-    const setTime     = t => { currentEl.textContent = trackCurEl.textContent = t; };
-    const setDuration = t => { durationEl.textContent = trackLenEl.textContent = t; };
 
-    audio.addEventListener('play',     () => { setPlayState(true);  updatePlayButtons(audio); });
-    audio.addEventListener('pause',    () => { setPlayState(false); updatePlayButtons(audio); });
-    audio.addEventListener('ended',    () => { setPlayState(false); setProgress(0); setTime('0:00'); updatePlayButtons(audio); });
-    audio.addEventListener('timeupdate', () => {
-      if (!audio.duration) return;
-      setProgress((audio.currentTime / audio.duration) * 100);
-      setTime(fmtTime(audio.currentTime));
+    const setPlayState = isPlaying => {
+      playIcon.style.display  = isPlaying ? 'none' : '';
+      pauseIcon.style.display = isPlaying ? '' : 'none';
+      playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+    };
+
+    const setProgress = percent => {
+      const clamped = Math.max(0, Math.min(100, percent));
+      progressFill.style.width = progressThumb.style.left = clamped + '%';
+      scrubberEl.setAttribute('aria-valuenow', Math.round(clamped));
+    };
+
+    const setVolume = percent => {
+      const clamped = Math.max(0, Math.min(100, percent));
+      volumeFill.style.width = volumeThumb.style.left = clamped + '%';
+      audioElement.volume = clamped / 100;
+      volumeSlider.setAttribute('aria-valuenow', Math.round(clamped));
+    };
+
+    const percentFromPointer = (event, element) => {
+      const rect = element.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    };
+
+    const setCurrentTime = timeString => { currentTimeEl.textContent = trackCurrentEl.textContent = timeString; };
+    const setDuration    = timeString => { durationEl.textContent    = trackLengthEl.textContent  = timeString; };
+
+    audioElement.addEventListener('play',     () => { setPlayState(true);  syncPlayButtonStates(audioElement); });
+    audioElement.addEventListener('pause',    () => { setPlayState(false); syncPlayButtonStates(audioElement); });
+    audioElement.addEventListener('ended',    () => { setPlayState(false); setProgress(0); setCurrentTime('0:00'); syncPlayButtonStates(audioElement); });
+    audioElement.addEventListener('timeupdate', () => {
+      if (!audioElement.duration) return;
+      setProgress((audioElement.currentTime / audioElement.duration) * 100);
+      setCurrentTime(formatTime(audioElement.currentTime));
     });
-    audio.addEventListener('durationchange', () => setDuration(fmtTime(audio.duration)));
-    audio.addEventListener('loadedmetadata', () => setDuration(fmtTime(audio.duration)));
-    audio.addEventListener('error', () => {
+    audioElement.addEventListener('durationchange', () => setDuration(formatTime(audioElement.duration)));
+    audioElement.addEventListener('loadedmetadata', () => setDuration(formatTime(audioElement.duration)));
+    audioElement.addEventListener('error', () => {
       setPlayState(false);
       document.getElementById('player-track-name').textContent = 'Failed to load track';
     });
 
-    playBtn.addEventListener('click', () => {
-      audio.paused ? audio.play().catch(() => {}) : audio.pause();
+    playPauseBtn.addEventListener('click', () => {
+      audioElement.paused ? audioElement.play().catch(() => {}) : audioElement.pause();
     });
+
     closeBtn.addEventListener('click', () => {
-      audio.pause();
-      audio.src = '';
-      player.setAttribute('hidden', '');
-      setPlayState(false); setProgress(0); setTime('0:00'); setDuration('0:00');
-      updatePlayButtons(audio);
+      audioElement.pause();
+      audioElement.src = '';
+      playerEl.setAttribute('hidden', '');
+      setPlayState(false); setProgress(0); setCurrentTime('0:00'); setDuration('0:00');
+      syncPlayButtonStates(audioElement);
     });
 
-    let scrubDragging = false, volDragging = false;
-    scrubber.addEventListener('mousedown', ev => {
-      scrubDragging = true;
-      if (audio.duration) audio.currentTime = pctFromEvent(ev, scrubber) * audio.duration;
-    });
-    volSlider.addEventListener('mousedown', ev => {
-      volDragging = true;
-      setVolume(pctFromEvent(ev, volSlider) * 100);
-    });
-    window.addEventListener('mousemove', ev => {
-      if (scrubDragging && audio.duration) audio.currentTime = pctFromEvent(ev, scrubber) * audio.duration;
-      if (volDragging) setVolume(pctFromEvent(ev, volSlider) * 100);
-    });
-    window.addEventListener('mouseup', () => { scrubDragging = false; volDragging = false; });
+    let isDraggingProgress = false;
+    let isDraggingVolume   = false;
 
-    scrubber.addEventListener('touchstart', ev => {
-      if (audio.duration) audio.currentTime = pctFromEvent(ev.touches[0], scrubber) * audio.duration;
+    scrubberEl.addEventListener('mousedown', event => {
+      isDraggingProgress = true;
+      if (audioElement.duration) audioElement.currentTime = percentFromPointer(event, scrubberEl) * audioElement.duration;
+    });
+    volumeSlider.addEventListener('mousedown', event => {
+      isDraggingVolume = true;
+      setVolume(percentFromPointer(event, volumeSlider) * 100);
+    });
+    window.addEventListener('mousemove', event => {
+      if (isDraggingProgress && audioElement.duration) audioElement.currentTime = percentFromPointer(event, scrubberEl) * audioElement.duration;
+      if (isDraggingVolume) setVolume(percentFromPointer(event, volumeSlider) * 100);
+    });
+    window.addEventListener('mouseup', () => { isDraggingProgress = false; isDraggingVolume = false; });
+
+    scrubberEl.addEventListener('touchstart', event => {
+      if (audioElement.duration) audioElement.currentTime = percentFromPointer(event.touches[0], scrubberEl) * audioElement.duration;
     }, { passive: true });
-    scrubber.addEventListener('touchmove', ev => {
-      if (audio.duration) audio.currentTime = pctFromEvent(ev.touches[0], scrubber) * audio.duration;
+    scrubberEl.addEventListener('touchmove', event => {
+      if (audioElement.duration) audioElement.currentTime = percentFromPointer(event.touches[0], scrubberEl) * audioElement.duration;
     }, { passive: true });
-    volSlider.addEventListener('touchstart', ev => setVolume(pctFromEvent(ev.touches[0], volSlider) * 100), { passive: true });
-    volSlider.addEventListener('touchmove',  ev => setVolume(pctFromEvent(ev.touches[0], volSlider) * 100), { passive: true });
+    volumeSlider.addEventListener('touchstart', event => setVolume(percentFromPointer(event.touches[0], volumeSlider) * 100), { passive: true });
+    volumeSlider.addEventListener('touchmove',  event => setVolume(percentFromPointer(event.touches[0], volumeSlider) * 100), { passive: true });
 
-    scrubber.addEventListener('keydown', ev => {
-      if (!audio.duration) return;
-      const step = audio.duration * 0.02;
-      if (ev.key === 'ArrowRight') { ev.preventDefault(); audio.currentTime = Math.min(audio.duration, audio.currentTime + step); }
-      if (ev.key === 'ArrowLeft')  { ev.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - step); }
+    scrubberEl.addEventListener('keydown', event => {
+      if (!audioElement.duration) return;
+      const step = audioElement.duration * 0.02;
+      if (event.key === 'ArrowRight') { event.preventDefault(); audioElement.currentTime = Math.min(audioElement.duration, audioElement.currentTime + step); }
+      if (event.key === 'ArrowLeft')  { event.preventDefault(); audioElement.currentTime = Math.max(0, audioElement.currentTime - step); }
     });
 
     setVolume(80);
   }
 
-  navBtn.addEventListener('click', ev => {
-    ev.stopPropagation();
-    const open = navMenu.classList.toggle('open');
-    navBtn.setAttribute('aria-expanded', String(open));
+  navTabBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    const isOpen = navTabMenu.classList.toggle('open');
+    navTabBtn.setAttribute('aria-expanded', String(isOpen));
   });
 
   document.querySelectorAll('.nav-dropdown-item').forEach(item => {
     item.addEventListener('click', () => {
-      navMenu.classList.remove('open');
-      navBtn.setAttribute('aria-expanded', 'false');
+      navTabMenu.classList.remove('open');
+      navTabBtn.setAttribute('aria-expanded', 'false');
       if (item.dataset.tab === currentTab) return;
       currentTab = item.dataset.tab;
-      navText.textContent = item.textContent.trim();
-      document.querySelectorAll('.nav-dropdown-item').forEach(i => i.classList.toggle('active', i === item));
-      if (allData) renderEras(searchBox.value, audio);
+      navBtnLabel.textContent = item.textContent.trim();
+      document.querySelectorAll('.nav-dropdown-item').forEach(navItem => navItem.classList.toggle('active', navItem === item));
+      if (vaultData) renderEras(searchBox.value, audioElement);
     });
   });
 
-  filterBtn.addEventListener('click', ev => {
-    ev.stopPropagation();
-    const open = filterMenu.classList.toggle('open');
-    filterBtn.setAttribute('aria-expanded', String(open));
+  qualityFilterBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    lengthFilterMenu.classList.remove('open');
+    lengthFilterBtn.setAttribute('aria-expanded', 'false');
+    const isOpen = qualityFilterMenu.classList.toggle('open');
+    qualityFilterBtn.setAttribute('aria-expanded', String(isOpen));
   });
 
-  filterMenu.addEventListener('click', ev => {
-    const item = ev.target.closest('.filter-item');
+  qualityFilterMenu.addEventListener('click', event => {
+    const item = event.target.closest('.filter-item');
     if (!item) return;
     const key = item.dataset.quality;
     if (activeQualities.has(key)) {
-      if (activeQualities.size === 1) return; 
+      if (activeQualities.size === 1) return;
       activeQualities.delete(key);
       item.classList.remove('active');
       item.setAttribute('aria-checked', 'false');
@@ -559,63 +622,93 @@ document.addEventListener('DOMContentLoaded', () => {
       item.classList.add('active');
       item.setAttribute('aria-checked', 'true');
     }
-    if (allData) renderEras(searchBox.value, audio);
+    if (vaultData) renderEras(searchBox.value, audioElement);
   });
 
-  document.addEventListener('keydown', ev => {
-    if (ev.key === '/' && document.activeElement !== searchBox) {
-      ev.preventDefault();
+  lengthFilterBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    qualityFilterMenu.classList.remove('open');
+    qualityFilterBtn.setAttribute('aria-expanded', 'false');
+    const isOpen = lengthFilterMenu.classList.toggle('open');
+    lengthFilterBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  lengthFilterMenu.addEventListener('click', event => {
+    const item = event.target.closest('.type-filter-item');
+    if (!item) return;
+    const key = item.dataset.type;
+    if (activeTypes.has(key)) {
+      if (activeTypes.size === 1) return;
+      activeTypes.delete(key);
+      item.classList.remove('active');
+      item.setAttribute('aria-checked', 'false');
+    } else {
+      activeTypes.add(key);
+      item.classList.add('active');
+      item.setAttribute('aria-checked', 'true');
+    }
+    if (vaultData) renderEras(searchBox.value, audioElement);
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === '/' && document.activeElement !== searchBox) {
+      event.preventDefault();
       searchBox.focus();
     }
-    if (ev.key === 'Escape') {
+    if (event.key === 'Escape') {
       searchBox.blur();
-      filterMenu.classList.remove('open');
-      filterBtn.setAttribute('aria-expanded', 'false');
-      navMenu.classList.remove('open');
-      navBtn.setAttribute('aria-expanded', 'false');
-      closeAllSongDropdowns();
+      qualityFilterMenu.classList.remove('open');
+      qualityFilterBtn.setAttribute('aria-expanded', 'false');
+      lengthFilterMenu.classList.remove('open');
+      lengthFilterBtn.setAttribute('aria-expanded', 'false');
+      navTabMenu.classList.remove('open');
+      navTabBtn.setAttribute('aria-expanded', 'false');
+      closeAllLinkDropdowns();
     }
   });
 
-  document.addEventListener('click', ev => {
-    if (!filterMenu.contains(ev.target) && ev.target !== filterBtn) {
-      filterMenu.classList.remove('open');
-      filterBtn.setAttribute('aria-expanded', 'false');
+  document.addEventListener('click', event => {
+    if (!qualityFilterMenu.contains(event.target) && event.target !== qualityFilterBtn) {
+      qualityFilterMenu.classList.remove('open');
+      qualityFilterBtn.setAttribute('aria-expanded', 'false');
     }
-    if (!navMenu.contains(ev.target) && !navBtn.contains(ev.target)) {
-      navMenu.classList.remove('open');
-      navBtn.setAttribute('aria-expanded', 'false');
+    if (!lengthFilterMenu.contains(event.target) && event.target !== lengthFilterBtn) {
+      lengthFilterMenu.classList.remove('open');
+      lengthFilterBtn.setAttribute('aria-expanded', 'false');
     }
-    if (!ev.target.closest('.song-dropdown')) closeAllSongDropdowns();
+    if (!navTabMenu.contains(event.target) && !navTabBtn.contains(event.target)) {
+      navTabMenu.classList.remove('open');
+      navTabBtn.setAttribute('aria-expanded', 'false');
+    }
+    if (!event.target.closest('.song-dropdown')) closeAllLinkDropdowns();
   });
 
   window.addEventListener('scroll', () => {
-    const show = scrollY > 400;
-    scrollBtn.classList.toggle('visible', show);
-    closeAllSongDropdowns();
+    scrollTopBtn.classList.toggle('visible', scrollY > 400);
+    closeAllLinkDropdowns();
   }, { passive: true });
 
-  scrollBtn.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
+  scrollTopBtn.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
 
   (async () => {
-    const fetchCsv = async id => {
-      const res = await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.text();
+    const fetchSheetAsCsv = async sheetId => {
+      const response = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.text();
     };
 
     try {
-      let csv;
-      try       { csv = await fetchCsv(SHEET_ID); }
-      catch (_) { csv = await fetchCsv(SHEET_ID_FALLBACK); }
-      allData = buildData(parseCsv(csv));
-      renderEras('', audio);
-    } catch (err) {
-      console.error('Failed to load vault data:', err);
-      const el = document.createElement('div');
-      el.className = 'error-msg';
-      el.textContent = 'Failed to load data — check your connection or sheet permissions.';
-      document.getElementById('era-list').replaceChildren(el);
+      let csvText;
+      try       { csvText = await fetchSheetAsCsv(PRIMARY_SHEET_ID); }
+      catch (_) { csvText = await fetchSheetAsCsv(FALLBACK_SHEET_ID); }
+      vaultData = buildVaultData(parseCsv(csvText));
+      renderEras('', audioElement);
+    } catch (error) {
+      console.error('Failed to load vault data:', error);
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'error-msg';
+      errorMessage.textContent = 'Failed to load data — check your connection or sheet permissions.';
+      document.getElementById('era-list').replaceChildren(errorMessage);
     }
   })();
 });
