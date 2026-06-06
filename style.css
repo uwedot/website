@@ -31,6 +31,8 @@ body{
 }
 
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip-link{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+.skip-link:focus{position:fixed;top:8px;left:8px;width:auto;height:auto;padding:8px 16px;background:var(--surface-3);color:var(--text);border:1px solid var(--border-hover);border-radius:var(--radius-sm);z-index:9999;font-size:13px;text-decoration:none}
 
 button, input, [role="button"], a, [role="menuitem"], [role="menuitemcheckbox"] {
   outline: none !important;
@@ -262,6 +264,7 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:var(--radius);
+  overflow:hidden;
 }
 
 .era-row{
@@ -297,11 +300,11 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
 .songs-panel{
   display:grid;
   grid-template-rows:0fr;
+  overflow:hidden;
   transition:grid-template-rows 0.2s ease;
   background:var(--bg);
 }
 .songs-panel.open{grid-template-rows:1fr}
-.songs-inner{overflow:hidden}
 .songs-inner{border-top:1px solid var(--border);min-height:0}
 
 .song-item{
@@ -496,10 +499,8 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
   transform: rotate(180deg);
 }
 .song-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 100px;
+  position: fixed;
+  min-width: 110px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -507,8 +508,8 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
   display: none;
   flex-direction: column;
   gap: 2px;
-  z-index: 50;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  z-index: 300;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
 }
 .song-dropdown-menu.open {
   display: flex;
@@ -597,12 +598,13 @@ main{max-width:760px;margin:0 auto;padding:0 24px}
   .song-item{flex-wrap:wrap;padding:12px 14px;gap:0;row-gap:6px;align-items:flex-start}
   .song-num{font-size:11px;min-width:16px;margin-top:1px}
   .song-name{font-size:13px;white-space:normal;overflow:visible;text-overflow:unset;padding-left:6px;line-height:1.4;flex:1}
-  .song-actions{width:100%;padding-left:22px;justify-content:space-between}
+  .song-actions{width:100%;max-width:100%;padding-left:22px;justify-content:space-between}
   .song-quality{font-size:11px;width:auto;text-align:left}
   .song-type{font-size:11px;width:auto;text-align:left}
   .song-quality-placeholder{display:none}
   .song-type-placeholder{display:none}
   .song-link-placeholder{display:none}
+  .note-toggle-placeholder{display:none}
   .note-toggle-placeholder{display:none}
   .song-note{padding-left:36px}
 

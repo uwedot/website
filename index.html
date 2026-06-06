@@ -16,10 +16,12 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to content</a>
+
 <nav class="nav" aria-label="Site navigation">
   <div class="nav-logo">Ye Vault</div>
   <div class="nav-dropdown-container">
-    <button type="button" id="nav-tab-btn" class="nav-dropdown-btn">
+    <button type="button" id="nav-tab-btn" class="nav-dropdown-btn" aria-haspopup="true" aria-expanded="false">
       <span id="nav-btn-text">Unreleased</span>
       <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="6,9 12,15 18,9"/>
@@ -44,7 +46,7 @@
   <p class="hero-sub">Ye's unreleased discography</p>
 </header>
 
-<main>
+<main id="main-content">
   <div class="controls-row">
     <div class="search-wrap">
       <label for="search-box" class="sr-only">Search songs or eras</label>
