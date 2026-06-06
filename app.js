@@ -98,6 +98,17 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
   const HasNote = Notes.trim() !== '';
   const HasUrl  = !!(Url && /^https?:/i.test(Url.trim()));
 
+  let DisplayQuality = Quality;
+  if (!HasUrl) {
+    DisplayQuality = 'Unavailable';
+  }
+
+  let DownloadHtml = '';
+  if (HasUrl && Url.includes('pillows.su/f/')) {
+    const DownloadUrl = Url.replace('pillows.su/f/', 'api.pillows.su/api/download/');
+    DownloadHtml = `<a class="song-link-btn" href="${EscapeHtml(DownloadUrl)}" target="_blank" rel="noopener noreferrer">Download</a>`;
+  }
+
   const El = document.createElement('div');
   El.className = 'song-item';
 
@@ -106,10 +117,11 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
     `<div class="song-name" title="${EscapeHtml(Name)}">${EscapeHtml(Name)}</div>` +
     `<div class="song-actions">` +
       `<div class="song-actions-left">` +
-        (Quality ? `<div class="song-quality ${QClass(Quality)}">${EscapeHtml(Quality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
+        (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : `<div class="song-quality-placeholder"></div>`) +
       `</div>` +
       `<div class="song-actions-right">` +
         (HasUrl  ? `<a class="song-link-btn" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">View</a>` : `<div class="song-link-placeholder"></div>`) +
+        DownloadHtml +
         (HasNote ? `<div class="note-toggle" aria-label="Show note">＋</div>` : `<div class="note-toggle-placeholder"></div>`) +
       `</div>` +
     `</div>`;
