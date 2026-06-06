@@ -1,6 +1,7 @@
 const SheetId = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
 
 let AllData = null;
+let CurrentTab = 'all';
 let ActiveQualities = new Set(['high', 'low', 'rec', 'cd', 'lossless']);
 
 const QualityKeys = {
@@ -129,9 +130,12 @@ function RenderEras(EraObj, Filter = '') {
   const List = document.getElementById('era-list');
   const F = Filter.trim().toLowerCase();
 
+  const TabEmoji = CurrentTab === 'best' ? '⭐' : CurrentTab === 'special' ? '✨' : null;
+
   const Filtered = {};
   for (const [Era, Songs] of Object.entries(EraObj)) {
     let Matched = Songs.filter(([, Quality]) => QualityAllowed(Quality));
+    if (TabEmoji) Matched = Matched.filter(([Name]) => Name.includes(TabEmoji));
     if (F) Matched = Matched.filter(([Name]) =>
       Name.toLowerCase().includes(F) || Era.toLowerCase().includes(F)
     );
@@ -228,6 +232,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const ScrollBtn   = document.getElementById('scroll-top');
 
   SearchBox.addEventListener('input', E => OnSearch(E.target.value));
+
+  document.querySelectorAll('.nav-tab').forEach(Tab => {
+    Tab.addEventListener('click', () => {
+      if (Tab.dataset.tab === CurrentTab) return;
+      CurrentTab = Tab.dataset.tab;
+      document.querySelectorAll('.nav-tab').forEach(T => T.classList.toggle('active', T === Tab));
+      if (AllData) RenderEras(AllData, SearchBox.value);
+    });
+  });
 
   document.addEventListener('keydown', E => {
     if (E.key === '/' && document.activeElement !== SearchBox) {
