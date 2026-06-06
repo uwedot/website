@@ -1,11 +1,15 @@
-const SheetId         = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
-const FallbackSheetId = '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM';
+'use strict';
 
-let AllData         = null;
-let CurrentTab      = 'all';
-let ActiveQualities = new Set(['high','low','rec','cd','lossless']);
+const SHEET_ID          = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
+const SHEET_ID_FALLBACK = '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM';
+const RECENT_LIMIT      = 200;
 
-const QualityKeys = {
+let allData        = null;
+let currentTab     = 'all';
+let activeQualities = new Set(['high', 'low', 'rec', 'cd', 'lossless']);
+let searchTimer    = null;
+
+const QUALITY_CHECKS = {
   high:    L => L.includes('high'),
   low:     L => L.includes('low') && !L.includes('high'),
   rec:     L => L.includes('record'),
@@ -13,545 +17,605 @@ const QualityKeys = {
   lossless:L => L.includes('lossless'),
 };
 
-function QClass(Q) {
-  if (!Q) return 'q-other';
-  const L = Q.toLowerCase();
-  if (L.includes('high'))     return 'q-high';
-  if (L.includes('cd'))       return 'q-cd';
-  if (L.includes('low'))      return 'q-low';
-  if (L.includes('record'))   return 'q-rec';
-  if (L.includes('lossless')) return 'q-lossless';
+function qualityClass(q) {
+  if (!q) return 'q-other';
+  const l = q.toLowerCase();
+  if (l.includes('high'))    return 'q-high';
+  if (l.includes('cd'))      return 'q-cd';
+  if (l.includes('low'))     return 'q-low';
+  if (l.includes('record'))  return 'q-rec';
+  if (l.includes('lossless'))return 'q-lossless';
   return 'q-other';
 }
 
-function TClass(T) {
-  if (!T) return 'tl-other';
-  const L = T.toLowerCase();
-  if (L.includes('og'))      return 'tl-og';
-  if (L.includes('stem'))    return 'tl-stem';
-  if (L.includes('full'))    return 'tl-full';
-  if (L.includes('tagged'))  return 'tl-tagged';
-  if (L.includes('partial')) return 'tl-partial';
-  if (L.includes('snippet')) return 'tl-snippet';
-  if (L.includes('unavail')) return 'tl-unavail';
+function typeClass(t) {
+  if (!t) return 'tl-other';
+  const l = t.toLowerCase();
+  if (l.includes('og'))      return 'tl-og';
+  if (l.includes('stem'))    return 'tl-stem';
+  if (l.includes('full'))    return 'tl-full';
+  if (l.includes('tagged'))  return 'tl-tagged';
+  if (l.includes('partial')) return 'tl-partial';
+  if (l.includes('snippet')) return 'tl-snippet';
+  if (l.includes('unavail')) return 'tl-unavail';
   return 'tl-other';
 }
 
-function QualityAllowed(Quality) {
-  if (!Quality) return false;
-  const L = Quality.toLowerCase();
-  if (L.includes('not avail') || L.includes('unavail')) return false;
-  for (const Key of ActiveQualities) {
-    if (QualityKeys[Key](L)) return true;
+function qualityAllowed(quality) {
+  if (!quality) return false;
+  const l = quality.toLowerCase();
+  if (l.includes('not avail') || l.includes('unavail')) return false;
+  for (const key of activeQualities) {
+    if (QUALITY_CHECKS[key](l)) return true;
   }
   return false;
 }
 
-function UpdatePlayButtonsState(Audio) {
-  if (!Audio) return;
-  document.querySelectorAll('.play-btn').forEach(Btn => {
-    try {
-      const IsCurrent = Audio.src && (new URL(Audio.src).href === new URL(Btn.dataset.url, location.href).href);
-      Btn.textContent = (IsCurrent && !Audio.paused) ? 'Pause' : 'Play';
-    } catch {
-      Btn.textContent = 'Play';
-    }
-  });
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-function CloseAllSongDropdowns() {
-  document.querySelectorAll('.song-dropdown-menu.open').forEach(M => M.classList.remove('open'));
-}
-
-function ParseCsv(Text) {
-  const Rows = [];
-  let Field = '', Row = [], InQuote = false;
-  for (let I = 0; I < Text.length; I++) {
-    const Ch = Text[I];
-    if (InQuote) {
-      if (Ch === '"' && Text[I + 1] === '"') { Field += '"'; I++; }
-      else if (Ch === '"') InQuote = false;
-      else Field += Ch;
+function parseCsv(text) {
+  const rows = [];
+  let field = '', row = [], inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') inQuote = false;
+      else field += ch;
     } else {
-      if (Ch === '"')       InQuote = true;
-      else if (Ch === ',')  { Row.push(Field); Field = ''; }
-      else if (Ch === '\n') { Row.push(Field); Rows.push(Row); Row = []; Field = ''; }
-      else if (Ch !== '\r') Field += Ch;
+      if (ch === '"')  inQuote = true;
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (ch !== '\r') field += ch;
     }
   }
-  if (Field || Row.length) { Row.push(Field); Rows.push(Row); }
-  return Rows;
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
 }
 
-function BuildData(Rows) {
-  const EraMap = {};
-  if (Rows.length < 2) return EraMap;
-
-  const Header = Rows[0].map(H => H.trim().toLowerCase());
-
-  let LeakDateIdx = Header.indexOf('leak date');
-  if (LeakDateIdx === -1) LeakDateIdx = Header.findIndex(H => H.includes('date'));
-
-  let UrlIdx = Header.indexOf('link(s)');
-  if (UrlIdx === -1) UrlIdx = Header.findIndex(H => H.includes('link'));
-
-  const Col = {
-    era:      Header.indexOf('era'),
-    name:     Header.indexOf('name'),
-    quality:  Header.indexOf('quality'),
-    url:      UrlIdx,
-    notes:    Header.indexOf('notes'),
-    leakDate: LeakDateIdx,
-    type:     Header.findIndex(H => H.includes('available length')),
+function buildData(rows) {
+  const map = {};
+  if (rows.length < 2) return map;
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  let leakDateIdx = header.indexOf('leak date');
+  if (leakDateIdx === -1) leakDateIdx = header.findIndex(h => h.includes('date'));
+  let urlIdx = header.indexOf('link(s)');
+  if (urlIdx === -1) urlIdx = header.findIndex(h => h.includes('link'));
+  const col = {
+    era:     header.indexOf('era'),
+    name:    header.indexOf('name'),
+    quality: header.indexOf('quality'),
+    url:     urlIdx,
+    notes:   header.indexOf('notes'),
+    date:    leakDateIdx,
+    type:    header.findIndex(h => h.includes('available length')),
   };
-
-  const SummaryPattern = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
-
-  for (let I = 1; I < Rows.length; I++) {
-    const R = Rows[I];
-    if (!R || R.every(C => !C.trim())) continue;
-    const Era = (R[Col.era] || '').trim();
-    if (!Era) continue;
-    const Name = (R[Col.name] || '').trim();
-    if (!Name) continue;
-    if (SummaryPattern.test(Name) || SummaryPattern.test(Era)) continue;
-
-    if (!EraMap[Era]) EraMap[Era] = [];
-    EraMap[Era].push([
-      Name,
-      (R[Col.quality]  || '').trim(),
-      Col.url      !== -1 ? (R[Col.url]      || '').trim() : '',
-      (R[Col.notes]    || '').trim(),
-      Col.leakDate !== -1 ? (R[Col.leakDate] || '').trim() : '',
-      Col.type     !== -1 ? (R[Col.type]     || '').trim() : '',
+  const summaryRe = /^\d+\s+(og file|full|tagged|partial|snippet|stem bounce|unavailable)/i;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.every(c => !c.trim())) continue;
+    const era  = (r[col.era]  || '').trim();
+    const name = (r[col.name] || '').trim();
+    if (!era || !name) continue;
+    if (summaryRe.test(name) || summaryRe.test(era)) continue;
+    if (!map[era]) map[era] = [];
+    map[era].push([
+      name,
+      (r[col.quality] || '').trim(),
+      col.url  !== -1 ? (r[col.url]  || '').trim() : '',
+      (r[col.notes]   || '').trim(),
+      col.date !== -1 ? (r[col.date] || '').trim() : '',
+      col.type !== -1 ? (r[col.type] || '').trim() : '',
     ]);
   }
-
-  return EraMap;
+  return map;
 }
 
-function EscapeHtml(Str) {
-  return Str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function getDateValue(str) {
+  if (!str) return 0;
+  const n = Date.parse(str);
+  if (!isNaN(n)) return n;
+  const m = str.match(/\b(19|20)\d{2}\b/);
+  return m ? new Date(m[0], 0, 1).getTime() : 0;
 }
 
-function PositionDropdown(Btn, Menu) {
-  Menu.style.cssText = 'visibility:hidden;display:flex';
-  const MenuH = Menu.offsetHeight;
-  const MenuW = Menu.offsetWidth;
-  Menu.style.cssText = '';
-
-  const Rect       = Btn.getBoundingClientRect();
-  const SpaceBelow = window.innerHeight - Rect.bottom;
-  const Left       = Math.max(4, Math.min(Rect.right - MenuW, window.innerWidth - MenuW - 4));
-  Menu.style.top   = (SpaceBelow < MenuH + 8 ? Rect.top - MenuH - 4 : Rect.bottom + 4) + 'px';
-  Menu.style.left  = Left + 'px';
-  Menu.style.right = '';
+function positionDropdown(btn, menu) {
+  menu.style.cssText = 'visibility:hidden;display:flex';
+  const mh = menu.offsetHeight;
+  const mw = menu.offsetWidth;
+  menu.style.cssText = '';
+  const rect = btn.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const left = Math.max(4, Math.min(rect.right - mw, window.innerWidth - mw - 4));
+  menu.style.top  = (spaceBelow < mh + 8 ? rect.top - mh - 4 : rect.bottom + 4) + 'px';
+  menu.style.left = left + 'px';
+  menu.style.right = '';
 }
 
-function MakeSongEl(Name, Quality, Url, Notes, Num, TrackType, Audio) {
-  const HasNote = Notes.trim() !== '';
-  const UrlList = Url ? Url.split(/[\s,\n\r]+/).map(U => U.trim()).filter(U => /^https?:/i.test(U)) : [];
-  const HasUrl  = UrlList.length > 0;
-  const DisplayQuality = HasUrl ? Quality : 'Unavailable';
-
-  const PillowsUrl = UrlList.find(U => U.includes('pillows.su/f/'));
-  let PlayBtnHtml = '';
-  if (PillowsUrl) {
-    const DownloadUrl = PillowsUrl.replace('pillows.su/f/', 'api.pillows.su/api/download/');
-    let BtnText = 'Play';
-    if (Audio?.src) {
-      try { if (new URL(Audio.src).href === new URL(DownloadUrl, location.href).href && !Audio.paused) BtnText = 'Pause'; } catch {}
+function updatePlayButtons(audio) {
+  if (!audio) return;
+  document.querySelectorAll('.play-btn').forEach(btn => {
+    try {
+      const isCurrent = audio.src &&
+        new URL(audio.src).href === new URL(btn.dataset.url, location.href).href;
+      btn.textContent = (isCurrent && !audio.paused) ? 'Pause' : 'Play';
+    } catch {
+      btn.textContent = 'Play';
     }
-    PlayBtnHtml = `<button type="button" class="song-play-btn play-btn" data-url="${EscapeHtml(DownloadUrl)}" data-name="${EscapeHtml(Name)}">${BtnText}</button>`;
-  }
-
-  let LinksHtml = '';
-  if (UrlList.length > 1) {
-    const ItemsHtml = UrlList.map((U, I) =>
-      `<a class="song-dropdown-item" href="${EscapeHtml(U)}" target="_blank" rel="noopener noreferrer">Link ${I + 1}</a>`
-    ).join('');
-    LinksHtml =
-      `<div class="song-dropdown">` +
-        `<button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false">` +
-          `<span>Links</span>` +
-          `<svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>` +
-        `</button>` +
-        `<div class="song-dropdown-menu" role="menu">${ItemsHtml}</div>` +
-      `</div>`;
-  } else if (UrlList.length === 1) {
-    LinksHtml = `<a class="song-link-btn" href="${EscapeHtml(UrlList[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
-  }
-
-  const NoteHtml = HasNote
-    ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note">＋</div>`
-    : '';
-
-  const PillsHtml =
-    (DisplayQuality ? `<div class="song-quality ${QClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : '') +
-    (TrackType      ? `<div class="song-type ${TClass(TrackType)}">${EscapeHtml(TrackType)}</div>`             : '');
-
-  // Flat structure: num | name | pills | buttons
-  // CSS grid handles layout per breakpoint — no nested wrapper divs
-  const El = document.createElement('div');
-  El.className = 'song-item';
-  El.innerHTML =
-    `<div class="song-num">${Num}</div>` +
-    `<div class="song-name" title="${EscapeHtml(Name)}">${EscapeHtml(Name)}</div>` +
-    `<div class="song-pills">${PillsHtml}</div>` +
-    `<div class="song-btns">${PlayBtnHtml}${LinksHtml}${NoteHtml}</div>`;
-
-  if (UrlList.length > 1) {
-    const DropBtn  = El.querySelector('.song-dropdown-btn');
-    const DropMenu = El.querySelector('.song-dropdown-menu');
-    DropBtn.addEventListener('click', Ev => {
-      Ev.stopPropagation();
-      const IsOpen = DropMenu.classList.contains('open');
-      CloseAllSongDropdowns();
-      if (!IsOpen) {
-        PositionDropdown(DropBtn, DropMenu);
-        DropMenu.classList.add('open');
-        DropBtn.setAttribute('aria-expanded', 'true');
-      }
-    });
-  }
-
-  const PlayBtn = El.querySelector('.play-btn');
-  if (PlayBtn) {
-    PlayBtn.addEventListener('click', Ev => {
-      Ev.stopPropagation();
-      CloseAllSongDropdowns();
-      const TrackUrl  = new URL(PlayBtn.dataset.url, location.href).href;
-      const Player    = document.getElementById('global-player');
-      const IsCurrent = Audio.src && (new URL(Audio.src).href === TrackUrl);
-      if (IsCurrent) {
-        Audio.paused ? Audio.play().catch(() => {}) : Audio.pause();
-      } else {
-        document.getElementById('player-track-name').textContent = PlayBtn.dataset.name;
-        Audio.src = TrackUrl;
-        Player.classList.add('active');
-        Audio.play().catch(() => {});
-      }
-    });
-  }
-
-  if (HasNote) {
-    const NoteEl       = document.createElement('div');
-    NoteEl.className   = 'song-note';
-    NoteEl.textContent = Notes;
-    const NoteToggle   = El.querySelector('.note-toggle');
-    NoteToggle.addEventListener('click', Ev => {
-      Ev.stopPropagation();
-      const IsExp = El.classList.toggle('expanded');
-      NoteToggle.textContent = IsExp ? '－' : '＋';
-      NoteToggle.setAttribute('aria-label', IsExp ? 'Hide note' : 'Show note');
-    });
-    NoteToggle.addEventListener('keydown', Ev => {
-      if (Ev.key === 'Enter' || Ev.key === ' ') { Ev.preventDefault(); NoteToggle.click(); }
-    });
-    return [El, NoteEl];
-  }
-  return [El];
-}
-
-function GetDateValue(Str) {
-  if (!Str) return 0;
-  const N = Date.parse(Str);
-  if (!isNaN(N)) return N;
-  const M = Str.match(/\b(19|20)\d{2}\b/);
-  return M ? new Date(M[0], 0, 1).getTime() : 0;
-}
-
-function CollapseAllPanels() {
-  document.querySelectorAll('.songs-panel.open').forEach(P => {
-    P.classList.remove('open');
-    const Row = P.previousElementSibling;
-    if (Row) { Row.classList.remove('active'); Row.setAttribute('aria-expanded', 'false'); }
   });
 }
 
-function RenderEras(Filter, Audio) {
-  const List = document.getElementById('era-list');
-  const F    = (Filter || '').trim().toLowerCase();
-  if (!AllData) return;
+function closeAllSongDropdowns() {
+  document.querySelectorAll('.song-dropdown-menu.open').forEach(m => m.classList.remove('open'));
+}
 
-  CollapseAllPanels();
-  CloseAllSongDropdowns();
+function makeSongEl(name, quality, url, notes, num, trackType, audio) {
+  const hasNote = notes.trim() !== '';
+  const urlList = url
+    ? url.split(/[\s,\n\r]+/).map(u => u.trim()).filter(u => /^https?:/i.test(u))
+    : [];
+  const hasUrl = urlList.length > 0;
+  const displayQuality = hasUrl ? quality : 'Unavailable';
 
-  const TabEmoji = CurrentTab === 'best' ? '⭐' : CurrentTab === 'special' ? '✨' : null;
-  const Filtered = {};
+  const pillowsUrl = urlList.find(u => u.includes('pillows.su/f/'));
+  let playBtnHtml = '';
+  if (pillowsUrl) {
+    const dlUrl = pillowsUrl.replace('pillows.su/f/', 'api.pillows.su/api/download/');
+    let btnText = 'Play';
+    if (audio?.src) {
+      try {
+        if (new URL(audio.src).href === new URL(dlUrl, location.href).href && !audio.paused)
+          btnText = 'Pause';
+      } catch {}
+    }
+    playBtnHtml = `<button type="button" class="song-play-btn play-btn" data-url="${escHtml(dlUrl)}" data-name="${escHtml(name)}">${btnText}</button>`;
+  }
 
-  if (CurrentTab === 'recent') {
-    const AllSongs = [];
-    for (const [Era, Songs] of Object.entries(AllData)) {
-      Songs.filter(([, Q]) => QualityAllowed(Q)).forEach(Song => {
-        if (!F || Song[0].toLowerCase().includes(F) || Era.toLowerCase().includes(F)) {
-          AllSongs.push({ era: Era, name: Song[0], quality: Song[1], url: Song[2], notes: Song[3], dateStr: Song[4] || '', trackType: Song[5] || '' });
+  let linksHtml = '';
+  if (urlList.length > 1) {
+    const items = urlList.map((u, i) =>
+      `<a class="song-dropdown-item" href="${escHtml(u)}" target="_blank" rel="noopener noreferrer">Link ${i + 1}</a>`
+    ).join('');
+    linksHtml = `<div class="song-dropdown">
+      <button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false">
+        <span>Links</span>
+        <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
+      </button>
+      <div class="song-dropdown-menu" role="menu">${items}</div>
+    </div>`;
+  } else if (urlList.length === 1) {
+    linksHtml = `<a class="song-link-btn" href="${escHtml(urlList[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
+  }
+
+  const noteHtml = hasNote
+    ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note">＋</div>`
+    : '';
+  const pillsHtml =
+    (displayQuality ? `<div class="song-quality ${qualityClass(displayQuality)}">${escHtml(displayQuality)}</div>` : '') +
+    (trackType      ? `<div class="song-type ${typeClass(trackType)}">${escHtml(trackType)}</div>` : '');
+
+  const el = document.createElement('div');
+  el.className = 'song-item';
+  el.setAttribute('role', 'listitem');
+  el.innerHTML = `
+    <div class="song-num">${num}</div>
+    <div class="song-name" title="${escHtml(name)}">${escHtml(name)}</div>
+    <div class="song-pills">${pillsHtml}</div>
+    <div class="song-btns">${playBtnHtml}${linksHtml}${noteHtml}</div>
+  `;
+
+  if (urlList.length > 1) {
+    const dropBtn  = el.querySelector('.song-dropdown-btn');
+    const dropMenu = el.querySelector('.song-dropdown-menu');
+    dropBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const isOpen = dropMenu.classList.contains('open');
+      closeAllSongDropdowns();
+      if (!isOpen) {
+        positionDropdown(dropBtn, dropMenu);
+        dropMenu.classList.add('open');
+        dropBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  const playBtn = el.querySelector('.play-btn');
+  if (playBtn) {
+    playBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      closeAllSongDropdowns();
+      const trackUrl = new URL(playBtn.dataset.url, location.href).href;
+      const player   = document.getElementById('global-player');
+      const isCurrent = audio.src && new URL(audio.src).href === trackUrl;
+      if (isCurrent) {
+        audio.paused ? audio.play().catch(() => {}) : audio.pause();
+      } else {
+        document.getElementById('player-track-name').textContent = playBtn.dataset.name;
+        audio.src = trackUrl;
+        player.removeAttribute('hidden');
+        audio.play().catch(() => {});
+      }
+    });
+  }
+
+  if (hasNote) {
+    const noteEl     = document.createElement('div');
+    noteEl.className = 'song-note';
+    noteEl.textContent = notes;
+    const noteToggle = el.querySelector('.note-toggle');
+    const toggleNote = () => {
+      const expanded = el.classList.toggle('expanded');
+      noteToggle.textContent = expanded ? '－' : '＋';
+      noteToggle.setAttribute('aria-label', expanded ? 'Hide note' : 'Show note');
+    };
+    noteToggle.addEventListener('click', ev => { ev.stopPropagation(); toggleNote(); });
+    noteToggle.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleNote(); }
+    });
+    return [el, noteEl];
+  }
+
+  return [el];
+}
+
+function collapseAllPanels() {
+  document.querySelectorAll('.songs-panel.open').forEach(panel => {
+    panel.classList.remove('open');
+    const row = panel.previousElementSibling;
+    if (row) { row.classList.remove('active'); row.setAttribute('aria-expanded', 'false'); }
+  });
+}
+
+function renderEras(filter, audio) {
+  const list = document.getElementById('era-list');
+  const f    = (filter || '').trim().toLowerCase();
+  if (!allData) return;
+
+  collapseAllPanels();
+  closeAllSongDropdowns();
+
+  const tabEmoji = currentTab === 'best' ? '⭐' : currentTab === 'special' ? '✨' : null;
+  const filtered = {};
+
+  if (currentTab === 'recent') {
+    const allSongs = [];
+    for (const [era, songs] of Object.entries(allData)) {
+      songs.filter(([, q]) => qualityAllowed(q)).forEach(song => {
+        if (!f || song[0].toLowerCase().includes(f) || era.toLowerCase().includes(f)) {
+          allSongs.push({
+            era, name: song[0], quality: song[1], url: song[2],
+            notes: song[3], dateStr: song[4] || '', trackType: song[5] || '',
+          });
         }
       });
     }
-    AllSongs.sort((A, B) => GetDateValue(B.dateStr) - GetDateValue(A.dateStr));
-    const RecentSongs = AllSongs.slice(0, 200);
-    if (RecentSongs.length) {
-      Filtered['Recent Leaks'] = RecentSongs.map(S => [
-        `[${S.era}] ${S.name}${S.dateStr ? ` (${S.dateStr})` : ''}`,
-        S.quality, S.url, S.notes, S.dateStr, S.trackType,
+    allSongs.sort((a, b) => getDateValue(b.dateStr) - getDateValue(a.dateStr));
+    const recent = allSongs.slice(0, RECENT_LIMIT);
+    if (recent.length) {
+      filtered['Recent Leaks'] = recent.map(s => [
+        `[${s.era}] ${s.name}${s.dateStr ? ` (${s.dateStr})` : ''}`,
+        s.quality, s.url, s.notes, s.dateStr, s.trackType,
       ]);
     }
   } else {
-    for (const [Era, Songs] of Object.entries(AllData)) {
-      let Matched = Songs.filter(([, Q]) => QualityAllowed(Q));
-      if (TabEmoji) Matched = Matched.filter(([N]) => N.includes(TabEmoji));
-      if (F)        Matched = Matched.filter(([N]) => N.toLowerCase().includes(F) || Era.toLowerCase().includes(F));
-      if (Matched.length) Filtered[Era] = Matched;
+    for (const [era, songs] of Object.entries(allData)) {
+      let matched = songs.filter(([, q]) => qualityAllowed(q));
+      if (tabEmoji) matched = matched.filter(([n]) => n.includes(tabEmoji));
+      if (f)        matched = matched.filter(([n]) => n.toLowerCase().includes(f) || era.toLowerCase().includes(f));
+      if (matched.length) filtered[era] = matched;
     }
   }
 
-  const EraKeys    = Object.keys(Filtered);
-  const TotalSongs = EraKeys.reduce((S, K) => S + Filtered[K].length, 0);
-  document.getElementById('nav-eras').textContent  = EraKeys.length;
-  document.getElementById('nav-songs').textContent = TotalSongs.toLocaleString();
+  const eraKeys   = Object.keys(filtered);
+  const totalSongs = eraKeys.reduce((s, k) => s + filtered[k].length, 0);
 
-  const Frag = document.createDocumentFragment();
+  const erasStat = document.getElementById('stat-eras');
+  if (currentTab === 'recent') {
+    erasStat.hidden = true;
+  } else {
+    erasStat.hidden = false;
+    document.getElementById('nav-eras').textContent = eraKeys.length.toLocaleString();
+  }
+  document.getElementById('nav-songs').textContent = totalSongs.toLocaleString();
 
-  if (!EraKeys.length) {
-    const El = document.createElement('div');
-    El.className   = 'no-results';
-    El.textContent = 'No results found.';
-    Frag.appendChild(El);
-    List.replaceChildren(Frag);
+  const frag = document.createDocumentFragment();
+
+  if (!eraKeys.length) {
+    const el = document.createElement('div');
+    el.className = 'no-results';
+    el.textContent = 'No results found.';
+    frag.appendChild(el);
+    list.replaceChildren(frag);
     return;
   }
 
-  for (const Era of EraKeys) {
-    const Songs = Filtered[Era];
-    const Wrap  = document.createElement('div');
-    Wrap.className = 'era-wrap';
+  for (const era of eraKeys) {
+    const songs = filtered[era];
 
-    const Row = document.createElement('div');
-    Row.className = 'era-row';
-    Row.setAttribute('role', 'button');
-    Row.setAttribute('tabindex', '0');
-    Row.setAttribute('aria-expanded', 'false');
-    Row.innerHTML =
-      `<div class="era-row-name">${EscapeHtml(Era)}</div>` +
-      `<div class="era-row-right">` +
-        `<div class="era-pill">${Songs.length}</div>` +
-        `<svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>` +
-      `</div>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'era-wrap';
+    wrap.setAttribute('role', 'listitem');
 
-    const Panel = document.createElement('div');
-    Panel.className = 'songs-panel';
-    const Inner = document.createElement('div');
-    Inner.className = 'songs-inner';
-    Panel.appendChild(Inner);
+    const row = document.createElement('div');
+    row.className = 'era-row';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('aria-expanded', 'false');
+    row.innerHTML = `
+      <div class="era-row-name">${escHtml(era)}</div>
+      <div class="era-row-right">
+        <div class="era-pill">${songs.length}</div>
+        <svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <polyline points="6,9 12,15 18,9"/>
+        </svg>
+      </div>
+    `;
 
-    const Toggle = () => {
-      const IsOpen = Panel.classList.contains('open');
-      CloseAllSongDropdowns();
-      if (IsOpen) {
-        Panel.classList.remove('open');
-        Row.classList.remove('active');
-        Row.setAttribute('aria-expanded', 'false');
+    const panel = document.createElement('div');
+    panel.className = 'songs-panel';
+
+    const inner = document.createElement('div');
+    inner.className = 'songs-inner';
+    inner.setAttribute('role', 'list');
+    panel.appendChild(inner);
+
+    const toggle = () => {
+      const isOpen = panel.classList.contains('open');
+      closeAllSongDropdowns();
+      if (isOpen) {
+        panel.classList.remove('open');
+        row.classList.remove('active');
+        row.setAttribute('aria-expanded', 'false');
       } else {
-        Panel.classList.add('open');
-        Row.classList.add('active');
-        Row.setAttribute('aria-expanded', 'true');
-        if (!Inner.dataset.loaded) {
-          Inner.dataset.loaded = '1';
-          const SongFrag = document.createDocumentFragment();
-          Songs.forEach(([N, Q, U, No, , TT], I) => {
-            MakeSongEl(N, Q, U, No, I + 1, TT || '', Audio).forEach(Node => SongFrag.appendChild(Node));
+        panel.classList.add('open');
+        row.classList.add('active');
+        row.setAttribute('aria-expanded', 'true');
+        if (!inner.dataset.loaded) {
+          inner.dataset.loaded = '1';
+          const songFrag = document.createDocumentFragment();
+          songs.forEach(([n, q, u, no, , tt], i) => {
+            makeSongEl(n, q, u, no, i + 1, tt || '', audio)
+              .forEach(node => songFrag.appendChild(node));
           });
-          Inner.appendChild(SongFrag);
-          UpdatePlayButtonsState(Audio);
+          inner.appendChild(songFrag);
+          updatePlayButtons(audio);
         }
-        requestAnimationFrame(() => Row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
       }
     };
 
-    Row.addEventListener('click', Toggle);
-    Row.addEventListener('keydown', E => { if (E.key === 'Enter' || E.key === ' ') { E.preventDefault(); Toggle(); } });
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
+    });
 
-    Wrap.appendChild(Row);
-    Wrap.appendChild(Panel);
-    Frag.appendChild(Wrap);
+    wrap.appendChild(row);
+    wrap.appendChild(panel);
+    frag.appendChild(wrap);
   }
 
-  List.replaceChildren(Frag);
+  list.replaceChildren(frag);
 }
 
-let SearchTimer;
-
 document.addEventListener('DOMContentLoaded', () => {
-  const SearchBox  = document.getElementById('search-box');
-  const FilterBtn  = document.getElementById('filter-btn');
-  const FilterMenu = document.getElementById('filter-menu');
-  const ScrollBtn  = document.getElementById('scroll-top');
-  const NavBtn     = document.getElementById('nav-tab-btn');
-  const NavMenu    = document.getElementById('nav-tab-menu');
-  const NavText    = document.getElementById('nav-btn-text');
-  const Audio      = document.getElementById('main-audio');
-  const Player     = document.getElementById('global-player');
+  const searchBox = document.getElementById('search-box');
+  const filterBtn = document.getElementById('filter-btn');
+  const filterMenu= document.getElementById('filter-menu');
+  const scrollBtn = document.getElementById('scroll-top');
+  const navBtn    = document.getElementById('nav-tab-btn');
+  const navMenu   = document.getElementById('nav-tab-menu');
+  const navText   = document.getElementById('nav-btn-text');
+  const audio     = document.getElementById('main-audio');
+  const player    = document.getElementById('global-player');
 
-  SearchBox.addEventListener('input', E => {
-    clearTimeout(SearchTimer);
-    SearchTimer = setTimeout(() => { if (AllData) RenderEras(E.target.value, Audio); }, 180);
+  searchBox.addEventListener('input', ev => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { if (allData) renderEras(ev.target.value, audio); }, 180);
   });
 
-  if (Audio) {
-    const PlayIcon       = document.getElementById('player-play-icon');
-    const PauseIcon      = document.getElementById('player-pause-icon');
-    const PlayBtn        = document.getElementById('player-play-btn');
-    const CloseBtn       = document.getElementById('player-close-btn');
-    const CurrentEl      = document.getElementById('player-current');
-    const DurationEl     = document.getElementById('player-duration');
-    const TrackLengthEl  = document.getElementById('player-track-length');
-    const TrackCurrentEl = document.getElementById('player-track-current');
-    const Fill           = document.getElementById('player-fill');
-    const Thumb          = document.getElementById('player-thumb');
-    const VolFill        = document.getElementById('player-vol-fill');
-    const VolThumb       = document.getElementById('player-vol-thumb');
-    const Scrubber       = document.getElementById('player-scrubber');
-    const VolSlider      = document.getElementById('player-volume');
+  if (audio) {
+    const playIcon    = document.getElementById('player-play-icon');
+    const pauseIcon   = document.getElementById('player-pause-icon');
+    const playBtn     = document.getElementById('player-play-btn');
+    const closeBtn    = document.getElementById('player-close-btn');
+    const currentEl   = document.getElementById('player-current');
+    const durationEl  = document.getElementById('player-duration');
+    const trackCurEl  = document.getElementById('player-track-current');
+    const trackLenEl  = document.getElementById('player-track-length');
+    const fill        = document.getElementById('player-fill');
+    const thumb       = document.getElementById('player-thumb');
+    const volFill     = document.getElementById('player-vol-fill');
+    const volThumb    = document.getElementById('player-vol-thumb');
+    const scrubber    = document.getElementById('player-scrubber');
+    const volSlider   = document.getElementById('player-volume');
 
-    const FormatTime = Secs => {
-      if (!isFinite(Secs) || Secs < 0) return '0:00';
-      return `${Math.floor(Secs / 60)}:${String(Math.floor(Secs % 60)).padStart(2, '0')}`;
+    const fmtTime = s => {
+      if (!isFinite(s) || s < 0) return '0:00';
+      return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     };
-
-    const SetPlayState = Playing => {
-      PlayIcon.style.display  = Playing ? 'none' : '';
-      PauseIcon.style.display = Playing ? ''     : 'none';
-      PlayBtn.setAttribute('aria-label', Playing ? 'Pause' : 'Play');
+    const setPlayState = playing => {
+      playIcon.style.display  = playing ? 'none' : '';
+      pauseIcon.style.display = playing ? '' : 'none';
+      playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
     };
-
-    const SetProgress = Pct => {
-      const P = Math.max(0, Math.min(100, Pct));
-      Fill.style.width = Thumb.style.left = P + '%';
+    const setProgress = pct => {
+      const p = Math.max(0, Math.min(100, pct));
+      fill.style.width = thumb.style.left = p + '%';
+      scrubber.setAttribute('aria-valuenow', Math.round(p));
     };
-
-    const SetVolume = Pct => {
-      const P = Math.max(0, Math.min(100, Pct));
-      VolFill.style.width = VolThumb.style.left = P + '%';
-      Audio.volume = P / 100;
+    const setVolume = pct => {
+      const p = Math.max(0, Math.min(100, pct));
+      volFill.style.width = volThumb.style.left = p + '%';
+      audio.volume = p / 100;
+      volSlider.setAttribute('aria-valuenow', Math.round(p));
     };
-
-    const ScrubberPct = (Ev, El) => {
-      const R = El.getBoundingClientRect();
-      return Math.max(0, Math.min(1, (Ev.clientX - R.left) / R.width));
+    const pctFromEvent = (ev, el) => {
+      const r = el.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
     };
+    const setTime     = t => { currentEl.textContent = trackCurEl.textContent = t; };
+    const setDuration = t => { durationEl.textContent = trackLenEl.textContent = t; };
 
-    const SetTime     = T => { CurrentEl.textContent = TrackCurrentEl.textContent = T; };
-    const SetDuration = T => { DurationEl.textContent = TrackLengthEl.textContent = T; };
-
-    Audio.addEventListener('play',  () => { SetPlayState(true);  UpdatePlayButtonsState(Audio); });
-    Audio.addEventListener('pause', () => { SetPlayState(false); UpdatePlayButtonsState(Audio); });
-    Audio.addEventListener('ended', () => { SetPlayState(false); SetProgress(0); SetTime('0:00'); UpdatePlayButtonsState(Audio); });
-    Audio.addEventListener('timeupdate',     () => { if (!Audio.duration) return; SetProgress((Audio.currentTime / Audio.duration) * 100); SetTime(FormatTime(Audio.currentTime)); });
-    Audio.addEventListener('durationchange', () => SetDuration(FormatTime(Audio.duration)));
-    Audio.addEventListener('loadedmetadata', () => SetDuration(FormatTime(Audio.duration)));
-
-    PlayBtn.addEventListener('click', () => { Audio.paused ? Audio.play().catch(() => {}) : Audio.pause(); });
-
-    CloseBtn.addEventListener('click', () => {
-      Audio.pause(); Audio.src = '';
-      Player.classList.remove('active');
-      SetPlayState(false); SetProgress(0); SetTime('0:00'); SetDuration('0:00');
-      UpdatePlayButtonsState(Audio);
+    audio.addEventListener('play',     () => { setPlayState(true);  updatePlayButtons(audio); });
+    audio.addEventListener('pause',    () => { setPlayState(false); updatePlayButtons(audio); });
+    audio.addEventListener('ended',    () => { setPlayState(false); setProgress(0); setTime('0:00'); updatePlayButtons(audio); });
+    audio.addEventListener('timeupdate', () => {
+      if (!audio.duration) return;
+      setProgress((audio.currentTime / audio.duration) * 100);
+      setTime(fmtTime(audio.currentTime));
+    });
+    audio.addEventListener('durationchange', () => setDuration(fmtTime(audio.duration)));
+    audio.addEventListener('loadedmetadata', () => setDuration(fmtTime(audio.duration)));
+    audio.addEventListener('error', () => {
+      setPlayState(false);
+      document.getElementById('player-track-name').textContent = 'Failed to load track';
     });
 
-    let ScrubDragging = false, VolDragging = false;
-    Scrubber.addEventListener('mousedown', Ev => { ScrubDragging = true; if (Audio.duration) Audio.currentTime = ScrubberPct(Ev, Scrubber) * Audio.duration; });
-    VolSlider.addEventListener('mousedown', Ev => { VolDragging = true; SetVolume(ScrubberPct(Ev, VolSlider) * 100); });
-    window.addEventListener('mousemove', Ev => {
-      if (ScrubDragging && Audio.duration) Audio.currentTime = ScrubberPct(Ev, Scrubber) * Audio.duration;
-      if (VolDragging) SetVolume(ScrubberPct(Ev, VolSlider) * 100);
+    playBtn.addEventListener('click', () => {
+      audio.paused ? audio.play().catch(() => {}) : audio.pause();
     });
-    window.addEventListener('mouseup', () => { ScrubDragging = false; VolDragging = false; });
+    closeBtn.addEventListener('click', () => {
+      audio.pause();
+      audio.src = '';
+      player.setAttribute('hidden', '');
+      setPlayState(false); setProgress(0); setTime('0:00'); setDuration('0:00');
+      updatePlayButtons(audio);
+    });
 
-    Scrubber.addEventListener('touchstart', Ev => { if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration; }, { passive: true });
-    Scrubber.addEventListener('touchmove',  Ev => { if (Audio.duration) Audio.currentTime = ScrubberPct(Ev.touches[0], Scrubber) * Audio.duration; }, { passive: true });
-    VolSlider.addEventListener('touchstart', Ev => SetVolume(ScrubberPct(Ev.touches[0], VolSlider) * 100), { passive: true });
-    VolSlider.addEventListener('touchmove',  Ev => SetVolume(ScrubberPct(Ev.touches[0], VolSlider) * 100), { passive: true });
+    let scrubDragging = false, volDragging = false;
+    scrubber.addEventListener('mousedown', ev => {
+      scrubDragging = true;
+      if (audio.duration) audio.currentTime = pctFromEvent(ev, scrubber) * audio.duration;
+    });
+    volSlider.addEventListener('mousedown', ev => {
+      volDragging = true;
+      setVolume(pctFromEvent(ev, volSlider) * 100);
+    });
+    window.addEventListener('mousemove', ev => {
+      if (scrubDragging && audio.duration) audio.currentTime = pctFromEvent(ev, scrubber) * audio.duration;
+      if (volDragging) setVolume(pctFromEvent(ev, volSlider) * 100);
+    });
+    window.addEventListener('mouseup', () => { scrubDragging = false; volDragging = false; });
 
-    SetVolume(80);
+    scrubber.addEventListener('touchstart', ev => {
+      if (audio.duration) audio.currentTime = pctFromEvent(ev.touches[0], scrubber) * audio.duration;
+    }, { passive: true });
+    scrubber.addEventListener('touchmove', ev => {
+      if (audio.duration) audio.currentTime = pctFromEvent(ev.touches[0], scrubber) * audio.duration;
+    }, { passive: true });
+    volSlider.addEventListener('touchstart', ev => setVolume(pctFromEvent(ev.touches[0], volSlider) * 100), { passive: true });
+    volSlider.addEventListener('touchmove',  ev => setVolume(pctFromEvent(ev.touches[0], volSlider) * 100), { passive: true });
+
+    scrubber.addEventListener('keydown', ev => {
+      if (!audio.duration) return;
+      const step = audio.duration * 0.02;
+      if (ev.key === 'ArrowRight') { ev.preventDefault(); audio.currentTime = Math.min(audio.duration, audio.currentTime + step); }
+      if (ev.key === 'ArrowLeft')  { ev.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - step); }
+    });
+
+    setVolume(80);
   }
 
-  NavBtn.addEventListener('click', E => {
-    E.stopPropagation();
-    const IsOpen = NavMenu.classList.toggle('open');
-    NavBtn.setAttribute('aria-expanded', String(IsOpen));
+  navBtn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const open = navMenu.classList.toggle('open');
+    navBtn.setAttribute('aria-expanded', String(open));
   });
 
-  document.querySelectorAll('.nav-dropdown-item').forEach(Item => {
-    Item.addEventListener('click', () => {
-      NavMenu.classList.remove('open');
-      NavBtn.setAttribute('aria-expanded', 'false');
-      if (Item.dataset.tab === CurrentTab) return;
-      CurrentTab = Item.dataset.tab;
-      NavText.textContent = Item.textContent.trim();
-      document.querySelectorAll('.nav-dropdown-item').forEach(I => I.classList.toggle('active', I === Item));
-      if (AllData) RenderEras(SearchBox.value, Audio);
+  document.querySelectorAll('.nav-dropdown-item').forEach(item => {
+    item.addEventListener('click', () => {
+      navMenu.classList.remove('open');
+      navBtn.setAttribute('aria-expanded', 'false');
+      if (item.dataset.tab === currentTab) return;
+      currentTab = item.dataset.tab;
+      navText.textContent = item.textContent.trim();
+      document.querySelectorAll('.nav-dropdown-item').forEach(i => i.classList.toggle('active', i === item));
+      if (allData) renderEras(searchBox.value, audio);
     });
   });
 
-  document.addEventListener('keydown', E => {
-    if (E.key === '/' && document.activeElement !== SearchBox) { E.preventDefault(); SearchBox.focus(); }
-    if (E.key === 'Escape') {
-      SearchBox.blur();
-      FilterMenu.classList.remove('open');
-      NavMenu.classList.remove('open');
-      NavBtn.setAttribute('aria-expanded', 'false');
-      CloseAllSongDropdowns();
-    }
+  filterBtn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const open = filterMenu.classList.toggle('open');
+    filterBtn.setAttribute('aria-expanded', String(open));
   });
 
-  window.addEventListener('scroll', () => { ScrollBtn.classList.toggle('visible', scrollY > 400); CloseAllSongDropdowns(); }, { passive: true });
-  ScrollBtn.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
-
-  FilterBtn.addEventListener('click', E => { E.stopPropagation(); FilterMenu.classList.toggle('open'); });
-
-  document.addEventListener('click', E => {
-    if (!FilterMenu.contains(E.target) && E.target !== FilterBtn) FilterMenu.classList.remove('open');
-    if (!NavMenu.contains(E.target) && !NavBtn.contains(E.target)) { NavMenu.classList.remove('open'); NavBtn.setAttribute('aria-expanded', 'false'); }
-    if (!E.target.closest('.song-dropdown')) CloseAllSongDropdowns();
-  });
-
-  FilterMenu.addEventListener('click', E => {
-    const Item = E.target.closest('.filter-item');
-    if (!Item) return;
-    const Key = Item.dataset.quality;
-    if (ActiveQualities.has(Key)) {
-      if (ActiveQualities.size === 1) return;
-      ActiveQualities.delete(Key);
-      Item.classList.remove('active');
-      Item.setAttribute('aria-checked', 'false');
+  filterMenu.addEventListener('click', ev => {
+    const item = ev.target.closest('.filter-item');
+    if (!item) return;
+    const key = item.dataset.quality;
+    if (activeQualities.has(key)) {
+      if (activeQualities.size === 1) return; 
+      activeQualities.delete(key);
+      item.classList.remove('active');
+      item.setAttribute('aria-checked', 'false');
     } else {
-      ActiveQualities.add(Key);
-      Item.classList.add('active');
-      Item.setAttribute('aria-checked', 'true');
+      activeQualities.add(key);
+      item.classList.add('active');
+      item.setAttribute('aria-checked', 'true');
     }
-    if (AllData) RenderEras(SearchBox.value, Audio);
+    if (allData) renderEras(searchBox.value, audio);
   });
+
+  document.addEventListener('keydown', ev => {
+    if (ev.key === '/' && document.activeElement !== searchBox) {
+      ev.preventDefault();
+      searchBox.focus();
+    }
+    if (ev.key === 'Escape') {
+      searchBox.blur();
+      filterMenu.classList.remove('open');
+      filterBtn.setAttribute('aria-expanded', 'false');
+      navMenu.classList.remove('open');
+      navBtn.setAttribute('aria-expanded', 'false');
+      closeAllSongDropdowns();
+    }
+  });
+
+  document.addEventListener('click', ev => {
+    if (!filterMenu.contains(ev.target) && ev.target !== filterBtn) {
+      filterMenu.classList.remove('open');
+      filterBtn.setAttribute('aria-expanded', 'false');
+    }
+    if (!navMenu.contains(ev.target) && !navBtn.contains(ev.target)) {
+      navMenu.classList.remove('open');
+      navBtn.setAttribute('aria-expanded', 'false');
+    }
+    if (!ev.target.closest('.song-dropdown')) closeAllSongDropdowns();
+  });
+
+  window.addEventListener('scroll', () => {
+    const show = scrollY > 400;
+    scrollBtn.classList.toggle('visible', show);
+    closeAllSongDropdowns();
+  }, { passive: true });
+
+  scrollBtn.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
 
   (async () => {
-    const FetchCsv = async Id => {
-      const Res = await fetch(`https://docs.google.com/spreadsheets/d/${Id}/export?format=csv`);
-      if (!Res.ok) throw new Error(`HTTP ${Res.status}`);
-      return Res.text();
+    const fetchCsv = async id => {
+      const res = await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
     };
+
     try {
-      let Csv;
-      try   { Csv = await FetchCsv(SheetId); }
-      catch { Csv = await FetchCsv(FallbackSheetId); }
-      AllData = BuildData(ParseCsv(Csv));
-      RenderEras('', Audio);
-    } catch {
-      const El = document.createElement('div');
-      El.className   = 'no-results';
-      El.style.color = 'var(--red)';
-      El.textContent = 'Failed to load data. Check sheet permissions.';
-      document.getElementById('era-list').replaceChildren(El);
+      let csv;
+      try       { csv = await fetchCsv(SHEET_ID); }
+      catch (_) { csv = await fetchCsv(SHEET_ID_FALLBACK); }
+      allData = buildData(parseCsv(csv));
+      renderEras('', audio);
+    } catch (err) {
+      console.error('Failed to load vault data:', err);
+      const el = document.createElement('div');
+      el.className = 'error-msg';
+      el.textContent = 'Failed to load data — check your connection or sheet permissions.';
+      document.getElementById('era-list').replaceChildren(el);
     }
   })();
 });
