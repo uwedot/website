@@ -129,14 +129,16 @@ function MakeSongEl(Name, Quality, Url, Notes, Num) {
   return [El];
 }
 
-function RenderEras(EraObj, Filter = '') {
+function RenderEras(Filter = '') {
   const List = document.getElementById('era-list');
   const F = Filter.trim().toLowerCase();
+
+  if (!AllData) return;
 
   const TabEmoji = CurrentTab === 'best' ? '⭐' : CurrentTab === 'special' ? '✨' : null;
 
   const Filtered = {};
-  for (const [Era, Songs] of Object.entries(EraObj)) {
+  for (const [Era, Songs] of Object.entries(AllData)) {
     let Matched = Songs.filter(([, Quality]) => QualityAllowed(Quality));
     if (TabEmoji) Matched = Matched.filter(([Name]) => Name.includes(TabEmoji));
     if (F) Matched = Matched.filter(([Name]) =>
@@ -226,7 +228,7 @@ function RenderEras(EraObj, Filter = '') {
 let SearchTimer;
 function OnSearch(Val) {
   clearTimeout(SearchTimer);
-  SearchTimer = setTimeout(() => { if (AllData) RenderEras(AllData, Val); }, 150);
+  SearchTimer = setTimeout(() => { if (AllData) RenderEras(Val); }, 150);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -234,15 +236,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const FilterBtn  = document.getElementById('filter-btn');
   const FilterMenu = document.getElementById('filter-menu');
   const ScrollBtn  = document.getElementById('scroll-top');
+  const NavBtn     = document.getElementById('nav-tab-btn');
+  const NavMenu    = document.getElementById('nav-tab-menu');
+  const NavText    = document.getElementById('nav-btn-text');
 
   SearchBox.addEventListener('input', E => OnSearch(E.target.value));
 
-  document.querySelectorAll('.nav-tab').forEach(Tab => {
-    Tab.addEventListener('click', () => {
-      if (Tab.dataset.tab === CurrentTab) return;
-      CurrentTab = Tab.dataset.tab;
-      document.querySelectorAll('.nav-tab').forEach(T => T.classList.toggle('active', T === Tab));
-      if (AllData) RenderEras(AllData, SearchBox.value);
+  NavBtn.addEventListener('click', E => {
+    E.stopPropagation();
+    NavMenu.classList.toggle('open');
+  });
+
+  document.querySelectorAll('.nav-dropdown-item').forEach(Item => {
+    Item.addEventListener('click', () => {
+      if (Item.dataset.tab === CurrentTab) {
+        NavMenu.classList.remove('open');
+        return;
+      }
+      CurrentTab = Item.dataset.tab;
+      NavText.textContent = Item.textContent;
+      document.querySelectorAll('.nav-dropdown-item').forEach(I => I.classList.toggle('active', I === Item));
+      NavMenu.classList.remove('open');
+      if (AllData) RenderEras(SearchBox.value);
     });
   });
 
@@ -254,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (E.key === 'Escape') {
       SearchBox.blur();
       FilterMenu.classList.remove('open');
+      NavMenu.classList.remove('open');
     }
   });
 
@@ -272,6 +288,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!FilterMenu.contains(E.target) && E.target !== FilterBtn) {
       FilterMenu.classList.remove('open');
     }
+    if (!NavMenu.contains(E.target) && !NavBtn.contains(E.target)) {
+      NavMenu.classList.remove('open');
+    }
   });
 
   FilterMenu.addEventListener('click', E => {
@@ -288,30 +307,31 @@ document.addEventListener('DOMContentLoaded', () => {
       ActiveQualities.add(Key);
       Item.classList.add('active');
     }
-    if (AllData) RenderEras(AllData, SearchBox.value);
+    if (AllData) RenderEras(SearchBox.value);
   });
 
   (async () => {
     async function FetchSheet(Id) {
-      const Res = await fetch(`https://docs.google.com/spreadsheets/d/${Id}/export?format=csv`);
+      const Url = `https://docs.google.com/spreadsheets/d/${Id}/export?format=csv`;
+      const Res = await fetch(Url);
       if (!Res.ok) throw new Error(`HTTP ${Res.status}`);
       return Res.text();
     }
 
     try {
-      let CsvText;
+      let MainCsv;
       try {
-        CsvText = await FetchSheet(SheetId);
+        MainCsv = await FetchSheet(SheetId);
       } catch {
-        CsvText = await FetchSheet(FallbackSheetId);
+        MainCsv = await FetchSheet(FallbackSheetId);
       }
-      AllData = BuildData(ParseCsv(CsvText));
-      RenderEras(AllData);
+      AllData = BuildData(ParseCsv(MainCsv));
+      RenderEras();
     } catch (Err) {
       const El = document.createElement('div');
       El.className = 'no-results';
       El.style.color = '#c0392b';
-      El.textContent = 'failed to load data — check sheet permissions';
+      El.textContent = 'failed to load data, check sheet permissions';
       document.getElementById('era-list').replaceChildren(El);
     }
   })();
