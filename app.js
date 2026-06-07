@@ -316,7 +316,13 @@ function renderEras(searchFilter, audioElement) {
   collapseAllEraPanels();
   closeAllLinkDropdowns();
 
-  const tabMarker  = currentTab === 'best' ? '⭐' : currentTab === 'special' ? '✨' : null;
+  const TAB_MARKERS = {
+    best:    ['⭐'],
+    special: ['✨'],
+    grails:  ['🏆', '🏅'],
+    ai:      ['🤖']
+  };
+  const tabMarkers = TAB_MARKERS[currentTab] || null;
   const visibleEras = {};
 
   if (currentTab === 'recent') {
@@ -354,7 +360,7 @@ function renderEras(searchFilter, audioElement) {
       let matched = songs.filter(([, quality]) =>
         isQualityVisible(quality)
       );
-      if (tabMarker)   matched = matched.filter(([name]) => name.includes(tabMarker));
+      if (tabMarkers)  matched = matched.filter(([name]) => tabMarkers.some(m => name.includes(m)));
       if (filterLower) matched = matched.filter(([name]) => name.toLowerCase().includes(filterLower) || era.toLowerCase().includes(filterLower));
       if (matched.length) visibleEras[era] = matched;
     }
