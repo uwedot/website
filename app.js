@@ -7,7 +7,6 @@ const RECENT_SONGS_LIMIT = 200;
 let vaultData        = null;
 let currentTab       = 'all';
 let activeQualities  = new Set(['high', 'low', 'rec', 'cd', 'lossless', 'unavail']);
-let activeTypes      = new Set(['og', 'full', 'partial', 'snippet', 'stem', 'vox', 'tagged', 'confirmed', 'rumored', 'unavail']);
 let searchDebounce   = null;
 
 const QUALITY_MATCHERS = {
@@ -17,19 +16,6 @@ const QUALITY_MATCHERS = {
   cd:       label => label.includes('cd'),
   lossless: label => label.includes('lossless'),
   unavail:  label => label.includes('not avail') || label.includes('unavail')
-};
-
-const TYPE_MATCHERS = {
-  og:        label => /\bog\b/.test(label),
-  stem:      label => label.includes('stem'),
-  full:      label => label.includes('full'),
-  tagged:    label => label.includes('tagged'),
-  partial:   label => label.includes('partial'),
-  snippet:   label => label.includes('snippet'),
-  unavail:   label => label.includes('unavail'),
-  confirmed: label => label.includes('confirmed'),
-  rumored:   label => label.includes('rumored'),
-  vox:       label => label.includes('vox')
 };
 
 function getQualityClass(quality) {
@@ -65,15 +51,6 @@ function isQualityVisible(quality) {
   if (!lower) return activeQualities.has('unavail');
   for (const key of activeQualities) {
     if (QUALITY_MATCHERS[key](lower)) return true;
-  }
-  return false;
-}
-
-function isAvailableLengthVisible(availableLength) {
-  if (!availableLength) return true;
-  const lower = availableLength.toLowerCase();
-  for (const key of activeTypes) {
-    if (TYPE_MATCHERS[key](lower)) return true;
   }
   return false;
 }
@@ -253,8 +230,8 @@ function buildSongElement(songName, quality, linkString, notes, trackNumber, ava
     : '';
 
   const pillsHtml =
-    (displayQuality    ? `<div class="song-quality ${getQualityClass(displayQuality)}">${escapeHtml(displayQuality)}</div>` : '') +
-    (availableLength   ? `<div class="song-type ${getAvailableLengthClass(availableLength)}">${escapeHtml(availableLength)}</div>` : '');
+    (displayQuality  ? `<div class="song-quality ${getQualityClass(displayQuality)}">${escapeHtml(displayQuality)}</div>` : '') +
+    (availableLength ? `<div class="song-type ${getAvailableLengthClass(availableLength)}">${escapeHtml(availableLength)}</div>` : '');
 
   const songEl = document.createElement('div');
   songEl.className = 'song-item';
@@ -345,24 +322,26 @@ function renderEras(searchFilter, audioElement) {
   if (currentTab === 'recent') {
     const flatSongs = [];
     for (const [era, songs] of Object.entries(vaultData)) {
-      songs.filter(([, quality, , , , availableLength]) =>
-        isQualityVisible(quality) && isAvailableLengthVisible(availableLength)
+      songs.filter(([, quality]) =>
+        isQualityVisible(quality)
       ).forEach(song => {
-        if (!filterLower || song[0].toLowerCase().includes(filterLower) || era.toLowerCase().includes(filterLower)) {
-          flatSongs.push({
-            era,
-            name:            song[0],
-            quality:         song[1],
-            link:            song[2],
-            notes:           song[3],
-            leakDate:        song[4] || '',
-            availableLength: song[5] || ''
-          });
-        }
+        flatSongs.push({
+          era,
+          name:            song[0],
+          quality:         song[1],
+          link:            song[2],
+          notes:           song[3],
+          leakDate:        song[4] || '',
+          availableLength: song[5] || ''
+        });
       });
     }
     flatSongs.sort((songA, songB) => parseDateToTimestamp(songB.leakDate) - parseDateToTimestamp(songA.leakDate));
-    const recentSongs = flatSongs.slice(0, RECENT_SONGS_LIMIT);
+    // Slice to the 200-song pool first, then apply search within that pool
+    const recentPool = flatSongs.slice(0, RECENT_SONGS_LIMIT);
+    const recentSongs = filterLower
+      ? recentPool.filter(song => song.name.toLowerCase().includes(filterLower) || song.era.toLowerCase().includes(filterLower))
+      : recentPool;
     if (recentSongs.length) {
       visibleEras['Recent Leaks'] = recentSongs.map(song => [
         `[${song.era}] ${song.name}${song.leakDate ? ` (${song.leakDate})` : ''}`,
@@ -372,8 +351,8 @@ function renderEras(searchFilter, audioElement) {
     }
   } else {
     for (const [era, songs] of Object.entries(vaultData)) {
-      let matched = songs.filter(([, quality, , , , availableLength]) =>
-        isQualityVisible(quality) && isAvailableLengthVisible(availableLength)
+      let matched = songs.filter(([, quality]) =>
+        isQualityVisible(quality)
       );
       if (tabMarker)   matched = matched.filter(([name]) => name.includes(tabMarker));
       if (filterLower) matched = matched.filter(([name]) => name.toLowerCase().includes(filterLower) || era.toLowerCase().includes(filterLower));
@@ -476,8 +455,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchBox        = document.getElementById('search-box');
   const qualityFilterBtn = document.getElementById('quality-filter-btn');
   const qualityFilterMenu= document.getElementById('quality-filter-menu');
-  const lengthFilterBtn  = document.getElementById('length-filter-btn');
-  const lengthFilterMenu = document.getElementById('length-filter-menu');
   const scrollTopBtn     = document.getElementById('scroll-top');
   const navTabBtn        = document.getElementById('nav-tab-btn');
   const navTabMenu       = document.getElementById('nav-tab-menu');
@@ -650,8 +627,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   qualityFilterBtn.addEventListener('click', event => {
     event.stopPropagation();
-    lengthFilterMenu.classList.remove('open');
-    lengthFilterBtn.setAttribute('aria-expanded', 'false');
     const isOpen = qualityFilterMenu.classList.toggle('open');
     qualityFilterBtn.setAttribute('aria-expanded', String(isOpen));
   });
@@ -673,31 +648,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (vaultData) renderEras(searchBox.value, audioElement);
   });
 
-  lengthFilterBtn.addEventListener('click', event => {
-    event.stopPropagation();
-    qualityFilterMenu.classList.remove('open');
-    qualityFilterBtn.setAttribute('aria-expanded', 'false');
-    const isOpen = lengthFilterMenu.classList.toggle('open');
-    lengthFilterBtn.setAttribute('aria-expanded', String(isOpen));
-  });
-
-  lengthFilterMenu.addEventListener('click', event => {
-    const item = event.target.closest('.type-filter-item');
-    if (!item) return;
-    const key = item.dataset.type;
-    if (activeTypes.has(key)) {
-      if (activeTypes.size === 1) return;
-      activeTypes.delete(key);
-      item.classList.remove('active');
-      item.setAttribute('aria-checked', 'false');
-    } else {
-      activeTypes.add(key);
-      item.classList.add('active');
-      item.setAttribute('aria-checked', 'true');
-    }
-    if (vaultData) renderEras(searchBox.value, audioElement);
-  });
-
   document.addEventListener('keydown', event => {
     if (event.key === '/' && document.activeElement !== searchBox) {
       event.preventDefault();
@@ -707,8 +657,6 @@ document.addEventListener('DOMContentLoaded', () => {
       searchBox.blur();
       qualityFilterMenu.classList.remove('open');
       qualityFilterBtn.setAttribute('aria-expanded', 'false');
-      lengthFilterMenu.classList.remove('open');
-      lengthFilterBtn.setAttribute('aria-expanded', 'false');
       navTabMenu.classList.remove('open');
       navTabBtn.setAttribute('aria-expanded', 'false');
       closeAllLinkDropdowns();
@@ -719,10 +667,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!qualityFilterMenu.contains(event.target) && event.target !== qualityFilterBtn) {
       qualityFilterMenu.classList.remove('open');
       qualityFilterBtn.setAttribute('aria-expanded', 'false');
-    }
-    if (!lengthFilterMenu.contains(event.target) && event.target !== lengthFilterBtn) {
-      lengthFilterMenu.classList.remove('open');
-      lengthFilterBtn.setAttribute('aria-expanded', 'false');
     }
     if (!navTabMenu.contains(event.target) && !navTabBtn.contains(event.target)) {
       navTabMenu.classList.remove('open');
