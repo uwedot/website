@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="MISTAPE">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,400&display=swap">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -108,14 +109,6 @@
   <p class="footer-text">I have no affiliation with any labels, and I do not host or distribute any files.</p>
 </footer>
 
-<button type="button" id="scroll-top" class="scroll-top" aria-label="Scroll to top">
-  <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
-       fill="none" aria-hidden="true">
-    <line x1="12" y1="19" x2="12" y2="5"/>
-    <polyline points="5,12 12,5 19,12"/>
-  </svg>
-</button>
-
 <div id="global-player" class="global-player"
      role="region" aria-label="Audio player" hidden>
   <audio id="main-audio" preload="none"></audio>
@@ -149,7 +142,6 @@
          aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
       <div class="player-scrubber-track">
         <div class="player-scrubber-fill" id="player-fill"></div>
-        <div class="player-scrubber-thumb" id="player-thumb"></div>
       </div>
     </div>
     <span id="player-duration" class="player-time" aria-label="Duration">0:00</span>
@@ -167,7 +159,6 @@
          aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" tabindex="0">
       <div class="player-scrubber-track">
         <div class="player-scrubber-fill" id="player-vol-fill"></div>
-        <div class="player-scrubber-thumb" id="player-vol-thumb"></div>
       </div>
     </div>
   </div>
@@ -199,7 +190,7 @@
 
     <label for="settings-artist-select" class="settings-label">Artist Preset</label>
     <select id="settings-artist-select" class="settings-artist-select">
-      <option value="12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM">Kanye West</option>
+      <option value="1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo">Kanye West</option>
       <option value="1v55XAPLzw1iuWxH1OQKajCIYPhW2BXcLoV4mXDZ55DI">Drake</option>
       <option value="1Irtfvymu26CShYowLMMfD-rM0o9CJqE6-BBSlYsAaF4">Playboi Carti</option>
       <option value="1_D-puv6fjwCjrx9x7qAu9oYzUfFzDLrLz1cElaXndso">Daniel Caesar</option>
