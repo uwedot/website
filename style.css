@@ -11,8 +11,7 @@
 
   --text-1: #EDEAE3;
   --text-2: #8A8680;
-  --text-3: #4A4845;
-  --text-4: #2A2927;
+  --text-3: #6B6865;
 
   --accent:      #C8963C;
   --accent-dim:  rgba(200,150,60,.10);
@@ -412,7 +411,7 @@ main {
   max-width: 120px; overflow: hidden; text-overflow: ellipsis;
 }
 .song-version-pill { color: var(--text-1); background: var(--hairline-strong); text-transform: uppercase; }
-.song-date-pill    { color: var(--text-3); background: var(--hairline-soft); }
+.song-date-pill    { color: var(--text-3); background: none; }
 
 /* ─── SONG BUTTONS ────────────────────────────────────────── */
 .song-link-btn,
@@ -509,7 +508,7 @@ main {
   font-size: var(--t-xs); color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
-.player-track-current::after { content: ' /'; color: var(--text-4); margin-left: 1px; }
+.player-track-current::after { content: ' /'; color: #2A2927; margin-left: 1px; }
 
 .player-controls { display: flex; align-items: center; flex-shrink: 0; }
 
