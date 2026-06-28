@@ -119,13 +119,13 @@
   <div class="player-controls">
     <button type="button" id="player-play-btn"
             class="player-btn player-play" aria-label="Play">
-      <svg id="player-play-icon"  viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <polygon points="5,3 19,12 5,21"/>
+      <svg id="player-play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M6.75 5.596a.75.75 0 0 1 1.084-.67l11.5 6.404a.75.75 0 0 1 0 1.34l-11.5 6.404a.75.75 0 0 1-1.084-.67V5.596Z"/>
       </svg>
       <svg id="player-pause-icon" viewBox="0 0 24 24" fill="currentColor"
            aria-hidden="true" style="display:none">
-        <rect x="6"  y="4" width="4" height="16"/>
-        <rect x="14" y="4" width="4" height="16"/>
+        <rect x="5.5" y="4.5" width="4" height="15" rx="1.25"/>
+        <rect x="14.5" y="4.5" width="4" height="15" rx="1.25"/>
       </svg>
     </button>
   </div>
@@ -143,11 +143,10 @@
   </div>
 
   <div class="player-volume-wrap">
-    <svg class="player-vol-icon" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/>
-      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+    <svg class="player-vol-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M13.5 4.063a.75.75 0 0 0-1.188-.61L7.38 7H4.5A1.5 1.5 0 0 0 3 8.5v7A1.5 1.5 0 0 0 4.5 17h2.88l4.932 3.547A.75.75 0 0 0 13.5 19.937V4.063Z"/>
+      <path d="M16.22 8.22a.75.75 0 0 1 1.06 0 7.5 7.5 0 0 1 0 10.607.75.75 0 0 1-1.06-1.06 6 6 0 0 0 0-8.486.75.75 0 0 1 0-1.06Z"/>
+      <path d="M17.985 5.985a.75.75 0 0 1 1.061 0 11.25 11.25 0 0 1 0 15.91.75.75 0 1 1-1.06-1.061 9.75 9.75 0 0 0 0-13.788.75.75 0 0 1 0-1.061Z" opacity="0.5"/>
     </svg>
     <div class="player-volume" id="player-volume"
          role="slider" aria-label="Volume"
@@ -160,10 +159,8 @@
 
   <button type="button" id="player-close-btn"
           class="player-btn player-close" aria-label="Close player">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2" aria-hidden="true">
-      <line x1="18" y1="6"  x2="6"  y2="18"/>
-      <line x1="6"  y1="6"  x2="18" y2="18"/>
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z"/>
     </svg>
   </button>
 </div>
