@@ -328,6 +328,15 @@ main {
 .songs-panel      { display: none; border-top: 1px solid var(--border); }
 .songs-panel.open { display: block; }
 
+.stems-category-divider {
+  font-size: var(--t-xs); font-weight: 600; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em;
+  padding: var(--s2) var(--s4);
+  background: var(--surface-h);
+  border-top: 1px solid var(--border);
+}
+.stems-category-divider:first-child { border-top: none; }
+
 .songs-flat {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -413,6 +422,7 @@ main {
 .song-date-pill    { color: var(--text-3); background: none; }
 
 .song-link-btn,
+.song-download-btn,
 .song-play-btn,
 .song-dropdown-btn {
   display: inline-flex; align-items: center; gap: var(--s1);
@@ -427,6 +437,7 @@ main {
   letter-spacing: .02em;
 }
 .song-link-btn:hover,
+.song-download-btn:hover,
 .song-dropdown-btn:hover { border-color: var(--accent-edge); color: var(--text-1); background: var(--surface-h); }
 
 .song-play-btn {
