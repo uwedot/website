@@ -19,7 +19,6 @@ local IconLibrary = "rbxassetid://3926305904"
 local IconLibrary2 = "rbxassetid://3926307971"
 local MainFont = Enum.Font.Gotham
 
--- New asset IDs provided
 local AssetX = "rbxassetid://110786993356448"
 local AssetInfo = "rbxassetid://124560466474914"
 local AssetWarning = "rbxassetid://119020096067894"
@@ -119,24 +118,48 @@ local function NewIcon(iconId, rectOffset, rectSize, size, position)
 end
 
 local function NewTickIcon()
-    return NewIcon(IconLibrary, Vector2.new(312, 4), Vector2.new(24, 24),
-                   UDim2.new(1, -6, 1, -6), UDim2.new(0, 3, 0, 3))
+    local img = Instance.new("ImageLabel")
+    img.BackgroundTransparency = 1
+    img.Image = IconLibrary
+    img.ImageRectOffset = Vector2.new(312, 4)
+    img.ImageRectSize = Vector2.new(24, 24)
+    img.Size = UDim2.new(1, -6, 1, -6)
+    img.Position = UDim2.new(0, 3, 0, 3)
+    return img
 end
 
 local function NewDropdownIcon()
-    return NewIcon(IconLibrary2, Vector2.new(324, 364), Vector2.new(36, 36),
-                   UDim2.new(0, 16, 0, 16), UDim2.new(1, -18, 0, 2))
+    local img = Instance.new("ImageLabel")
+    img.BackgroundTransparency = 1
+    img.Image = IconLibrary2
+    img.ImageRectOffset = Vector2.new(324, 364)
+    img.ImageRectSize = Vector2.new(36, 36)
+    img.Size = UDim2.new(0, 16, 0, 16)
+    img.Position = UDim2.new(1, -18, 0, 2)
+    return img
 end
 
 local function NewSearchIcon()
-    return NewIcon(IconLibrary, Vector2.new(964, 324), Vector2.new(36, 36),
-                   UDim2.new(0, 16, 0, 16), UDim2.new(0, 2, 0, 2))
+    local img = Instance.new("ImageLabel")
+    img.BackgroundTransparency = 1
+    img.Image = IconLibrary
+    img.ImageRectOffset = Vector2.new(964, 324)
+    img.ImageRectSize = Vector2.new(36, 36)
+    img.Size = UDim2.new(0, 16, 0, 16)
+    img.Position = UDim2.new(0, 2, 0, 2)
+    return img
 end
 
 local function NewTitleIcon()
-    local img = NewIcon(IconLibrary, Vector2.new(524, 764), Vector2.new(36, 36),
-                        UDim2.new(0, 14, 0, 14), UDim2.new(1, -17, 0.5, -7))
+    local img = Instance.new("ImageButton")
+    img.BackgroundTransparency = 1
+    img.Image = IconLibrary
+    img.ImageRectOffset = Vector2.new(524, 764)
+    img.ImageRectSize = Vector2.new(36, 36)
+    img.Size = UDim2.new(0, 14, 0, 14)
+    img.Position = UDim2.new(1, -17, 0.5, -7)
     img.Rotation = 180
+    img.AutoButtonColor = false
     return img
 end
 
@@ -474,7 +497,7 @@ local function BuildMainFrame()
     return container, main, shadow
 end
 
-local function BuildTitleBar(main, hubName, gameName, version)
+local function BuildTitleBar(main, hubName, gameName, version, container, shadow)
     local bar = NewRoundedFrame(5)
     bar.Name = "TitleBar"
     bar.ImageColor3 = Color3.fromRGB(40, 40, 40)
@@ -553,7 +576,7 @@ local function BuildTitleBar(main, hubName, gameName, version)
         end)
     end)
 
-    return bar, minBtn, shadow, container
+    return bar
 end
 
 local function BuildSidebar(main)
@@ -1408,7 +1431,7 @@ function UILibrary.Load(hubName, gameName, version, topBarConfig)
     local container, main, shadow = BuildMainFrame()
     container.Parent = rootGui
 
-    local titleBar, minBtn, shadow, containerRef = BuildTitleBar(main, hubName, gameName, version)
+    local titleBar = BuildTitleBar(main, hubName, gameName, version, container, shadow)
 
     local menuBar, display = BuildSidebar(main)
 
