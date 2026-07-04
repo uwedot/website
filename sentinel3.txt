@@ -49,6 +49,8 @@ local function SetupDrag(Frame, Container)
 end
 
 local function BuildWindowGui(Title)
+    Title = tostring(Title) or "SentinelLIB"
+
     local Gui = CreateInstance("ScreenGui", {
         Name = "SentinelLIB",
         Parent = CoreGui,
@@ -114,7 +116,7 @@ local function BuildWindowGui(Title)
         Position = UDim2.new(0, 32, 0.5, 0),
         Size = UDim2.new(0, 165, 0, 22),
         Font = Enum.Font.Gotham,
-        Text = Title or "SentinelLIB",
+        Text = Title,
         TextColor3 = Color3.fromRGB(17, 85, 232),
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left
@@ -212,6 +214,8 @@ local function BuildWindowGui(Title)
 end
 
 local function CreateTab(WindowParts, Title, IsFirst)
+    Title = tostring(Title) or "Tab"
+
     local TabsContainer = WindowParts.TabsContainer
     local PagesContainer = WindowParts.PagesContainer
 
@@ -234,7 +238,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.Gotham,
-        Text = Title or "Tab",
+        Text = Title,
         TextColor3 = Color3.fromRGB(72, 72, 72),
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Center
@@ -291,6 +295,8 @@ local function CreateTab(WindowParts, Title, IsFirst)
     local Elements = {}
 
     function Elements:Button(Text, Callback)
+        Text = tostring(Text) or "Button"
+
         local Button = CreateInstance("TextButton", {
             Name = "Button",
             Parent = Page,
@@ -299,7 +305,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
             Size = UDim2.new(1, -6, 0, 34),
             AutoButtonColor = false,
             Font = Enum.Font.Gotham,
-            Text = Text or "Button",
+            Text = Text,
             TextColor3 = Color3.fromRGB(255, 255, 255),
             TextSize = 14
         })
@@ -315,6 +321,8 @@ local function CreateTab(WindowParts, Title, IsFirst)
     end
 
     function Elements:Toggle(Text, Default, Callback)
+        Text = tostring(Text) or "Toggle"
+
         local Toggle = CreateInstance("TextButton", {
             Name = "Toggle",
             Parent = Page,
@@ -333,7 +341,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
             Position = UDim2.new(0, 8, 0, 0),
             Size = UDim2.new(1, -6, 1, 0),
             Font = Enum.Font.Gotham,
-            Text = Text or "Toggle",
+            Text = Text,
             TextColor3 = Color3.fromRGB(255, 255, 255),
             TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left
@@ -391,25 +399,28 @@ local function CreateTab(WindowParts, Title, IsFirst)
     end
 
     function Elements:Label(Text)
+        Text = tostring(Text) or "Label"
+
         local Label = CreateInstance("TextLabel", {
             Parent = Page,
             BackgroundColor3 = Color3.fromRGB(35, 35, 35),
             BorderSizePixel = 0,
             Size = UDim2.new(1, -6, 0, 34),
             Font = Enum.Font.Gotham,
-            Text = Text or "Label",
+            Text = Text,
             TextColor3 = Color3.fromRGB(255, 255, 255),
             TextSize = 14
         })
         CreateInstance("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Label })
         return {
             Set = function(_, NewText)
-                Label.Text = NewText or "Label"
+                Label.Text = tostring(NewText) or "Label"
             end
         }
     end
 
     function Elements:Slider(Text, Min, Max, Default, Increment, Callback)
+        Text = tostring(Text) or "Slider"
         Min = Min or 0
         Max = Max or 100
         Default = Default or Min
@@ -430,7 +441,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
             Position = UDim2.new(0, 8, 0, 0),
             Size = UDim2.new(1, -6, 0, 34),
             Font = Enum.Font.Gotham,
-            Text = Text or "Slider",
+            Text = Text,
             TextColor3 = Color3.fromRGB(255, 255, 255),
             TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left
@@ -538,6 +549,8 @@ local function CreateTab(WindowParts, Title, IsFirst)
     end
 
     function Elements:InputBox(Text, Callback)
+        Text = tostring(Text) or "Input"
+
         local InputBox = CreateInstance("Frame", {
             Name = "InputBox",
             Parent = Page,
@@ -554,7 +567,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
             Position = UDim2.new(0, 8, 0, 0),
             Size = UDim2.new(0.5, -6, 1, 0),
             Font = Enum.Font.Gotham,
-            Text = Text or "Input",
+            Text = Text,
             TextColor3 = Color3.fromRGB(255, 255, 255),
             TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left
@@ -597,6 +610,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
         end
         Options = Options or {}
         DefaultOption = DefaultOption or ""
+        Text = tostring(Text) or "Dropdown"
 
         local Dropdown = CreateInstance("Frame", {
             Name = "Dropdown",
@@ -623,7 +637,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
             Position = UDim2.new(0, 8, 0, 0),
             Size = UDim2.new(1, -46, 1, 0),
             Font = Enum.Font.Gotham,
-            Text = Text or "Dropdown",
+            Text = Text,
             TextColor3 = Color3.fromRGB(255, 255, 255),
             TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left
@@ -673,11 +687,11 @@ local function CreateTab(WindowParts, Title, IsFirst)
 
         local Dropped = false
         local CurrentOption = DefaultOption
-        local DropdownText = Text or "Dropdown"
+        local DropdownText = Text
 
         if DefaultOption ~= "" and table.find(Options, DefaultOption) then
             if Callback then Callback(DefaultOption) end
-            Title.Text = DropdownText .. ": " .. DefaultOption
+            Title.Text = DropdownText .. ": " .. tostring(DefaultOption)
         end
 
         local function Refresh(NewOptions)
@@ -712,7 +726,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
                         Size = UDim2.new(1, -16, 0, 30),
                         AutoButtonColor = false,
                         Font = Enum.Font.Gotham,
-                        Text = Opt,
+                        Text = tostring(Opt),
                         TextColor3 = Color3.fromRGB(255, 255, 255),
                         TextSize = 14
                     })
@@ -720,7 +734,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
                     Btn.MouseButton1Click:Connect(function()
                         if Callback then Callback(Opt) end
                         CurrentOption = Opt
-                        Title.Text = DropdownText .. ": " .. Opt
+                        Title.Text = DropdownText .. ": " .. tostring(Opt)
                         Dropped = false
                         OptionHolder.Visible = false
                         Arrow.Rotation = 0
