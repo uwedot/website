@@ -49,7 +49,7 @@ local function SetupDrag(Frame, Container)
 end
 
 local function BuildWindowGui(Title)
-    Title = tostring(Title) or "SentinelLIB"
+    Title = tostring(Title or "SentinelLIB")
 
     local Gui = CreateInstance("ScreenGui", {
         Name = "SentinelLIB",
@@ -214,7 +214,7 @@ local function BuildWindowGui(Title)
 end
 
 local function CreateTab(WindowParts, Title, IsFirst)
-    Title = tostring(Title) or "Tab"
+    Title = tostring(Title or "Tab")
 
     local TabsContainer = WindowParts.TabsContainer
     local PagesContainer = WindowParts.PagesContainer
@@ -295,7 +295,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
     local Elements = {}
 
     function Elements:Button(Text, Callback)
-        Text = tostring(Text) or "Button"
+        Text = tostring(Text or "Button")
 
         local Button = CreateInstance("TextButton", {
             Name = "Button",
@@ -321,7 +321,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
     end
 
     function Elements:Toggle(Text, Default, Callback)
-        Text = tostring(Text) or "Toggle"
+        Text = tostring(Text or "Toggle")
 
         local Toggle = CreateInstance("TextButton", {
             Name = "Toggle",
@@ -399,7 +399,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
     end
 
     function Elements:Label(Text)
-        Text = tostring(Text) or "Label"
+        Text = tostring(Text or "Label")
 
         local Label = CreateInstance("TextLabel", {
             Parent = Page,
@@ -414,13 +414,13 @@ local function CreateTab(WindowParts, Title, IsFirst)
         CreateInstance("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Label })
         return {
             Set = function(_, NewText)
-                Label.Text = tostring(NewText) or "Label"
+                Label.Text = tostring(NewText or "Label")
             end
         }
     end
 
     function Elements:Slider(Text, Min, Max, Default, Increment, Callback)
-        Text = tostring(Text) or "Slider"
+        Text = tostring(Text or "Slider")
         Min = Min or 0
         Max = Max or 100
         Default = Default or Min
@@ -549,7 +549,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
     end
 
     function Elements:InputBox(Text, Callback)
-        Text = tostring(Text) or "Input"
+        Text = tostring(Text or "Input")
 
         local InputBox = CreateInstance("Frame", {
             Name = "InputBox",
@@ -610,7 +610,7 @@ local function CreateTab(WindowParts, Title, IsFirst)
         end
         Options = Options or {}
         DefaultOption = DefaultOption or ""
-        Text = tostring(Text) or "Dropdown"
+        Text = tostring(Text or "Dropdown")
 
         local Dropdown = CreateInstance("Frame", {
             Name = "Dropdown",
