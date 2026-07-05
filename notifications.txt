@@ -1,10 +1,8 @@
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
-local Players = game:GetService("Players")
 
-local LocalPlayer = Players.LocalPlayer
-local CoreGui = (RunService:IsStudio() and LocalPlayer.PlayerGui) or game:GetService("CoreGui")
+local CoreGui = game:GetService("CoreGui")
 
 local NotificationGui = Instance.new("ScreenGui")
 NotificationGui.Name = "AkaliNotif"
@@ -91,19 +89,23 @@ local function FadeOutObject(Object)
 	end
 end
 
-local function RemoveNotificationAfterDelay(Label, Duration)
+local function RemoveNotificationAfterDelay(Entry)
+	local Background, Duration = Entry[1], Entry[4] -- stored duration
 	task.wait(Duration)
-	FadeOutObject(Label)
+	FadeOutObject(Background)
 	task.wait(0.25)
-	for Index, Entry in ipairs(ActiveNotifications) do
-		if Entry[1] == Label then
+	Background.Parent = nil -- destroy the GUI object
+
+	for Index, ExistingEntry in ipairs(ActiveNotifications) do
+		if ExistingEntry == Entry then
 			table.remove(ActiveNotifications, Index)
 			break
 		end
 	end
-	for _, Entry in ipairs(ActiveNotifications) do
-		Entry[2] = 0
-		Entry[3] = false
+
+	for _, ExistingEntry in ipairs(ActiveNotifications) do
+		ExistingEntry[2] = 0
+		ExistingEntry[3] = false
 	end
 end
 
@@ -111,7 +113,7 @@ local function UpdatePositions()
 	local Delta = tick() - LastTick
 	local OffsetY = 0
 	for _, Entry in ipairs(ActiveNotifications) do
-		local Label, Progress, Done = Entry[1], Entry[2], Entry[3]
+		local Label, Progress, Done, Height = Entry[1], Entry[2], Entry[3], Entry[5]
 		if not Done then
 			Progress = math.min(Progress + Delta / TweenTime, 1)
 			Entry[2] = Progress
@@ -125,7 +127,7 @@ local function UpdatePositions()
 		local CurrentPos = Label.Position
 		local TargetPos = UDim2.new(0, 0, 0, TargetY)
 		Label.Position = CurrentPos:Lerp(TargetPos, EasedProgress)
-		OffsetY = OffsetY + Label.AbsoluteSize.Y + Padding
+		OffsetY = OffsetY + Height + Padding
 	end
 	LastTick = tick()
 end
@@ -138,9 +140,11 @@ return {
 		local Title = Properties.Title
 		local Description = Properties.Description
 		local Duration = Properties.Duration or 5
+
 		if not (Title or Description) then
 			return
 		end
+
 		local Height = 0
 		if Title then
 			Height = Height + 26
@@ -151,20 +155,25 @@ return {
 			local LineCount = math.max(1, math.ceil(TextSize.X / MaxWidth))
 			Height = Height + (TextSize.Y * LineCount) + 8
 		end
+
 		local Background = CreateRoundedBackground()
 		Background.Size = UDim2.new(1, 0, 0, Height)
+
 		local TotalHeight = 0
 		for _, Entry in ipairs(ActiveNotifications) do
-			TotalHeight = TotalHeight + Entry[1].AbsoluteSize.Y + Padding
+			TotalHeight = TotalHeight + Entry[5] + Padding
 		end
 		Background.Position = UDim2.new(-1, 20, 0, TotalHeight)
+
 		CreateShadow().Parent = Background
+
 		if Title then
 			local TitleLabel = CreateTitleLabel(Title)
 			TitleLabel.Size = UDim2.new(1, -10, 0, 26)
 			TitleLabel.Position = UDim2.fromOffset(10, 0)
 			TitleLabel.Parent = Background
 		end
+
 		if Description then
 			local DescLabel = CreateDescriptionLabel(Description)
 			DescLabel.TextWrapped = true
@@ -173,8 +182,12 @@ return {
 			DescLabel.TextYAlignment = Title and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center
 			DescLabel.Parent = Background
 		end
+
 		Background.Parent = Container
-		table.insert(ActiveNotifications, { Background, 0, false })
-		task.spawn(RemoveNotificationAfterDelay, Background, Duration)
+
+		local Entry = { Background, 0, false, Duration, Height }
+		table.insert(ActiveNotifications, Entry)
+
+		task.spawn(RemoveNotificationAfterDelay, Entry)
 	end
 }
