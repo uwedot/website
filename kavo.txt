@@ -522,7 +522,7 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 return { Btn = Btn }
             end
 
-            function Elements:NewButton(ButtonName, TipText, Callback)
+            function Elements:NewButton(ButtonName, Callback)
                 ButtonName = ButtonName or "Click Me!"
                 Callback = Callback or function() end
 
@@ -573,7 +573,7 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 return { UpdateButton = UpdateButton }
             end
 
-            function Elements:NewTextBox(TextBoxName, TipText, Callback)
+            function Elements:NewTextBox(TextBoxName, Callback)
                 TextBoxName = TextBoxName or "Textbox"
                 Callback = Callback or function() end
 
@@ -670,7 +670,7 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 UpdateSectionSize()
             end
 
-            function Elements:NewToggle(ToggleName, TipText, Callback)
+            function Elements:NewToggle(ToggleName, Callback)
                 ToggleName = ToggleName or "Toggle"
                 Callback = Callback or function() end
 
@@ -749,7 +749,7 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 return { UpdateToggle = UpdateToggle }
             end
 
-            function Elements:NewSlider(SliderName, TipText, MaxValue, MinValue, Callback)
+            function Elements:NewSlider(SliderName, MaxValue, MinValue, Callback)
                 SliderName = SliderName or "Slider"
                 MaxValue = MaxValue or 500
                 MinValue = MinValue or 16
@@ -891,7 +891,7 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 UpdateSectionSize()
             end
 
-            function Elements:NewDropdown(DropName, TipText, Items, Callback)
+            function Elements:NewDropdown(DropName, Items, Callback)
                 DropName = DropName or "Dropdown"
                 Items = Items or {}
                 Callback = Callback or function() end
@@ -1042,7 +1042,7 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 return { Refresh = RefreshItems }
             end
 
-            function Elements:NewKeybind(KeyName, TipText, DefaultKey, Callback)
+            function Elements:NewKeybind(KeyName, DefaultKey, Callback)
                 KeyName = KeyName or "KeybindText"
                 DefaultKey = DefaultKey or Enum.KeyCode.Unknown
                 Callback = Callback or function() end
@@ -1164,12 +1164,6 @@ function Kavo.CreateLib(LibName, ThemeInput)
     Library.Tabs = Tabs
     Kavo._CurrentGui = ScreenGui
     return Library
-end
-
-function Kavo.ToggleUI()
-    if Kavo._CurrentGui then
-        Kavo._CurrentGui.Enabled = not Kavo._CurrentGui.Enabled
-    end
 end
 
 local ConfigFileName = "KavoConfig.JSON"
