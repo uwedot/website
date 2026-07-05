@@ -152,9 +152,9 @@ end
 
 function ThemeManager:SetTheme(ThemeInput)
     if type(ThemeInput) == "string" then
-        Self.Theme = ThemeStyles[ThemeInput] or DefaultTheme
+        self.Theme = ThemeStyles[ThemeInput] or DefaultTheme
     elseif type(ThemeInput) == "table" then
-        Self.Theme = {
+        self.Theme = {
             SchemeColor = ThemeInput.SchemeColor or DefaultTheme.SchemeColor,
             Background = ThemeInput.Background or DefaultTheme.Background,
             Header = ThemeInput.Header or DefaultTheme.Header,
@@ -162,20 +162,20 @@ function ThemeManager:SetTheme(ThemeInput)
             ElementColor = ThemeInput.ElementColor or DefaultTheme.ElementColor,
         }
     else
-        Self.Theme = DefaultTheme
+        self.Theme = DefaultTheme
     end
-    Self:UpdateAll()
+    self:UpdateAll()
 end
 
 function ThemeManager:UpdateAll()
-    for _, Updater in ipairs(Self.Updaters or {}) do
+    for _, Updater in ipairs(self.Updaters or {}) do
         Updater()
     end
 end
 
 function ThemeManager:RegisterUpdater(Updater)
-    if not Self.Updaters then Self.Updaters = {} end
-    table.insert(Self.Updaters, Updater)
+    if not self.Updaters then self.Updaters = {} end
+    table.insert(self.Updaters, Updater)
 end
 
 local function StartThemeUpdater(Element, PropertyMap, ThemeManager)
