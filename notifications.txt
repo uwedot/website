@@ -90,11 +90,11 @@ local function FadeOutObject(Object)
 end
 
 local function RemoveNotificationAfterDelay(Entry)
-	local Background, Duration = Entry[1], Entry[4] -- stored duration
+	local Background, Duration = Entry[1], Entry[4]
 	task.wait(Duration)
 	FadeOutObject(Background)
 	task.wait(0.25)
-	Background.Parent = nil -- destroy the GUI object
+	Background.Parent = nil
 
 	for Index, ExistingEntry in ipairs(ActiveNotifications) do
 		if ExistingEntry == Entry then
@@ -113,7 +113,7 @@ local function UpdatePositions()
 	local Delta = tick() - LastTick
 	local OffsetY = 0
 	for _, Entry in ipairs(ActiveNotifications) do
-		local Label, Progress, Done, Height = Entry[1], Entry[2], Entry[3], Entry[5]
+		local Label, Progress, Done, _, Height = Entry[1], Entry[2], Entry[3], Entry[4], Entry[5]
 		if not Done then
 			Progress = math.min(Progress + Delta / TweenTime, 1)
 			Entry[2] = Progress
