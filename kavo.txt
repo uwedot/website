@@ -92,7 +92,7 @@ local function EnableDragging(Frame, Parent)
     local DragInput, MousePos, FramePos
 
     Frame.InputBegan:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
             Dragging = true
             MousePos = Input.Position
             FramePos = Parent.Position
@@ -105,7 +105,7 @@ local function EnableDragging(Frame, Parent)
     end)
 
     Frame.InputChanged:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseMovement then
+        if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
             DragInput = Input
         end
     end)
@@ -192,78 +192,6 @@ local function StartThemeUpdater(Element, PropertyMap, ThemeManager)
     end
     ThemeManager:RegisterUpdater(Update)
     Update()
-end
-
-local function CreateInfoPanel(InfoContainer, BlurFrame, TipText, ThemeManager, Parent)
-    local MoreInfo = Instance.new("TextLabel")
-    MoreInfo.Name = "TipMore"
-    MoreInfo.Parent = InfoContainer
-    MoreInfo.BackgroundColor3 = ThemeManager.Theme.SchemeColor
-    MoreInfo.Position = UDim2.new(0, 0, 2, 0)
-    MoreInfo.Size = UDim2.new(0, 353, 0, 33)
-    MoreInfo.ZIndex = 9
-    MoreInfo.Font = Enum.Font.GothamSemibold
-    MoreInfo.Text = "  " .. TipText
-    MoreInfo.RichText = true
-    MoreInfo.TextColor3 = ThemeManager.Theme.TextColor
-    MoreInfo.TextSize = 14
-    MoreInfo.TextXAlignment = Enum.TextXAlignment.Left
-
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 4)
-    Corner.Parent = MoreInfo
-
-    StartThemeUpdater(MoreInfo, {
-        [MoreInfo] = {
-            BackgroundColor3 = "SchemeColor",
-            TextColor3 = "TextColor",
-        }
-    }, ThemeManager)
-
-    return MoreInfo
-end
-
-local function CreateViewInfoButton(Parent, ThemeManager, TipText, InfoContainer, BlurFrame)
-    local ViewInfo = Instance.new("ImageButton")
-    ViewInfo.Name = "viewInfo"
-    ViewInfo.Parent = Parent
-    ViewInfo.BackgroundTransparency = 1
-    ViewInfo.LayoutOrder = 9
-    ViewInfo.Position = UDim2.new(0.93, 0, 0.152, 0)
-    ViewInfo.Size = UDim2.new(0, 23, 0, 23)
-    ViewInfo.ZIndex = 2
-    ViewInfo.Image = "rbxassetid://3926305904"
-    ViewInfo.ImageRectOffset = Vector2.new(764, 764)
-    ViewInfo.ImageRectSize = Vector2.new(36, 36)
-
-    StartThemeUpdater(ViewInfo, {
-        [ViewInfo] = { ImageColor3 = "SchemeColor" }
-    }, ThemeManager)
-
-    local ViewDe = false
-    local Focusing = false
-    local MoreInfo = CreateInfoPanel(InfoContainer, BlurFrame, TipText, ThemeManager)
-
-    ViewInfo.MouseButton1Click:Connect(function()
-        if not ViewDe then
-            ViewDe = true
-            Focusing = true
-            for _, Child in ipairs(InfoContainer:GetChildren()) do
-                if Child ~= MoreInfo then
-                    TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                end
-            end
-            TweenObject(MoreInfo, { Position = UDim2.new(0, 0, 0, 0) }, 0.2)
-            TweenObject(BlurFrame, { BackgroundTransparency = 0.5 }, 0.2)
-            wait(1.5)
-            Focusing = false
-            TweenObject(MoreInfo, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-            TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-            ViewDe = false
-        end
-    end)
-
-    return ViewInfo, Focusing, MoreInfo
 end
 
 function Kavo.CreateLib(LibName, ThemeInput)
@@ -389,24 +317,6 @@ function Kavo.CreateLib(LibName, ThemeInput)
     local PagesFolder = Instance.new("Folder")
     PagesFolder.Name = "Pages"
     PagesFolder.Parent = PagesContainer
-
-    local InfoContainer = Instance.new("Frame")
-    InfoContainer.Name = "infoContainer"
-    InfoContainer.Parent = Main
-    InfoContainer.BackgroundTransparency = 1
-    InfoContainer.ClipsDescendants = true
-    InfoContainer.Position = UDim2.new(0.299, 0, 0.8742, 0)
-    InfoContainer.Size = UDim2.new(0, 368, 0, 33)
-
-    local BlurFrame = Instance.new("Frame")
-    BlurFrame.Name = "blurFrame"
-    BlurFrame.Parent = PagesContainer
-    BlurFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    BlurFrame.BackgroundTransparency = 1
-    BlurFrame.BorderSizePixel = 0
-    BlurFrame.Position = UDim2.new(-0.0222, 0, -0.0372, 0)
-    BlurFrame.Size = UDim2.new(0, 376, 0, 289)
-    BlurFrame.ZIndex = 999
 
     EnableDragging(Header, Main)
 
@@ -575,7 +485,7 @@ function Kavo.CreateLib(LibName, ThemeInput)
 
             local Elements = {}
 
-            local function CreateInteractiveElement(Parent, ElementType, Name, TipText, InfoContainer, BlurFrame, ThemeManager)
+            local function CreateInteractiveElement(Parent, ElementType, Name)
                 local Btn = Instance.new("TextButton")
                 Btn.Name = Name
                 Btn.Parent = Parent
@@ -592,49 +502,32 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 Corner.CornerRadius = UDim.new(0, 4)
                 Corner.Parent = Btn
 
-                local ViewInfo, Focusing, MoreInfo = CreateViewInfoButton(Btn, ThemeManager, TipText, InfoContainer, BlurFrame)
-
-                local Hovering = false
                 Btn.MouseEnter:Connect(function()
-                    if not Focusing then
-                        TweenObject(Btn, {
-                            BackgroundColor3 = Color3.fromRGB(
-                                ThemeManager.Theme.ElementColor.r * 255 + 8,
-                                ThemeManager.Theme.ElementColor.g * 255 + 9,
-                                ThemeManager.Theme.ElementColor.b * 255 + 10
-                            )
-                        }, 0.1)
-                        Hovering = true
-                    end
+                    TweenObject(Btn, {
+                        BackgroundColor3 = Color3.fromRGB(
+                            ThemeManager.Theme.ElementColor.r * 255 + 8,
+                            ThemeManager.Theme.ElementColor.g * 255 + 9,
+                            ThemeManager.Theme.ElementColor.b * 255 + 10
+                        )
+                    }, 0.1)
                 end)
                 Btn.MouseLeave:Connect(function()
-                    if not Focusing then
-                        TweenObject(Btn, { BackgroundColor3 = ThemeManager.Theme.ElementColor }, 0.1)
-                        Hovering = false
-                    end
+                    TweenObject(Btn, { BackgroundColor3 = ThemeManager.Theme.ElementColor }, 0.1)
                 end)
 
                 StartThemeUpdater(Btn, {
                     [Btn] = { BackgroundColor3 = "ElementColor" }
                 }, ThemeManager)
 
-                return {
-                    Btn = Btn,
-                    ViewInfo = ViewInfo,
-                    MoreInfo = MoreInfo,
-                    Focusing = Focusing,
-                    Hovering = Hovering,
-                }
+                return { Btn = Btn }
             end
 
             function Elements:NewButton(ButtonName, TipText, Callback)
-                TipText = TipText or "Tip: Clicking this nothing will happen!"
                 ButtonName = ButtonName or "Click Me!"
                 Callback = Callback or function() end
 
-                local Data = CreateInteractiveElement(Inner, "Button", ButtonName, TipText, InfoContainer, BlurFrame, ThemeManager)
+                local Data = CreateInteractiveElement(Inner, "Button", ButtonName)
                 local Btn = Data.Btn
-                local Focusing = Data.Focusing
 
                 local Icon = Instance.new("ImageLabel")
                 Icon.Name = "touch"
@@ -670,18 +563,8 @@ function Kavo.CreateLib(LibName, ThemeInput)
 
                 local Mouse = game.Players.LocalPlayer:GetMouse()
                 Btn.MouseButton1Click:Connect(function()
-                    if not Focusing then
-                        Callback()
-                        CreateRipple(Btn, Mouse)
-                    else
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= Data.MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
-                        end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
-                    end
+                    Callback()
+                    CreateRipple(Btn, Mouse)
                 end)
 
                 local function UpdateButton(NewTitle)
@@ -692,12 +575,10 @@ function Kavo.CreateLib(LibName, ThemeInput)
 
             function Elements:NewTextBox(TextBoxName, TipText, Callback)
                 TextBoxName = TextBoxName or "Textbox"
-                TipText = TipText or "Gets a value of Textbox"
                 Callback = Callback or function() end
 
-                local Data = CreateInteractiveElement(Inner, "TextBox", TextBoxName, TipText, InfoContainer, BlurFrame, ThemeManager)
+                local Data = CreateInteractiveElement(Inner, "TextBox", TextBoxName)
                 local Btn = Data.Btn
-                local Focusing = Data.Focusing
 
                 local Icon = Instance.new("ImageLabel")
                 Icon.Name = "write"
@@ -779,31 +660,10 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 }, ThemeManager)
 
                 TextBox.FocusLost:Connect(function(EnterPressed)
-                    if Focusing then
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= Data.MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
-                        end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
-                    end
                     if EnterPressed then
                         Callback(TextBox.Text)
                         wait(0.18)
                         TextBox.Text = ""
-                    end
-                end)
-
-                Btn.MouseButton1Click:Connect(function()
-                    if Focusing then
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= Data.MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
-                        end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
                     end
                 end)
 
@@ -812,14 +672,12 @@ function Kavo.CreateLib(LibName, ThemeInput)
 
             function Elements:NewToggle(ToggleName, TipText, Callback)
                 ToggleName = ToggleName or "Toggle"
-                TipText = TipText or "Prints Current Toggle State"
                 Callback = Callback or function() end
 
                 local Toggled = false
 
-                local Data = CreateInteractiveElement(Inner, "Toggle", ToggleName, TipText, InfoContainer, BlurFrame, ThemeManager)
+                local Data = CreateInteractiveElement(Inner, "Toggle", ToggleName)
                 local Btn = Data.Btn
-                local Focusing = Data.Focusing
 
                 local DisabledImg = Instance.new("ImageLabel")
                 DisabledImg.Name = "toggleDisabled"
@@ -866,24 +724,14 @@ function Kavo.CreateLib(LibName, ThemeInput)
 
                 local Mouse = game.Players.LocalPlayer:GetMouse()
                 Btn.MouseButton1Click:Connect(function()
-                    if not Focusing then
-                        Toggled = not Toggled
-                        if Toggled then
-                            TweenObject(EnabledImg, { ImageTransparency = 0 }, 0.11)
-                        else
-                            TweenObject(EnabledImg, { ImageTransparency = 1 }, 0.11)
-                        end
-                        CreateRipple(Btn, Mouse)
-                        pcall(Callback, Toggled)
+                    Toggled = not Toggled
+                    if Toggled then
+                        TweenObject(EnabledImg, { ImageTransparency = 0 }, 0.11)
                     else
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= Data.MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
-                        end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
+                        TweenObject(EnabledImg, { ImageTransparency = 1 }, 0.11)
                     end
+                    CreateRipple(Btn, Mouse)
+                    pcall(Callback, Toggled)
                 end)
 
                 local function UpdateToggle(NewText, State)
@@ -903,14 +751,12 @@ function Kavo.CreateLib(LibName, ThemeInput)
 
             function Elements:NewSlider(SliderName, TipText, MaxValue, MinValue, Callback)
                 SliderName = SliderName or "Slider"
-                TipText = TipText or "Slider tip here"
                 MaxValue = MaxValue or 500
                 MinValue = MinValue or 16
                 Callback = Callback or function() end
 
-                local Data = CreateInteractiveElement(Inner, "Slider", SliderName, TipText, InfoContainer, BlurFrame, ThemeManager)
+                local Data = CreateInteractiveElement(Inner, "Slider", SliderName)
                 local Btn = Data.Btn
-                local Focusing = Data.Focusing
 
                 local Icon = Instance.new("ImageLabel")
                 Icon.Name = "write"
@@ -1019,29 +865,26 @@ function Kavo.CreateLib(LibName, ThemeInput)
                     pcall(Callback, CurrentValue)
                 end
 
-                Track.MouseButton1Down:Connect(function()
-                    if not Focusing then
-                        TweenObject(ValLabel, { TextTransparency = 0 }, 0.1)
-                        local StartX = Mouse.X
-                        UpdateSlider(StartX)
-                        MoveConnection = Mouse.Move:Connect(function()
-                            UpdateSlider(Mouse.X)
-                        end)
-                        ReleaseConnection = UIS.InputEnded:Connect(function(Input)
-                            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                                MoveConnection:Disconnect()
-                                ReleaseConnection:Disconnect()
-                                TweenObject(ValLabel, { TextTransparency = 1 }, 0.1)
-                            end
-                        end)
-                    else
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= Data.MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
+                local function StartDrag(Input)
+                    TweenObject(ValLabel, { TextTransparency = 0 }, 0.1)
+                    UpdateSlider(Input.Position.X)
+                    MoveConnection = UIS.InputChanged:Connect(function(ChangedInput)
+                        if ChangedInput.UserInputType == Input.UserInputType then
+                            UpdateSlider(ChangedInput.Position.X)
                         end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
+                    end)
+                    ReleaseConnection = UIS.InputEnded:Connect(function(EndedInput)
+                        if EndedInput.UserInputType == Input.UserInputType then
+                            MoveConnection:Disconnect()
+                            ReleaseConnection:Disconnect()
+                            TweenObject(ValLabel, { TextTransparency = 1 }, 0.1)
+                        end
+                    end)
+                end
+
+                Track.InputBegan:Connect(function(Input)
+                    if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                        StartDrag(Input)
                     end
                 end)
 
@@ -1051,7 +894,6 @@ function Kavo.CreateLib(LibName, ThemeInput)
             function Elements:NewDropdown(DropName, TipText, Items, Callback)
                 DropName = DropName or "Dropdown"
                 Items = Items or {}
-                TipText = TipText or "Dropdown info"
                 Callback = Callback or function() end
 
                 local Opened = false
@@ -1116,8 +958,6 @@ function Kavo.CreateLib(LibName, ThemeInput)
                     [Label] = { TextColor3 = "TextColor" }
                 }, ThemeManager)
 
-                local ViewInfo, Focusing, MoreInfo = CreateViewInfoButton(DropBtn, ThemeManager, TipText, InfoContainer, BlurFrame)
-
                 local ListLayout = Instance.new("UIListLayout")
                 ListLayout.Parent = DropFrame
                 ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1136,18 +976,8 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 end
 
                 DropBtn.MouseButton1Click:Connect(function()
-                    if not Focusing then
-                        ToggleDropdown(not Opened)
-                        CreateRipple(DropBtn, Mouse)
-                    else
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
-                        end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
-                    end
+                    ToggleDropdown(not Opened)
+                    CreateRipple(DropBtn, Mouse)
                 end)
 
                 local function RefreshItems(NewItems)
@@ -1183,20 +1013,10 @@ function Kavo.CreateLib(LibName, ThemeInput)
                         }, ThemeManager)
 
                         Option.MouseButton1Click:Connect(function()
-                            if not Focusing then
-                                Callback(Item)
-                                Label.Text = Item
-                                ToggleDropdown(false)
-                                CreateRipple(Option, Mouse)
-                            else
-                                for _, Child in ipairs(InfoContainer:GetChildren()) do
-                                    if Child ~= MoreInfo then
-                                        TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                                    end
-                                end
-                                TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                                Focusing = false
-                            end
+                            Callback(Item)
+                            Label.Text = Item
+                            ToggleDropdown(false)
+                            CreateRipple(Option, Mouse)
                         end)
 
                         Option.MouseEnter:Connect(function()
@@ -1224,15 +1044,13 @@ function Kavo.CreateLib(LibName, ThemeInput)
 
             function Elements:NewKeybind(KeyName, TipText, DefaultKey, Callback)
                 KeyName = KeyName or "KeybindText"
-                TipText = TipText or "Keybind info"
                 DefaultKey = DefaultKey or Enum.KeyCode.Unknown
                 Callback = Callback or function() end
 
                 local CurrentKey = DefaultKey.Name or "Unknown"
 
-                local Data = CreateInteractiveElement(Inner, "Keybind", KeyName, TipText, InfoContainer, BlurFrame, ThemeManager)
+                local Data = CreateInteractiveElement(Inner, "Keybind", KeyName)
                 local Btn = Data.Btn
-                local Focusing = Data.Focusing
 
                 local Icon = Instance.new("ImageLabel")
                 Icon.Name = "touch"
@@ -1284,335 +1102,19 @@ function Kavo.CreateLib(LibName, ThemeInput)
                 local Mouse = game.Players.LocalPlayer:GetMouse()
 
                 Btn.MouseButton1Click:Connect(function()
-                    if not Focusing then
-                        KeyLabel.Text = "..."
-                        local Input = UserInputService.InputBegan:Wait()
-                        if Input.KeyCode.Name ~= "Unknown" then
-                            CurrentKey = Input.KeyCode.Name
-                            KeyLabel.Text = CurrentKey
-                        end
-                        CreateRipple(Btn, Mouse)
-                    else
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= Data.MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
-                        end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
+                    KeyLabel.Text = "..."
+                    local Input = UserInputService.InputBegan:Wait()
+                    if Input.KeyCode.Name ~= "Unknown" then
+                        CurrentKey = Input.KeyCode.Name
+                        KeyLabel.Text = CurrentKey
                     end
+                    CreateRipple(Btn, Mouse)
                 end)
 
                 UserInputService.InputBegan:Connect(function(Input, Processed)
                     if not Processed and Input.KeyCode.Name == CurrentKey then
                         Callback()
                     end
-                end)
-
-                UpdateSectionSize()
-            end
-
-            function Elements:NewColorPicker(PickerName, TipText, DefaultColor, Callback)
-                PickerName = PickerName or "ColorPicker"
-                TipText = TipText or "Color Picker"
-                DefaultColor = DefaultColor or Color3.fromRGB(255, 255, 255)
-                Callback = Callback or function() end
-
-                local H, S, V = Color3.toHSV(DefaultColor)
-
-                local ColorFrame = Instance.new("TextButton")
-                ColorFrame.Name = "colorElement"
-                ColorFrame.Parent = Inner
-                ColorFrame.BackgroundColor3 = ThemeManager.Theme.ElementColor
-                ColorFrame.BackgroundTransparency = 1
-                ColorFrame.ClipsDescendants = true
-                ColorFrame.Size = UDim2.new(0, 352, 0, 33)
-                ColorFrame.AutoButtonColor = false
-                ColorFrame.Font = Enum.Font.SourceSans
-                ColorFrame.Text = ""
-                ColorFrame.TextColor3 = Color3.fromRGB(0, 0, 0)
-                ColorFrame.TextSize = 14
-
-                local ColorCorner = Instance.new("UICorner")
-                ColorCorner.CornerRadius = UDim.new(0, 4)
-                ColorCorner.Parent = ColorFrame
-
-                StartThemeUpdater(ColorFrame, {
-                    [ColorFrame] = { BackgroundColor3 = "ElementColor" }
-                }, ThemeManager)
-
-                local Header = Instance.new("Frame")
-                Header.Name = "colorHeader"
-                Header.Parent = ColorFrame
-                Header.BackgroundColor3 = ThemeManager.Theme.ElementColor
-                Header.Size = UDim2.new(0, 352, 0, 33)
-                Header.ClipsDescendants = true
-
-                StartThemeUpdater(Header, {
-                    [Header] = { BackgroundColor3 = "ElementColor" }
-                }, ThemeManager)
-
-                local Icon = Instance.new("ImageLabel")
-                Icon.Name = "touch"
-                Icon.Parent = Header
-                Icon.BackgroundTransparency = 1
-                Icon.Position = UDim2.new(0.02, 0, 0.18, 0)
-                Icon.Size = UDim2.new(0, 21, 0, 21)
-                Icon.Image = "rbxassetid://3926305904"
-                Icon.ImageRectOffset = Vector2.new(44, 964)
-                Icon.ImageRectSize = Vector2.new(36, 36)
-
-                StartThemeUpdater(Icon, {
-                    [Icon] = { ImageColor3 = "SchemeColor" }
-                }, ThemeManager)
-
-                local Label = Instance.new("TextLabel")
-                Label.Name = "togName"
-                Label.Parent = Header
-                Label.BackgroundTransparency = 1
-                Label.Position = UDim2.new(0.0967, 0, 0.2727, 0)
-                Label.Size = UDim2.new(0, 288, 0, 14)
-                Label.Font = Enum.Font.GothamSemibold
-                Label.Text = PickerName
-                Label.RichText = true
-                Label.TextColor3 = ThemeManager.Theme.TextColor
-                Label.TextSize = 14
-                Label.TextXAlignment = Enum.TextXAlignment.Left
-
-                StartThemeUpdater(Label, {
-                    [Label] = { TextColor3 = "TextColor" }
-                }, ThemeManager)
-
-                local ViewInfo, Focusing, MoreInfo = CreateViewInfoButton(Header, ThemeManager, TipText, InfoContainer, BlurFrame)
-
-                local CurrentColor = Instance.new("Frame")
-                CurrentColor.Name = "colorCurrent"
-                CurrentColor.Parent = Header
-                CurrentColor.BackgroundColor3 = DefaultColor
-                CurrentColor.Position = UDim2.new(0.7926, 0, 0.2121, 0)
-                CurrentColor.Size = UDim2.new(0, 42, 0, 18)
-
-                local PreviewCorner = Instance.new("UICorner")
-                PreviewCorner.CornerRadius = UDim.new(0, 4)
-                PreviewCorner.Parent = CurrentColor
-
-                local Inner = Instance.new("Frame")
-                Inner.Name = "colorInners"
-                Inner.Parent = ColorFrame
-                Inner.BackgroundColor3 = ThemeManager.Theme.ElementColor
-                Inner.Position = UDim2.new(0, 0, 0.2553, 0)
-                Inner.Size = UDim2.new(0, 352, 0, 105)
-
-                StartThemeUpdater(Inner, {
-                    [Inner] = { BackgroundColor3 = "ElementColor" }
-                }, ThemeManager)
-
-                local RgbPicker = Instance.new("ImageButton")
-                RgbPicker.Name = "rgb"
-                RgbPicker.Parent = Inner
-                RgbPicker.BackgroundTransparency = 1
-                RgbPicker.Position = UDim2.new(0.0199, 0, 0.0476, 0)
-                RgbPicker.Size = UDim2.new(0, 211, 0, 93)
-                RgbPicker.Image = "http://www.roblox.com/asset/?id=6523286724"
-
-                local RgbCorner = Instance.new("UICorner")
-                RgbCorner.CornerRadius = UDim.new(0, 4)
-                RgbCorner.Parent = RgbPicker
-
-                local RgbCursor = Instance.new("ImageLabel")
-                RgbCursor.Name = "rbgcircle"
-                RgbCursor.Parent = RgbPicker
-                RgbCursor.BackgroundTransparency = 1
-                RgbCursor.Size = UDim2.new(0, 14, 0, 14)
-                RgbCursor.Image = "rbxassetid://3926309567"
-                RgbCursor.ImageColor3 = Color3.fromRGB(0, 0, 0)
-                RgbCursor.ImageRectOffset = Vector2.new(628, 420)
-                RgbCursor.ImageRectSize = Vector2.new(48, 48)
-
-                local DarkPicker = Instance.new("ImageButton")
-                DarkPicker.Name = "darkness"
-                DarkPicker.Parent = Inner
-                DarkPicker.BackgroundTransparency = 1
-                DarkPicker.Position = UDim2.new(0.6364, 0, 0.0476, 0)
-                DarkPicker.Size = UDim2.new(0, 18, 0, 93)
-                DarkPicker.Image = "http://www.roblox.com/asset/?id=6523291212"
-
-                local DarkCorner = Instance.new("UICorner")
-                DarkCorner.CornerRadius = UDim.new(0, 4)
-                DarkCorner.Parent = DarkPicker
-
-                local DarkCursor = Instance.new("ImageLabel")
-                DarkCursor.Name = "darkcircle"
-                DarkCursor.Parent = DarkPicker
-                DarkCursor.AnchorPoint = Vector2.new(0.5, 0)
-                DarkCursor.BackgroundTransparency = 1
-                DarkCursor.Size = UDim2.new(0, 14, 0, 14)
-                DarkCursor.Image = "rbxassetid://3926309567"
-                DarkCursor.ImageColor3 = Color3.fromRGB(0, 0, 0)
-                DarkCursor.ImageRectOffset = Vector2.new(628, 420)
-                DarkCursor.ImageRectSize = Vector2.new(48, 48)
-
-                local RainbowDisabled = Instance.new("ImageLabel")
-                RainbowDisabled.Name = "toggleDisabled"
-                RainbowDisabled.Parent = Inner
-                RainbowDisabled.BackgroundTransparency = 1
-                RainbowDisabled.Position = UDim2.new(0.7047, 0, 0.0657, 0)
-                RainbowDisabled.Size = UDim2.new(0, 21, 0, 21)
-                RainbowDisabled.Image = "rbxassetid://3926309567"
-                RainbowDisabled.ImageRectOffset = Vector2.new(628, 420)
-                RainbowDisabled.ImageRectSize = Vector2.new(48, 48)
-
-                local RainbowEnabled = Instance.new("ImageLabel")
-                RainbowEnabled.Name = "toggleEnabled"
-                RainbowEnabled.Parent = Inner
-                RainbowEnabled.BackgroundTransparency = 1
-                RainbowEnabled.Position = UDim2.new(0.705, 0, 0.066, 0)
-                RainbowEnabled.Size = UDim2.new(0, 21, 0, 21)
-                RainbowEnabled.Image = "rbxassetid://3926309567"
-                RainbowEnabled.ImageRectOffset = Vector2.new(784, 420)
-                RainbowEnabled.ImageRectSize = Vector2.new(48, 48)
-                RainbowEnabled.ImageTransparency = 1
-
-                StartThemeUpdater(RainbowDisabled, {
-                    [RainbowDisabled] = { ImageColor3 = "SchemeColor" },
-                    [RainbowEnabled] = { ImageColor3 = "SchemeColor" },
-                }, ThemeManager)
-
-                local RainbowLabel = Instance.new("TextLabel")
-                RainbowLabel.Name = "togName"
-                RainbowLabel.Parent = Inner
-                RainbowLabel.BackgroundTransparency = 1
-                RainbowLabel.Position = UDim2.new(0.78, 0, 0.1, 0)
-                RainbowLabel.Size = UDim2.new(0, 278, 0, 14)
-                RainbowLabel.Font = Enum.Font.GothamSemibold
-                RainbowLabel.Text = "Rainbow"
-                RainbowLabel.TextColor3 = ThemeManager.Theme.TextColor
-                RainbowLabel.TextSize = 14
-                RainbowLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-                StartThemeUpdater(RainbowLabel, {
-                    [RainbowLabel] = { TextColor3 = "TextColor" }
-                }, ThemeManager)
-
-                local RainbowBtn = Instance.new("TextButton")
-                RainbowBtn.Name = "onrainbow"
-                RainbowBtn.Parent = RainbowEnabled
-                RainbowBtn.BackgroundTransparency = 1
-                RainbowBtn.Size = UDim2.new(1, 0, 1, 0)
-                RainbowBtn.Font = Enum.Font.SourceSans
-                RainbowBtn.Text = ""
-                RainbowBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-                RainbowBtn.TextSize = 14
-
-                local Plr = game.Players.LocalPlayer
-                local Mouse = Plr:GetMouse()
-                local UIS = UserInputService
-                local RS = RunService
-                local PickingColor = false
-                local PickingDark = false
-                local Rainbow = false
-                local RainbowConnection
-
-                local function Zigzag(X) return math.acos(math.cos(X * math.pi)) / math.pi end
-
-                local Color = {H, S, V}
-
-                local function UpdateColor()
-                    local RealColor = Color3.fromHSV(Color[1], Color[2], Color[3])
-                    CurrentColor.BackgroundColor3 = RealColor
-                    pcall(Callback, RealColor)
-                end
-
-                local function OnMouseMove()
-                    if PickingColor then
-                        local X = math.clamp((Mouse.X - RgbPicker.AbsolutePosition.X) / RgbPicker.AbsoluteSize.X, 0, 1)
-                        local Y = math.clamp((Mouse.Y - RgbPicker.AbsolutePosition.Y) / RgbPicker.AbsoluteSize.Y, 0, 1)
-                        local CX, CY = RgbCursor.AbsoluteSize.X/2, RgbCursor.AbsoluteSize.Y/2
-                        RgbCursor.Position = UDim2.new(X, -CX, Y, -CY)
-                        Color = {1 - X, 1 - Y, Color[3]}
-                        UpdateColor()
-                    end
-                    if PickingDark then
-                        local Y = math.clamp((Mouse.Y - DarkPicker.AbsolutePosition.Y) / DarkPicker.AbsoluteSize.Y, 0, 1)
-                        local CY = DarkCursor.AbsoluteSize.Y/2
-                        DarkCursor.Position = UDim2.new(0.5, 0, Y, -CY)
-                        DarkCursor.ImageColor3 = Color3.fromHSV(0, 0, Y)
-                        Color = {Color[1], Color[2], 1 - Y}
-                        UpdateColor()
-                    end
-                end
-
-                local function SetColor(HSV)
-                    Color = {HSV[1], HSV[2], HSV[3]}
-                    local CX, CY = RgbCursor.AbsoluteSize.X/2, RgbCursor.AbsoluteSize.Y/2
-                    RgbCursor.Position = UDim2.new(Color[1], -CX, 1 - Color[2], -CY)
-                    DarkCursor.Position = UDim2.new(0.5, 0, 1 - Color[3], -DarkCursor.AbsoluteSize.Y/2)
-                    UpdateColor()
-                end
-
-                local function ToggleRainbow()
-                    Rainbow = not Rainbow
-                    if Rainbow then
-                        TweenObject(RainbowEnabled, { ImageTransparency = 0 }, 0.1)
-                        local Counter = 0
-                        RainbowConnection = RS.RenderStepped:Connect(function()
-                            local H = Zigzag(Counter)
-                            SetColor({H, 1, 1})
-                            Counter = Counter + 0.01
-                        end)
-                    else
-                        TweenObject(RainbowEnabled, { ImageTransparency = 1 }, 0.1)
-                        if RainbowConnection then
-                            RainbowConnection:Disconnect()
-                            RainbowConnection = nil
-                        end
-                    end
-                end
-
-                RainbowBtn.MouseButton1Click:Connect(ToggleRainbow)
-
-                Mouse.Move:Connect(OnMouseMove)
-                RgbPicker.MouseButton1Down:Connect(function() PickingColor = true end)
-                DarkPicker.MouseButton1Down:Connect(function() PickingDark = true end)
-                UIS.InputEnded:Connect(function(Input)
-                    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                        PickingColor = false
-                        PickingDark = false
-                    end
-                end)
-
-                SetColor({H, S, V})
-
-                local ColorOpened = false
-                ColorFrame.MouseButton1Click:Connect(function()
-                    if not Focusing then
-                        ColorOpened = not ColorOpened
-                        local TargetSize = ColorOpened and UDim2.new(0, 352, 0, 141) or UDim2.new(0, 352, 0, 33)
-                        TweenObject(ColorFrame, { Size = TargetSize }, 0.08)
-                        UpdateSectionSize()
-                        CreateRipple(ColorFrame, Mouse)
-                    else
-                        for _, Child in ipairs(InfoContainer:GetChildren()) do
-                            if Child ~= MoreInfo then
-                                TweenObject(Child, { Position = UDim2.new(0, 0, 2, 0) }, 0.2)
-                            end
-                        end
-                        TweenObject(BlurFrame, { BackgroundTransparency = 1 }, 0.2)
-                        Focusing = false
-                    end
-                end)
-
-                ColorFrame.MouseEnter:Connect(function()
-                    TweenObject(ColorFrame, {
-                        BackgroundColor3 = Color3.fromRGB(
-                            ThemeManager.Theme.ElementColor.r * 255 + 8,
-                            ThemeManager.Theme.ElementColor.g * 255 + 9,
-                            ThemeManager.Theme.ElementColor.b * 255 + 10
-                        )
-                    }, 0.1)
-                end)
-                ColorFrame.MouseLeave:Connect(function()
-                    TweenObject(ColorFrame, { BackgroundColor3 = ThemeManager.Theme.ElementColor }, 0.1)
                 end)
 
                 UpdateSectionSize()
