@@ -1,0 +1,1365 @@
+local Kavo = {}
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+
+local TweenInfo = TweenInfo.new
+
+local function TweenObject(obj, properties, duration, easing, direction)
+	TweenService:Create(obj, TweenInfo(duration or 0.2, easing or Enum.EasingStyle.Linear, direction or Enum.EasingDirection.In), properties):Play()
+end
+
+local function CreateCorner(parent, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius or 4)
+	corner.Parent = parent
+	return corner
+end
+
+local function CloneWithRipple(button, sampleTemplate)
+	local sample = sampleTemplate:Clone()
+	sample.Parent = button
+	local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+	local x, y = mouse.X - sample.AbsolutePosition.X, mouse.Y - sample.AbsolutePosition.Y
+	sample.Position = UDim2.new(0, x, 0, y)
+	local size = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 1.5
+	sample:TweenSizeAndPosition(
+		UDim2.new(0, size, 0, size),
+		UDim2.new(0.5, -size/2, 0.5, -size/2),
+		Enum.EasingDirection.Out,
+		Enum.EasingStyle.Quad,
+		0.35,
+		true
+	)
+	for i = 1, 10 do
+		sample.ImageTransparency = sample.ImageTransparency + 0.05
+		task.wait(0.35 / 12)
+	end
+	sample:Destroy()
+end
+
+local DefaultTheme = {
+	SchemeColor = Color3.fromRGB(74, 99, 135),
+	Background = Color3.fromRGB(36, 37, 43),
+	Header = Color3.fromRGB(28, 29, 34),
+	TextColor = Color3.fromRGB(255, 255, 255),
+	ElementColor = Color3.fromRGB(32, 32, 38),
+}
+
+local ThemePresets = {
+	DarkTheme = {
+		SchemeColor = Color3.fromRGB(64, 64, 64),
+		Background = Color3.fromRGB(0, 0, 0),
+		Header = Color3.fromRGB(0, 0, 0),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(20, 20, 20),
+	},
+	LightTheme = {
+		SchemeColor = Color3.fromRGB(150, 150, 150),
+		Background = Color3.fromRGB(255, 255, 255),
+		Header = Color3.fromRGB(200, 200, 200),
+		TextColor = Color3.fromRGB(0, 0, 0),
+		ElementColor = Color3.fromRGB(224, 224, 224),
+	},
+	BloodTheme = {
+		SchemeColor = Color3.fromRGB(227, 27, 27),
+		Background = Color3.fromRGB(10, 10, 10),
+		Header = Color3.fromRGB(5, 5, 5),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(20, 20, 20),
+	},
+	GrapeTheme = {
+		SchemeColor = Color3.fromRGB(166, 71, 214),
+		Background = Color3.fromRGB(64, 50, 71),
+		Header = Color3.fromRGB(36, 28, 41),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(74, 58, 84),
+	},
+	Ocean = {
+		SchemeColor = Color3.fromRGB(86, 76, 251),
+		Background = Color3.fromRGB(26, 32, 58),
+		Header = Color3.fromRGB(38, 45, 71),
+		TextColor = Color3.fromRGB(200, 200, 200),
+		ElementColor = Color3.fromRGB(38, 45, 71),
+	},
+	Midnight = {
+		SchemeColor = Color3.fromRGB(26, 189, 158),
+		Background = Color3.fromRGB(44, 62, 82),
+		Header = Color3.fromRGB(57, 81, 105),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(52, 74, 95),
+	},
+	Sentinel = {
+		SchemeColor = Color3.fromRGB(230, 35, 69),
+		Background = Color3.fromRGB(32, 32, 32),
+		Header = Color3.fromRGB(24, 24, 24),
+		TextColor = Color3.fromRGB(119, 209, 138),
+		ElementColor = Color3.fromRGB(24, 24, 24),
+	},
+	Synapse = {
+		SchemeColor = Color3.fromRGB(46, 48, 43),
+		Background = Color3.fromRGB(13, 15, 12),
+		Header = Color3.fromRGB(36, 38, 35),
+		TextColor = Color3.fromRGB(152, 99, 53),
+		ElementColor = Color3.fromRGB(24, 24, 24),
+	},
+	Serpent = {
+		SchemeColor = Color3.fromRGB(0, 166, 58),
+		Background = Color3.fromRGB(31, 41, 43),
+		Header = Color3.fromRGB(22, 29, 31),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(22, 29, 31),
+	},
+}
+
+local RegisteredElements = {}
+
+local function RegisterElement(updateFn)
+	table.insert(RegisteredElements, updateFn)
+end
+
+local function UpdateAllElements()
+	for _, fn in ipairs(RegisteredElements) do
+		fn()
+	end
+end
+
+function Kavo:DraggingEnabled(frame, parent)
+	parent = parent or frame
+	local dragging = false
+	local dragInput, mousePos, framePos
+
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			mousePos = input.Position
+			framePos = parent.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - mousePos
+			parent.Position = UDim2.new(
+				framePos.X.Scale, framePos.X.Offset + delta.X,
+				framePos.Y.Scale, framePos.Y.Offset + delta.Y
+			)
+		end
+	end)
+end
+
+local LibScreenGuiName = tostring(math.random(1, 100)) .. tostring(math.random(1, 50)) .. tostring(math.random(1, 100))
+
+function Kavo:ToggleUI()
+	local gui = game.CoreGui:FindFirstChild(LibScreenGuiName)
+	if gui then
+		gui.Enabled = not gui.Enabled
+	end
+end
+
+local CurrentTheme = {}
+
+function Kavo:ChangeColor(property, color)
+	if property == "Background" then
+		CurrentTheme.Background = color
+	elseif property == "SchemeColor" then
+		CurrentTheme.SchemeColor = color
+	elseif property == "Header" then
+		CurrentTheme.Header = color
+	elseif property == "TextColor" then
+		CurrentTheme.TextColor = color
+	elseif property == "ElementColor" then
+		CurrentTheme.ElementColor = color
+	end
+	UpdateAllElements()
+end
+
+function Kavo.CreateLib(libName, theme)
+	if type(theme) == "string" then
+		theme = ThemePresets[theme] or {}
+	else
+		theme = theme or {}
+	end
+	CurrentTheme = {
+		SchemeColor = theme.SchemeColor or DefaultTheme.SchemeColor,
+		Background = theme.Background or DefaultTheme.Background,
+		Header = theme.Header or DefaultTheme.Header,
+		TextColor = theme.TextColor or DefaultTheme.TextColor,
+		ElementColor = theme.ElementColor or DefaultTheme.ElementColor,
+	}
+
+	libName = libName or "Library"
+
+	for _, child in ipairs(game.CoreGui:GetChildren()) do
+		if child:IsA("ScreenGui") and child.Name == libName then
+			child:Destroy()
+		end
+	end
+
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = LibScreenGuiName
+	screenGui.Parent = game.CoreGui
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.ResetOnSpawn = false
+
+	local main = Instance.new("Frame")
+	main.Name = "Main"
+	main.Parent = screenGui
+	main.BackgroundColor3 = CurrentTheme.Background
+	main.ClipsDescendants = true
+	main.Position = UDim2.new(0.3365, 0, 0.2755, 0)
+	main.Size = UDim2.new(0, 525, 0, 318)
+	CreateCorner(main)
+
+	local mainHeader = Instance.new("Frame")
+	mainHeader.Name = "MainHeader"
+	mainHeader.Parent = main
+	mainHeader.BackgroundColor3 = CurrentTheme.Header
+	mainHeader.Size = UDim2.new(0, 525, 0, 29)
+	CreateCorner(mainHeader)
+	local headerCover = Instance.new("Frame")
+	headerCover.Name = "headerCover"
+	headerCover.Parent = mainHeader
+	headerCover.BackgroundColor3 = CurrentTheme.Header
+	headerCover.BorderSizePixel = 0
+	headerCover.Position = UDim2.new(0, 0, 0.7586, 0)
+	headerCover.Size = UDim2.new(0, 525, 0, 7)
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Parent = mainHeader
+	title.BackgroundTransparency = 1
+	title.BorderSizePixel = 0
+	title.Position = UDim2.new(0.01714, 0, 0.3448, 0)
+	title.Size = UDim2.new(0, 204, 0, 8)
+	title.Font = Enum.Font.Gotham
+	title.RichText = true
+	title.Text = libName
+	title.TextColor3 = Color3.fromRGB(245, 245, 245)
+	title.TextSize = 16
+	title.TextXAlignment = Enum.TextXAlignment.Left
+
+	local closeBtn = Instance.new("ImageButton")
+	closeBtn.Name = "CloseBtn"
+	closeBtn.Parent = mainHeader
+	closeBtn.BackgroundTransparency = 1
+	closeBtn.Position = UDim2.new(0.95, 0, 0.138, 0)
+	closeBtn.Size = UDim2.new(0, 21, 0, 21)
+	closeBtn.ZIndex = 2
+	closeBtn.Image = "rbxassetid://3926305904"
+	closeBtn.ImageRectOffset = Vector2.new(284, 4)
+	closeBtn.ImageRectSize = Vector2.new(24, 24)
+	closeBtn.MouseButton1Click:Connect(function()
+		TweenObject(closeBtn, { ImageTransparency = 1 }, 0.1)
+		task.wait()
+		TweenObject(main, {
+			Size = UDim2.new(0, 0, 0, 0),
+			Position = UDim2.new(0, main.AbsolutePosition.X + main.AbsoluteSize.X/2, 0, main.AbsolutePosition.Y + main.AbsoluteSize.Y/2)
+		}, 0.1)
+		task.wait(1)
+		screenGui:Destroy()
+	end)
+
+	Kavo:DraggingEnabled(mainHeader, main)
+
+	local mainSide = Instance.new("Frame")
+	mainSide.Name = "MainSide"
+	mainSide.Parent = main
+	mainSide.BackgroundColor3 = CurrentTheme.Header
+	mainSide.Position = UDim2.new(-7.45e-09, 0, 0.0912, 0)
+	mainSide.Size = UDim2.new(0, 149, 0, 289)
+	CreateCorner(mainSide)
+	local sideCover = Instance.new("Frame")
+	sideCover.Name = "SideCover"
+	sideCover.Parent = mainSide
+	sideCover.BackgroundColor3 = CurrentTheme.Header
+	sideCover.BorderSizePixel = 0
+	sideCover.Position = UDim2.new(0.94994, 0, 0, 0)
+	sideCover.Size = UDim2.new(0, 7, 0, 289)
+
+	local tabFrames = Instance.new("Frame")
+	tabFrames.Name = "TabFrames"
+	tabFrames.Parent = mainSide
+	tabFrames.BackgroundTransparency = 1
+	tabFrames.Position = UDim2.new(0.0439, 0, -0.00066, 0)
+	tabFrames.Size = UDim2.new(0, 135, 0, 283)
+
+	local tabListing = Instance.new("UIListLayout")
+	tabListing.Name = "TabListing"
+	tabListing.Parent = tabFrames
+	tabListing.SortOrder = Enum.SortOrder.LayoutOrder
+
+	local pages = Instance.new("Frame")
+	pages.Name = "Pages"
+	pages.Parent = main
+	pages.BackgroundTransparency = 1
+	pages.BorderSizePixel = 0
+	pages.Position = UDim2.new(0.29905, 0, 0.12264, 0)
+	pages.Size = UDim2.new(0, 360, 0, 269)
+
+	local pageContainer = Instance.new("Folder")
+	pageContainer.Name = "PageContainer"
+	pageContainer.Parent = pages
+
+	local function UpdateMainColors()
+		main.BackgroundColor3 = CurrentTheme.Background
+		mainHeader.BackgroundColor3 = CurrentTheme.Header
+		headerCover.BackgroundColor3 = CurrentTheme.Header
+		mainSide.BackgroundColor3 = CurrentTheme.Header
+		sideCover.BackgroundColor3 = CurrentTheme.Header
+	end
+	RegisterElement(UpdateMainColors)
+
+	local Tabs = {}
+	local FirstTab = true
+
+	function Tabs:NewTab(tabName)
+		tabName = tabName or "Tab"
+
+		local tabBtn = Instance.new("TextButton")
+		tabBtn.Name = tabName .. "TabButton"
+		tabBtn.Parent = tabFrames
+		tabBtn.BackgroundColor3 = CurrentTheme.SchemeColor
+		tabBtn.Size = UDim2.new(0, 135, 0, 28)
+		tabBtn.AutoButtonColor = false
+		tabBtn.Font = Enum.Font.Gotham
+		tabBtn.Text = tabName
+		tabBtn.TextColor3 = CurrentTheme.TextColor
+		tabBtn.TextSize = 14
+		tabBtn.BackgroundTransparency = 1
+		CreateCorner(tabBtn, 5)
+
+		local page = Instance.new("ScrollingFrame")
+		page.Name = "Page"
+		page.Parent = pageContainer
+		page.Active = true
+		page.BackgroundColor3 = CurrentTheme.Background
+		page.BorderSizePixel = 0
+		page.Position = UDim2.new(0, 0, -0.0037, 0)
+		page.Size = UDim2.new(1, 0, 1, 0)
+		page.ScrollBarThickness = 5
+		page.ScrollBarImageColor3 = CurrentTheme.SchemeColor
+		page.Visible = FirstTab
+
+		local pageLayout = Instance.new("UIListLayout")
+		pageLayout.Name = "PageLayout"
+		pageLayout.Parent = page
+		pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		pageLayout.Padding = UDim.new(0, 5)
+
+		local function UpdatePageSize()
+			local contentSize = pageLayout.AbsoluteContentSize
+			TweenObject(page, { CanvasSize = UDim2.new(0, contentSize.X, 0, contentSize.Y) }, 0.15)
+		end
+
+		page.ChildAdded:Connect(UpdatePageSize)
+		page.ChildRemoved:Connect(UpdatePageSize)
+
+		if FirstTab then
+			FirstTab = false
+			tabBtn.BackgroundTransparency = 0
+			UpdatePageSize()
+		else
+			page.Visible = false
+		end
+
+		tabBtn.MouseButton1Click:Connect(function()
+			UpdatePageSize()
+			for _, child in ipairs(pageContainer:GetChildren()) do
+				child.Visible = false
+			end
+			page.Visible = true
+			for _, child in ipairs(tabFrames:GetChildren()) do
+				if child:IsA("TextButton") then
+					TweenObject(child, { BackgroundTransparency = 1 }, 0.2)
+				end
+			end
+			TweenObject(tabBtn, { BackgroundTransparency = 0 }, 0.2)
+		end)
+
+		local function UpdateTabColors()
+			page.BackgroundColor3 = CurrentTheme.Background
+			page.ScrollBarImageColor3 = CurrentTheme.SchemeColor
+			tabBtn.TextColor3 = CurrentTheme.TextColor
+			tabBtn.BackgroundColor3 = CurrentTheme.SchemeColor
+		end
+		RegisterElement(UpdateTabColors)
+
+		local Sections = {}
+
+		function Sections:NewSection(sectionName, hidden)
+			sectionName = sectionName or "Section"
+			hidden = hidden or false
+
+			local sectionFrame = Instance.new("Frame")
+			sectionFrame.Name = "SectionFrame"
+			sectionFrame.Parent = page
+			sectionFrame.BackgroundColor3 = CurrentTheme.Background
+			sectionFrame.BorderSizePixel = 0
+
+			local sectionLayout = Instance.new("UIListLayout")
+			sectionLayout.Name = "SectionLayout"
+			sectionLayout.Parent = sectionFrame
+			sectionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			sectionLayout.Padding = UDim.new(0, 5)
+
+			local sectionHead = Instance.new("Frame")
+			sectionHead.Name = "SectionHead"
+			sectionHead.Parent = sectionFrame
+			sectionHead.BackgroundColor3 = CurrentTheme.SchemeColor
+			sectionHead.Size = UDim2.new(0, 352, 0, 33)
+			sectionHead.Visible = not hidden
+			CreateCorner(sectionHead)
+
+			local sectionTitle = Instance.new("TextLabel")
+			sectionTitle.Name = "SectionTitle"
+			sectionTitle.Parent = sectionHead
+			sectionTitle.BackgroundTransparency = 1
+			sectionTitle.Position = UDim2.new(0.0199, 0, 0, 0)
+			sectionTitle.Size = UDim2.new(0.9801, 0, 1, 0)
+			sectionTitle.Font = Enum.Font.Gotham
+			sectionTitle.RichText = true
+			sectionTitle.Text = sectionName
+			sectionTitle.TextColor3 = CurrentTheme.TextColor
+			sectionTitle.TextSize = 14
+			sectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+			if CurrentTheme.SchemeColor == Color3.fromRGB(255,255,255) then
+				sectionTitle.TextColor3 = Color3.fromRGB(0,0,0)
+			elseif CurrentTheme.SchemeColor == Color3.fromRGB(0,0,0) then
+				sectionTitle.TextColor3 = Color3.fromRGB(255,255,255)
+			end
+
+			local sectionInners = Instance.new("Frame")
+			sectionInners.Name = "SectionInners"
+			sectionInners.Parent = sectionFrame
+			sectionInners.BackgroundTransparency = 1
+			sectionInners.Position = UDim2.new(0, 0, 0.19075, 0)
+
+			local innerLayout = Instance.new("UIListLayout")
+			innerLayout.Name = "InnerLayout"
+			innerLayout.Parent = sectionInners
+			innerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			innerLayout.Padding = UDim.new(0, 3)
+
+			local function UpdateSectionSize()
+				local innerSize = innerLayout.AbsoluteContentSize
+				sectionInners.Size = UDim2.new(1, 0, 0, innerSize.Y)
+				local frameSize = sectionLayout.AbsoluteContentSize
+				sectionFrame.Size = UDim2.new(0, 352, 0, frameSize.Y)
+				UpdatePageSize()
+			end
+			sectionInners.ChildAdded:Connect(UpdateSectionSize)
+			sectionInners.ChildRemoved:Connect(UpdateSectionSize)
+			UpdateSectionSize()
+
+			local function UpdateSectionColors()
+				sectionFrame.BackgroundColor3 = CurrentTheme.Background
+				sectionHead.BackgroundColor3 = CurrentTheme.SchemeColor
+				sectionTitle.TextColor3 = CurrentTheme.TextColor
+				if CurrentTheme.SchemeColor == Color3.fromRGB(255,255,255) then
+					sectionTitle.TextColor3 = Color3.fromRGB(0,0,0)
+				elseif CurrentTheme.SchemeColor == Color3.fromRGB(0,0,0) then
+					sectionTitle.TextColor3 = Color3.fromRGB(255,255,255)
+				end
+			end
+			RegisterElement(UpdateSectionColors)
+
+			local Elements = {}
+
+			local function CreateElementBase(container, width, height)
+				local element = Instance.new("TextButton")
+				element.Size = UDim2.new(0, width or 352, 0, height or 33)
+				element.AutoButtonColor = false
+				element.Font = Enum.Font.SourceSans
+				element.Text = ""
+				element.TextColor3 = Color3.fromRGB(0,0,0)
+				element.TextSize = 14
+				element.ClipsDescendants = true
+				element.Parent = container
+				CreateCorner(element)
+				return element
+			end
+
+			local function CreateRippleTemplate(parent)
+				local sample = Instance.new("ImageLabel")
+				sample.Name = "RippleTemplate"
+				sample.Parent = parent
+				sample.BackgroundTransparency = 1
+				sample.Image = "http://www.roblox.com/asset/?id=4560909609"
+				sample.ImageColor3 = CurrentTheme.SchemeColor
+				sample.ImageTransparency = 0.6
+				return sample
+			end
+
+			local function SetupHover(element)
+				local hovering = false
+				element.MouseEnter:Connect(function()
+					if not hovering then
+						TweenObject(element, {
+							BackgroundColor3 = Color3.fromRGB(
+								CurrentTheme.ElementColor.r * 255 + 8,
+								CurrentTheme.ElementColor.g * 255 + 9,
+								CurrentTheme.ElementColor.b * 255 + 10
+							)
+						}, 0.1)
+						hovering = true
+					end
+				end)
+				element.MouseLeave:Connect(function()
+					if hovering then
+						TweenObject(element, {
+							BackgroundColor3 = CurrentTheme.ElementColor
+						}, 0.1)
+						hovering = false
+					end
+				end)
+				return hovering
+			end
+
+			function Elements:NewButton(label, tooltip, callback)
+				label = label or "Click Me!"
+				callback = callback or function() end
+
+				local element = CreateElementBase(sectionInners)
+				element.BackgroundColor3 = CurrentTheme.ElementColor
+
+				local icon = Instance.new("ImageLabel")
+				icon.Name = "Icon"
+				icon.Parent = element
+				icon.BackgroundTransparency = 1
+				icon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				icon.Size = UDim2.new(0, 21, 0, 21)
+				icon.Image = "rbxassetid://3926305904"
+				icon.ImageColor3 = CurrentTheme.SchemeColor
+				icon.ImageRectOffset = Vector2.new(84, 204)
+				icon.ImageRectSize = Vector2.new(36, 36)
+
+				local text = Instance.new("TextLabel")
+				text.Name = "Text"
+				text.Parent = element
+				text.BackgroundTransparency = 1
+				text.Position = UDim2.new(0.0967, 0, 0.2727, 0)
+				text.Size = UDim2.new(0, 314, 0, 14)
+				text.Font = Enum.Font.GothamSemibold
+				text.RichText = true
+				text.Text = label
+				text.TextColor3 = CurrentTheme.TextColor
+				text.TextSize = 14
+				text.TextXAlignment = Enum.TextXAlignment.Left
+
+				local rippleTemplate = CreateRippleTemplate(element)
+				SetupHover(element)
+
+				element.MouseButton1Click:Connect(function()
+					callback()
+					CloneWithRipple(element, rippleTemplate)
+				end)
+
+				local function UpdateButtonColors()
+					element.BackgroundColor3 = CurrentTheme.ElementColor
+					icon.ImageColor3 = CurrentTheme.SchemeColor
+					text.TextColor3 = CurrentTheme.TextColor
+				end
+				RegisterElement(UpdateButtonColors)
+
+				local ButtonFunctions = {}
+				function ButtonFunctions:UpdateButton(newLabel)
+					text.Text = newLabel
+				end
+				return ButtonFunctions
+			end
+
+			function Elements:NewTextBox(label, tooltip, callback)
+				label = label or "Textbox"
+				callback = callback or function() end
+
+				local element = CreateElementBase(sectionInners)
+				element.BackgroundColor3 = CurrentTheme.ElementColor
+
+				local icon = Instance.new("ImageLabel")
+				icon.Name = "Icon"
+				icon.Parent = element
+				icon.BackgroundTransparency = 1
+				icon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				icon.Size = UDim2.new(0, 21, 0, 21)
+				icon.Image = "rbxassetid://3926305904"
+				icon.ImageColor3 = CurrentTheme.SchemeColor
+				icon.ImageRectOffset = Vector2.new(324, 604)
+				icon.ImageRectSize = Vector2.new(36, 36)
+
+				local text = Instance.new("TextLabel")
+				text.Name = "Text"
+				text.Parent = element
+				text.BackgroundTransparency = 1
+				text.Position = UDim2.new(0.0967, 0, 0.2727, 0)
+				text.Size = UDim2.new(0, 138, 0, 14)
+				text.Font = Enum.Font.GothamSemibold
+				text.RichText = true
+				text.Text = label
+				text.TextColor3 = CurrentTheme.TextColor
+				text.TextSize = 14
+				text.TextXAlignment = Enum.TextXAlignment.Left
+
+				local textBox = Instance.new("TextBox")
+				textBox.Name = "TextBox"
+				textBox.Parent = element
+				textBox.BackgroundColor3 = CurrentTheme.ElementColor
+				textBox.BorderSizePixel = 0
+				textBox.ClipsDescendants = true
+				textBox.Position = UDim2.new(0.48875, 0, 0.2121, 0)
+				textBox.Size = UDim2.new(0, 150, 0, 18)
+				textBox.ZIndex = 99
+				textBox.ClearTextOnFocus = false
+				textBox.Font = Enum.Font.Gotham
+				textBox.PlaceholderColor3 = CurrentTheme.SchemeColor
+				textBox.PlaceholderText = "Type here!"
+				textBox.Text = ""
+				textBox.TextColor3 = CurrentTheme.SchemeColor
+				textBox.TextSize = 12
+				CreateCorner(textBox)
+
+				SetupHover(element)
+
+				textBox.FocusLost:Connect(function(enterPressed)
+					if enterPressed then
+						callback(textBox.Text)
+						task.wait(0.18)
+						textBox.Text = ""
+					end
+				end)
+
+				local function UpdateTextBoxColors()
+					element.BackgroundColor3 = CurrentTheme.ElementColor
+					icon.ImageColor3 = CurrentTheme.SchemeColor
+					text.TextColor3 = CurrentTheme.TextColor
+					textBox.BackgroundColor3 = Color3.fromRGB(
+						CurrentTheme.ElementColor.r * 255 - 6,
+						CurrentTheme.ElementColor.g * 255 - 6,
+						CurrentTheme.ElementColor.b * 255 - 7
+					)
+					textBox.PlaceholderColor3 = CurrentTheme.SchemeColor
+					textBox.TextColor3 = CurrentTheme.SchemeColor
+				end
+				RegisterElement(UpdateTextBoxColors)
+			end
+
+			function Elements:NewToggle(label, tooltip, callback)
+				label = label or "Toggle"
+				callback = callback or function() end
+
+				local state = false
+
+				local element = CreateElementBase(sectionInners)
+				element.BackgroundColor3 = CurrentTheme.ElementColor
+
+				local disabledIcon = Instance.new("ImageLabel")
+				disabledIcon.Name = "DisabledIcon"
+				disabledIcon.Parent = element
+				disabledIcon.BackgroundTransparency = 1
+				disabledIcon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				disabledIcon.Size = UDim2.new(0, 21, 0, 21)
+				disabledIcon.Image = "rbxassetid://3926309567"
+				disabledIcon.ImageColor3 = CurrentTheme.SchemeColor
+				disabledIcon.ImageRectOffset = Vector2.new(628, 420)
+				disabledIcon.ImageRectSize = Vector2.new(48, 48)
+
+				local enabledIcon = Instance.new("ImageLabel")
+				enabledIcon.Name = "EnabledIcon"
+				enabledIcon.Parent = element
+				enabledIcon.BackgroundTransparency = 1
+				enabledIcon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				enabledIcon.Size = UDim2.new(0, 21, 0, 21)
+				enabledIcon.Image = "rbxassetid://3926309567"
+				enabledIcon.ImageColor3 = CurrentTheme.SchemeColor
+				enabledIcon.ImageRectOffset = Vector2.new(784, 420)
+				enabledIcon.ImageRectSize = Vector2.new(48, 48)
+				enabledIcon.ImageTransparency = 1
+
+				local text = Instance.new("TextLabel")
+				text.Name = "Text"
+				text.Parent = element
+				text.BackgroundTransparency = 1
+				text.Position = UDim2.new(0.0967, 0, 0.2727, 0)
+				text.Size = UDim2.new(0, 288, 0, 14)
+				text.Font = Enum.Font.GothamSemibold
+				text.RichText = true
+				text.Text = label
+				text.TextColor3 = CurrentTheme.TextColor
+				text.TextSize = 14
+				text.TextXAlignment = Enum.TextXAlignment.Left
+
+				local rippleTemplate = CreateRippleTemplate(element)
+				SetupHover(element)
+
+				element.MouseButton1Click:Connect(function()
+					state = not state
+					if state then
+						TweenObject(enabledIcon, { ImageTransparency = 0 }, 0.11)
+					else
+						TweenObject(enabledIcon, { ImageTransparency = 1 }, 0.11)
+					end
+					CloneWithRipple(element, rippleTemplate)
+					callback(state)
+				end)
+
+				local function UpdateToggleColors()
+					element.BackgroundColor3 = CurrentTheme.ElementColor
+					disabledIcon.ImageColor3 = CurrentTheme.SchemeColor
+					enabledIcon.ImageColor3 = CurrentTheme.SchemeColor
+					text.TextColor3 = CurrentTheme.TextColor
+				end
+				RegisterElement(UpdateToggleColors)
+
+				local ToggleFunctions = {}
+				function ToggleFunctions:UpdateToggle(newLabel, newState)
+					if newLabel then text.Text = newLabel end
+					if newState ~= nil then
+						state = newState
+						if state then
+							TweenObject(enabledIcon, { ImageTransparency = 0 }, 0.11)
+						else
+							TweenObject(enabledIcon, { ImageTransparency = 1 }, 0.11)
+						end
+						callback(state)
+					end
+				end
+				return ToggleFunctions
+			end
+
+			function Elements:NewSlider(label, tooltip, maxVal, minVal, callback)
+				label = label or "Slider"
+				maxVal = maxVal or 500
+				minVal = minVal or 16
+				callback = callback or function() end
+
+				local element = CreateElementBase(sectionInners)
+				element.BackgroundColor3 = CurrentTheme.ElementColor
+
+				local icon = Instance.new("ImageLabel")
+				icon.Name = "Icon"
+				icon.Parent = element
+				icon.BackgroundTransparency = 1
+				icon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				icon.Size = UDim2.new(0, 21, 0, 21)
+				icon.Image = "rbxassetid://3926307971"
+				icon.ImageColor3 = CurrentTheme.SchemeColor
+				icon.ImageRectOffset = Vector2.new(404, 164)
+				icon.ImageRectSize = Vector2.new(36, 36)
+
+				local text = Instance.new("TextLabel")
+				text.Name = "Text"
+				text.Parent = element
+				text.BackgroundTransparency = 1
+				text.Position = UDim2.new(0.0967, 0, 0.2727, 0)
+				text.Size = UDim2.new(0, 138, 0, 14)
+				text.Font = Enum.Font.GothamSemibold
+				text.RichText = true
+				text.Text = label
+				text.TextColor3 = CurrentTheme.TextColor
+				text.TextSize = 14
+				text.TextXAlignment = Enum.TextXAlignment.Left
+
+				local valueDisplay = Instance.new("TextLabel")
+				valueDisplay.Name = "ValueDisplay"
+				valueDisplay.Parent = element
+				valueDisplay.BackgroundTransparency = 1
+				valueDisplay.Position = UDim2.new(0.3524, 0, 0.2727, 0)
+				valueDisplay.Size = UDim2.new(0, 41, 0, 14)
+				valueDisplay.Font = Enum.Font.GothamSemibold
+				valueDisplay.Text = tostring(minVal)
+				valueDisplay.TextColor3 = CurrentTheme.TextColor
+				valueDisplay.TextSize = 14
+				valueDisplay.TextTransparency = 1
+				valueDisplay.TextXAlignment = Enum.TextXAlignment.Right
+
+				local sliderTrack = Instance.new("TextButton")
+				sliderTrack.Name = "SliderTrack"
+				sliderTrack.Parent = element
+				sliderTrack.BackgroundColor3 = CurrentTheme.ElementColor
+				sliderTrack.BorderSizePixel = 0
+				sliderTrack.Position = UDim2.new(0.48875, 0, 0.3939, 0)
+				sliderTrack.Size = UDim2.new(0, 149, 0, 6)
+				sliderTrack.AutoButtonColor = false
+				sliderTrack.Text = ""
+				CreateCorner(sliderTrack)
+
+				local sliderFill = Instance.new("Frame")
+				sliderFill.Name = "SliderFill"
+				sliderFill.Parent = sliderTrack
+				sliderFill.BackgroundColor3 = CurrentTheme.SchemeColor
+				sliderFill.BorderSizePixel = 0
+				sliderFill.Size = UDim2.new(-0.67114, 100, 1, 0)
+				CreateCorner(sliderFill)
+
+				SetupHover(element)
+
+				local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+				local uis = UserInputService
+				local dragging = false
+				local moveConn, releaseConn
+
+				local function UpdateSlider(value)
+					value = math.clamp(value, minVal, maxVal)
+					local ratio = (value - minVal) / (maxVal - minVal)
+					local size = ratio * 149
+					sliderFill.Size = UDim2.new(0, size, 0, 6)
+					valueDisplay.Text = tostring(math.floor(value))
+					callback(value)
+				end
+
+				sliderTrack.MouseButton1Down:Connect(function()
+					dragging = true
+					TweenObject(valueDisplay, { TextTransparency = 0 }, 0.1)
+					local x = math.clamp(mouse.X - sliderFill.AbsolutePosition.X, 0, 149)
+					local ratio = x / 149
+					local value = minVal + ratio * (maxVal - minVal)
+					UpdateSlider(value)
+
+					moveConn = mouse.Move:Connect(function()
+						if dragging then
+							local x2 = math.clamp(mouse.X - sliderFill.AbsolutePosition.X, 0, 149)
+							local ratio2 = x2 / 149
+							local val = minVal + ratio2 * (maxVal - minVal)
+							UpdateSlider(val)
+						end
+					end)
+					releaseConn = uis.InputEnded:Connect(function(input)
+						if input.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
+							dragging = false
+							TweenObject(valueDisplay, { TextTransparency = 1 }, 0.1)
+							if moveConn then moveConn:Disconnect() end
+							if releaseConn then releaseConn:Disconnect() end
+						end
+					end)
+				end)
+
+				local function UpdateSliderColors()
+					element.BackgroundColor3 = CurrentTheme.ElementColor
+					icon.ImageColor3 = CurrentTheme.SchemeColor
+					text.TextColor3 = CurrentTheme.TextColor
+					valueDisplay.TextColor3 = CurrentTheme.TextColor
+					sliderTrack.BackgroundColor3 = CurrentTheme.ElementColor
+					sliderFill.BackgroundColor3 = CurrentTheme.SchemeColor
+				end
+				RegisterElement(UpdateSliderColors)
+			end
+
+			function Elements:NewDropdown(label, tooltip, items, callback)
+				label = label or "Dropdown"
+				items = items or {}
+				callback = callback or function() end
+
+				local open = false
+
+				local dropFrame = Instance.new("Frame")
+				dropFrame.Name = "DropFrame"
+				dropFrame.Parent = sectionInners
+				dropFrame.BackgroundColor3 = CurrentTheme.Background
+				dropFrame.BorderSizePixel = 0
+				dropFrame.Size = UDim2.new(0, 352, 0, 33)
+				dropFrame.ClipsDescendants = true
+
+				local header = Instance.new("TextButton")
+				header.Name = "Header"
+				header.Parent = dropFrame
+				header.BackgroundColor3 = CurrentTheme.ElementColor
+				header.Size = UDim2.new(0, 352, 0, 33)
+				header.AutoButtonColor = false
+				header.Text = ""
+				header.ClipsDescendants = true
+				CreateCorner(header)
+
+				local icon = Instance.new("ImageLabel")
+				icon.Name = "Icon"
+				icon.Parent = header
+				icon.BackgroundTransparency = 1
+				icon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				icon.Size = UDim2.new(0, 21, 0, 21)
+				icon.Image = "rbxassetid://3926305904"
+				icon.ImageColor3 = CurrentTheme.SchemeColor
+				icon.ImageRectOffset = Vector2.new(644, 364)
+				icon.ImageRectSize = Vector2.new(36, 36)
+
+				local text = Instance.new("TextLabel")
+				text.Name = "Text"
+				text.Parent = header
+				text.BackgroundTransparency = 1
+				text.Position = UDim2.new(0.097, 0, 0.273, 0)
+				text.Size = UDim2.new(0, 138, 0, 14)
+				text.Font = Enum.Font.GothamSemibold
+				text.RichText = true
+				text.Text = label
+				text.TextColor3 = CurrentTheme.TextColor
+				text.TextSize = 14
+				text.TextXAlignment = Enum.TextXAlignment.Left
+
+				local selectedText = Instance.new("TextLabel")
+				selectedText.Name = "SelectedText"
+				selectedText.Parent = header
+				selectedText.BackgroundTransparency = 1
+				selectedText.Position = UDim2.new(0.5, 0, 0.273, 0)
+				selectedText.Size = UDim2.new(0, 120, 0, 14)
+				selectedText.Font = Enum.Font.GothamSemibold
+				selectedText.Text = ""
+				selectedText.TextColor3 = CurrentTheme.TextColor
+				selectedText.TextSize = 14
+				selectedText.TextXAlignment = Enum.TextXAlignment.Right
+
+				local rippleTemplate = CreateRippleTemplate(header)
+				SetupHover(header)
+
+				local itemList = Instance.new("UIListLayout")
+				itemList.Name = "ItemList"
+				itemList.Parent = dropFrame
+				itemList.SortOrder = Enum.SortOrder.LayoutOrder
+				itemList.Padding = UDim.new(0, 3)
+
+				local function UpdateDropdownSize()
+					local contentSize = itemList.AbsoluteContentSize
+					if open then
+						dropFrame.Size = UDim2.new(0, 352, 0, 33 + contentSize.Y)
+					else
+						dropFrame.Size = UDim2.new(0, 352, 0, 33)
+					end
+					UpdateSectionSize()
+				end
+
+				header.MouseButton1Click:Connect(function()
+					open = not open
+					CloneWithRipple(header, rippleTemplate)
+					UpdateDropdownSize()
+				end)
+
+				local function PopulateItems(newItems)
+					for _, child in ipairs(dropFrame:GetChildren()) do
+						if child:IsA("TextButton") and child ~= header then
+							child:Destroy()
+						end
+					end
+					for _, item in ipairs(newItems) do
+						local btn = Instance.new("TextButton")
+						btn.Name = "Item"
+						btn.Parent = dropFrame
+						btn.BackgroundColor3 = CurrentTheme.ElementColor
+						btn.Size = UDim2.new(0, 352, 0, 33)
+						btn.AutoButtonColor = false
+						btn.Font = Enum.Font.GothamSemibold
+						btn.Text = "  " .. item
+						btn.TextColor3 = CurrentTheme.TextColor
+						btn.TextSize = 14
+						btn.TextXAlignment = Enum.TextXAlignment.Left
+						btn.ClipsDescendants = true
+						CreateCorner(btn)
+
+						local itemHover = false
+						btn.MouseEnter:Connect(function()
+							if not itemHover then
+								TweenObject(btn, {
+									BackgroundColor3 = Color3.fromRGB(
+										CurrentTheme.ElementColor.r * 255 + 8,
+										CurrentTheme.ElementColor.g * 255 + 9,
+										CurrentTheme.ElementColor.b * 255 + 10
+									)
+								}, 0.1)
+								itemHover = true
+							end
+						end)
+						btn.MouseLeave:Connect(function()
+							if itemHover then
+								TweenObject(btn, {
+									BackgroundColor3 = CurrentTheme.ElementColor
+								}, 0.1)
+								itemHover = false
+							end
+						end)
+
+						btn.MouseButton1Click:Connect(function()
+							selectedText.Text = item
+							callback(item)
+							open = false
+							UpdateDropdownSize()
+							CloneWithRipple(btn, rippleTemplate)
+						end)
+
+						local function UpdateItemColors()
+							btn.BackgroundColor3 = CurrentTheme.ElementColor
+							btn.TextColor3 = CurrentTheme.TextColor
+						end
+						RegisterElement(UpdateItemColors)
+					end
+					UpdateDropdownSize()
+				end
+				PopulateItems(items)
+
+				local function UpdateDropdownColors()
+					dropFrame.BackgroundColor3 = CurrentTheme.Background
+					header.BackgroundColor3 = CurrentTheme.ElementColor
+					icon.ImageColor3 = CurrentTheme.SchemeColor
+					text.TextColor3 = CurrentTheme.TextColor
+					selectedText.TextColor3 = CurrentTheme.TextColor
+				end
+				RegisterElement(UpdateDropdownColors)
+
+				local DropFunctions = {}
+				function DropFunctions:Refresh(newItems)
+					items = newItems or {}
+					selectedText.Text = ""
+					PopulateItems(items)
+				end
+				return DropFunctions
+			end
+
+			function Elements:NewKeybind(label, tooltip, defaultKey, callback)
+				label = label or "KeybindText"
+				defaultKey = defaultKey or Enum.KeyCode.Unknown
+				callback = callback or function() end
+
+				local currentKey = defaultKey
+
+				local element = CreateElementBase(sectionInners)
+				element.BackgroundColor3 = CurrentTheme.ElementColor
+
+				local icon = Instance.new("ImageLabel")
+				icon.Name = "Icon"
+				icon.Parent = element
+				icon.BackgroundTransparency = 1
+				icon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				icon.Size = UDim2.new(0, 21, 0, 21)
+				icon.Image = "rbxassetid://3926305904"
+				icon.ImageColor3 = CurrentTheme.SchemeColor
+				icon.ImageRectOffset = Vector2.new(364, 284)
+				icon.ImageRectSize = Vector2.new(36, 36)
+
+				local text = Instance.new("TextLabel")
+				text.Name = "Text"
+				text.Parent = element
+				text.BackgroundTransparency = 1
+				text.Position = UDim2.new(0.0967, 0, 0.2727, 0)
+				text.Size = UDim2.new(0, 222, 0, 14)
+				text.Font = Enum.Font.GothamSemibold
+				text.RichText = true
+				text.Text = label
+				text.TextColor3 = CurrentTheme.TextColor
+				text.TextSize = 14
+				text.TextXAlignment = Enum.TextXAlignment.Left
+
+				local keyDisplay = Instance.new("TextLabel")
+				keyDisplay.Name = "KeyDisplay"
+				keyDisplay.Parent = element
+				keyDisplay.BackgroundTransparency = 1
+				keyDisplay.Position = UDim2.new(0.7274, 0, 0.2727, 0)
+				keyDisplay.Size = UDim2.new(0, 70, 0, 14)
+				keyDisplay.Font = Enum.Font.GothamSemibold
+				keyDisplay.Text = defaultKey.Name
+				keyDisplay.TextColor3 = CurrentTheme.SchemeColor
+				keyDisplay.TextSize = 14
+				keyDisplay.TextXAlignment = Enum.TextXAlignment.Right
+
+				local rippleTemplate = CreateRippleTemplate(element)
+				SetupHover(element)
+
+				element.MouseButton1Click:Connect(function()
+					keyDisplay.Text = "..."
+					local input = UserInputService.InputBegan:Wait()
+					if input.KeyCode ~= Enum.KeyCode.Unknown then
+						currentKey = input.KeyCode
+						keyDisplay.Text = currentKey.Name
+						CloneWithRipple(element, rippleTemplate)
+					end
+				end)
+
+				UserInputService.InputBegan:Connect(function(input, processed)
+					if not processed and input.KeyCode == currentKey then
+						callback()
+					end
+				end)
+
+				local function UpdateKeybindColors()
+					element.BackgroundColor3 = CurrentTheme.ElementColor
+					icon.ImageColor3 = CurrentTheme.SchemeColor
+					text.TextColor3 = CurrentTheme.TextColor
+					keyDisplay.TextColor3 = CurrentTheme.SchemeColor
+				end
+				RegisterElement(UpdateKeybindColors)
+			end
+
+			function Elements:NewColorPicker(label, tooltip, defaultColor, callback)
+				label = label or "ColorPicker"
+				defaultColor = defaultColor or Color3.fromRGB(1,1,1)
+				callback = callback or function() end
+
+				local hue, sat, val = Color3.toHSV(defaultColor)
+				local open = false
+
+				local element = CreateElementBase(sectionInners)
+				element.BackgroundColor3 = CurrentTheme.ElementColor
+				element.BackgroundTransparency = 1
+
+				local header = Instance.new("TextButton")
+				header.Name = "Header"
+				header.Parent = element
+				header.BackgroundColor3 = CurrentTheme.ElementColor
+				header.Size = UDim2.new(0, 352, 0, 33)
+				header.AutoButtonColor = false
+				header.Text = ""
+				header.ClipsDescendants = true
+				CreateCorner(header)
+
+				local icon = Instance.new("ImageLabel")
+				icon.Name = "Icon"
+				icon.Parent = header
+				icon.BackgroundTransparency = 1
+				icon.Position = UDim2.new(0.02, 0, 0.18, 0)
+				icon.Size = UDim2.new(0, 21, 0, 21)
+				icon.Image = "rbxassetid://3926305904"
+				icon.ImageColor3 = CurrentTheme.SchemeColor
+				icon.ImageRectOffset = Vector2.new(44, 964)
+				icon.ImageRectSize = Vector2.new(36, 36)
+
+				local text = Instance.new("TextLabel")
+				text.Name = "Text"
+				text.Parent = header
+				text.BackgroundTransparency = 1
+				text.Position = UDim2.new(0.0967, 0, 0.2727, 0)
+				text.Size = UDim2.new(0, 288, 0, 14)
+				text.Font = Enum.Font.GothamSemibold
+				text.RichText = true
+				text.Text = label
+				text.TextColor3 = CurrentTheme.TextColor
+				text.TextSize = 14
+				text.TextXAlignment = Enum.TextXAlignment.Left
+
+				local colorDisplay = Instance.new("Frame")
+				colorDisplay.Name = "ColorDisplay"
+				colorDisplay.Parent = header
+				colorDisplay.BackgroundColor3 = defaultColor
+				colorDisplay.Position = UDim2.new(0.7926, 0, 0.2121, 0)
+				colorDisplay.Size = UDim2.new(0, 42, 0, 18)
+				CreateCorner(colorDisplay)
+
+				local rippleTemplate = CreateRippleTemplate(header)
+				SetupHover(header)
+
+				local innerPanel = Instance.new("Frame")
+				innerPanel.Name = "InnerPanel"
+				innerPanel.Parent = element
+				innerPanel.BackgroundColor3 = CurrentTheme.ElementColor
+				innerPanel.Position = UDim2.new(0, 0, 0.2553, 0)
+				innerPanel.Size = UDim2.new(0, 352, 0, 105)
+				innerPanel.Visible = false
+				CreateCorner(innerPanel)
+
+				local hueSatMap = Instance.new("ImageButton")
+				hueSatMap.Name = "HueSatMap"
+				hueSatMap.Parent = innerPanel
+				hueSatMap.BackgroundTransparency = 1
+				hueSatMap.Position = UDim2.new(0.0199, 0, 0.0476, 0)
+				hueSatMap.Size = UDim2.new(0, 211, 0, 93)
+				hueSatMap.Image = "http://www.roblox.com/asset/?id=6523286724"
+				CreateCorner(hueSatMap)
+
+				local hueSatCursor = Instance.new("ImageLabel")
+				hueSatCursor.Name = "HueSatCursor"
+				hueSatCursor.Parent = hueSatMap
+				hueSatCursor.BackgroundTransparency = 1
+				hueSatCursor.Size = UDim2.new(0, 14, 0, 14)
+				hueSatCursor.Image = "rbxassetid://3926309567"
+				hueSatCursor.ImageColor3 = Color3.fromRGB(0,0,0)
+				hueSatCursor.ImageRectOffset = Vector2.new(628, 420)
+				hueSatCursor.ImageRectSize = Vector2.new(48, 48)
+
+				local valueMap = Instance.new("ImageButton")
+				valueMap.Name = "ValueMap"
+				valueMap.Parent = innerPanel
+				valueMap.BackgroundTransparency = 1
+				valueMap.Position = UDim2.new(0.6364, 0, 0.0476, 0)
+				valueMap.Size = UDim2.new(0, 18, 0, 93)
+				valueMap.Image = "http://www.roblox.com/asset/?id=6523291212"
+				CreateCorner(valueMap)
+
+				local valueCursor = Instance.new("ImageLabel")
+				valueCursor.Name = "ValueCursor"
+				valueCursor.Parent = valueMap
+				valueCursor.AnchorPoint = Vector2.new(0.5, 0)
+				valueCursor.BackgroundTransparency = 1
+				valueCursor.Size = UDim2.new(0, 14, 0, 14)
+				valueCursor.Image = "rbxassetid://3926309567"
+				valueCursor.ImageColor3 = Color3.fromRGB(0,0,0)
+				valueCursor.ImageRectOffset = Vector2.new(628, 420)
+				valueCursor.ImageRectSize = Vector2.new(48, 48)
+
+				local rainbowEnabled = Instance.new("ImageLabel")
+				rainbowEnabled.Name = "RainbowEnabled"
+				rainbowEnabled.Parent = innerPanel
+				rainbowEnabled.BackgroundTransparency = 1
+				rainbowEnabled.Position = UDim2.new(0.705, 0, 0.066, 0)
+				rainbowEnabled.Size = UDim2.new(0, 21, 0, 21)
+				rainbowEnabled.Image = "rbxassetid://3926309567"
+				rainbowEnabled.ImageColor3 = CurrentTheme.SchemeColor
+				rainbowEnabled.ImageRectOffset = Vector2.new(784, 420)
+				rainbowEnabled.ImageRectSize = Vector2.new(48, 48)
+				rainbowEnabled.ImageTransparency = 1
+
+				local rainbowLabel = Instance.new("TextLabel")
+				rainbowLabel.Name = "RainbowLabel"
+				rainbowLabel.Parent = innerPanel
+				rainbowLabel.BackgroundTransparency = 1
+				rainbowLabel.Position = UDim2.new(0.78, 0, 0.1, 0)
+				rainbowLabel.Size = UDim2.new(0, 278, 0, 14)
+				rainbowLabel.Font = Enum.Font.GothamSemibold
+				rainbowLabel.Text = "Rainbow"
+				rainbowLabel.TextColor3 = CurrentTheme.TextColor
+				rainbowLabel.TextSize = 14
+				rainbowLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+				local rainbowToggle = Instance.new("TextButton")
+				rainbowToggle.Name = "RainbowToggle"
+				rainbowToggle.Parent = rainbowEnabled
+				rainbowToggle.BackgroundTransparency = 1
+				rainbowToggle.Size = UDim2.new(1, 0, 1, 0)
+				rainbowToggle.Text = ""
+
+				local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+				local uis = UserInputService
+				local pickingHueSat = false
+				local pickingValue = false
+				local rainbowActive = false
+				local rainbowConnection
+
+				local function SetColor(h, s, v)
+					hue, sat, val = h, s, v
+					local cx = hueSatCursor.AbsoluteSize.X / 2
+					local cy = hueSatCursor.AbsoluteSize.Y / 2
+					hueSatCursor.Position = UDim2.new(h, -cx, s-1, -cy)
+					valueCursor.Position = UDim2.new(0.5, 0, v-1, -valueCursor.AbsoluteSize.Y/2)
+					local color = Color3.fromHSV(h, s, v)
+					colorDisplay.BackgroundColor3 = color
+					callback(color)
+				end
+
+				local function UpdatePicker()
+					if pickingHueSat then
+						local x = math.clamp(mouse.X - hueSatMap.AbsolutePosition.X, 0, hueSatMap.AbsoluteSize.X)
+						local y = math.clamp(mouse.Y - hueSatMap.AbsolutePosition.Y, 0, hueSatMap.AbsoluteSize.Y)
+						local h = x / hueSatMap.AbsoluteSize.X
+						local s = y / hueSatMap.AbsoluteSize.Y
+						SetColor(h, s, val)
+					end
+					if pickingValue then
+						local y = math.clamp(mouse.Y - valueMap.AbsolutePosition.Y, 0, valueMap.AbsoluteSize.Y)
+						local v = y / valueMap.AbsoluteSize.Y
+						SetColor(hue, sat, v)
+					end
+				end
+
+				local function ToggleRainbow()
+					rainbowActive = not rainbowActive
+					if rainbowActive then
+						TweenObject(rainbowEnabled, { ImageTransparency = 0 }, 0.1)
+						rainbowConnection = RunService.RenderStepped:Connect(function()
+							local h = (hue + 0.01) % 1
+							SetColor(h, sat, val)
+						end)
+					else
+						TweenObject(rainbowEnabled, { ImageTransparency = 1 }, 0.1)
+						if rainbowConnection then rainbowConnection:Disconnect() end
+					end
+				end
+
+				hueSatMap.MouseButton1Down:Connect(function() pickingHueSat = true end)
+				valueMap.MouseButton1Down:Connect(function() pickingValue = true end)
+				uis.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 then
+						pickingHueSat = false
+						pickingValue = false
+					end
+				end)
+				mouse.Move:Connect(UpdatePicker)
+				rainbowToggle.MouseButton1Click:Connect(ToggleRainbow)
+
+				header.MouseButton1Click:Connect(function()
+					open = not open
+					innerPanel.Visible = open
+					element.Size = open and UDim2.new(0, 352, 0, 141) or UDim2.new(0, 352, 0, 33)
+					CloneWithRipple(header, rippleTemplate)
+					UpdateSectionSize()
+				end)
+
+				local function UpdateColorPickerColors()
+					element.BackgroundColor3 = CurrentTheme.ElementColor
+					header.BackgroundColor3 = CurrentTheme.ElementColor
+					icon.ImageColor3 = CurrentTheme.SchemeColor
+					text.TextColor3 = CurrentTheme.TextColor
+					innerPanel.BackgroundColor3 = CurrentTheme.ElementColor
+					rainbowEnabled.ImageColor3 = CurrentTheme.SchemeColor
+					rainbowLabel.TextColor3 = CurrentTheme.TextColor
+				end
+				RegisterElement(UpdateColorPickerColors)
+
+				SetColor(hue, sat, val)
+			end
+
+			function Elements:NewLabel(text)
+				local label = Instance.new("TextLabel")
+				label.Name = "Label"
+				label.Parent = sectionInners
+				label.BackgroundColor3 = CurrentTheme.SchemeColor
+				label.BorderSizePixel = 0
+				label.ClipsDescendants = true
+				label.Size = UDim2.new(0, 352, 0, 33)
+				label.Font = Enum.Font.Gotham
+				label.Text = "  " .. text
+				label.RichText = true
+				label.TextColor3 = CurrentTheme.TextColor
+				label.TextSize = 14
+				label.TextXAlignment = Enum.TextXAlignment.Left
+				CreateCorner(label)
+				if CurrentTheme.SchemeColor == Color3.fromRGB(255,255,255) then
+					label.TextColor3 = Color3.fromRGB(0,0,0)
+				elseif CurrentTheme.SchemeColor == Color3.fromRGB(0,0,0) then
+					label.TextColor3 = Color3.fromRGB(255,255,255)
+				end
+
+				local function UpdateLabelColors()
+					label.BackgroundColor3 = CurrentTheme.SchemeColor
+					label.TextColor3 = CurrentTheme.TextColor
+					if CurrentTheme.SchemeColor == Color3.fromRGB(255,255,255) then
+						label.TextColor3 = Color3.fromRGB(0,0,0)
+					elseif CurrentTheme.SchemeColor == Color3.fromRGB(0,0,0) then
+						label.TextColor3 = Color3.fromRGB(255,255,255)
+					end
+				end
+				RegisterElement(UpdateLabelColors)
+
+				UpdateSectionSize()
+
+				local LabelFunctions = {}
+				function LabelFunctions:UpdateLabel(newText)
+					label.Text = "  " .. newText
+				end
+				return LabelFunctions
+			end
+
+			return Elements
+		end
+
+		return Sections
+	end
+
+	return Tabs
+end
+
+return Kavo
