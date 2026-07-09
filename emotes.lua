@@ -4626,6 +4626,11 @@ do -- Module: StarterGui.AFEMMax.SBT
 				return self.F.Acceleration(t)
 			elseif key == "Goal" then
 				return self.ExternalForce / self.Constant
+			elseif key == "Frequency" then
+				local damping = self.Damping
+				local stiffness = self.Constant
+				local mass = self.Mass
+				return sqrt(-damping * damping + 4 * stiffness / mass) / (2 * PI)
 			else
 				return rawget(self, key)
 			end
@@ -4636,8 +4641,8 @@ do -- Module: StarterGui.AFEMMax.SBT
 		SpringTween.__index = SpringTween
 
 		local TypeHandlers = {
-			number = function(obj, property, mass, stiffness, damping)
-				local spring = Spring.new(mass, stiffness, damping, obj[property], 0, obj[property])
+			number = function(obj, property, mass, damping, stiffness)
+				local spring = Spring.new(mass, damping, stiffness, obj[property], 0, obj[property])
 				return {
 					springSet = { spring },
 					updateFunc = function() obj[property] = spring.Offset end,
@@ -4645,11 +4650,11 @@ do -- Module: StarterGui.AFEMMax.SBT
 					setOffset = function(offset) spring:SetOffset(offset) end,
 				}
 			end,
-			UDim2 = function(obj, property, mass, stiffness, damping)
-				local sXOff = Spring.new(mass, stiffness, damping, obj[property].X.Offset, 0, obj[property].X.Offset)
-				local sXSc = Spring.new(mass, stiffness, damping, obj[property].X.Scale, 0, obj[property].X.Scale)
-				local sYOff = Spring.new(mass, stiffness, damping, obj[property].Y.Offset, 0, obj[property].Y.Offset)
-				local sYSc = Spring.new(mass, stiffness, damping, obj[property].Y.Scale, 0, obj[property].Y.Scale)
+			UDim2 = function(obj, property, mass, damping, stiffness)
+				local sXOff = Spring.new(mass, damping, stiffness, obj[property].X.Offset, 0, obj[property].X.Offset)
+				local sXSc = Spring.new(mass, damping, stiffness, obj[property].X.Scale, 0, obj[property].X.Scale)
+				local sYOff = Spring.new(mass, damping, stiffness, obj[property].Y.Offset, 0, obj[property].Y.Offset)
+				local sYSc = Spring.new(mass, damping, stiffness, obj[property].Y.Scale, 0, obj[property].Y.Scale)
 				return {
 					springSet = { XOffset = sXOff, XScale = sXSc, YOffset = sYOff, YScale = sYSc },
 					updateFunc = function()
@@ -4665,9 +4670,9 @@ do -- Module: StarterGui.AFEMMax.SBT
 					end,
 				}
 			end,
-			UDim = function(obj, property, mass, stiffness, damping)
-				local sOff = Spring.new(mass, stiffness, damping, obj[property].Offset, 0, obj[property].Offset)
-				local sSc = Spring.new(mass, stiffness, damping, obj[property].Scale, 0, obj[property].Scale)
+			UDim = function(obj, property, mass, damping, stiffness)
+				local sOff = Spring.new(mass, damping, stiffness, obj[property].Offset, 0, obj[property].Offset)
+				local sSc = Spring.new(mass, damping, stiffness, obj[property].Scale, 0, obj[property].Scale)
 				return {
 					springSet = { Offset = sOff, Scale = sSc },
 					updateFunc = function() obj[property] = UDim.new(sSc.Offset, sOff.Offset) end,
@@ -4675,9 +4680,9 @@ do -- Module: StarterGui.AFEMMax.SBT
 					setOffset = function(offset) sOff:SetOffset(offset.Offset); sSc:SetOffset(offset.Scale) end,
 				}
 			end,
-			Vector2 = function(obj, property, mass, stiffness, damping)
-				local sX = Spring.new(mass, stiffness, damping, obj[property].X, 0, obj[property].X)
-				local sY = Spring.new(mass, stiffness, damping, obj[property].Y, 0, obj[property].Y)
+			Vector2 = function(obj, property, mass, damping, stiffness)
+				local sX = Spring.new(mass, damping, stiffness, obj[property].X, 0, obj[property].X)
+				local sY = Spring.new(mass, damping, stiffness, obj[property].Y, 0, obj[property].Y)
 				return {
 					springSet = { X = sX, Y = sY },
 					updateFunc = function() obj[property] = Vector2.new(sX.Offset, sY.Offset) end,
@@ -4685,10 +4690,10 @@ do -- Module: StarterGui.AFEMMax.SBT
 					setOffset = function(offset) sX:SetOffset(offset.X); sY:SetOffset(offset.Y) end,
 				}
 			end,
-			Vector3 = function(obj, property, mass, stiffness, damping)
-				local sX = Spring.new(mass, stiffness, damping, obj[property].X, 0, obj[property].X)
-				local sY = Spring.new(mass, stiffness, damping, obj[property].Y, 0, obj[property].Y)
-				local sZ = Spring.new(mass, stiffness, damping, obj[property].Z, 0, obj[property].Z)
+			Vector3 = function(obj, property, mass, damping, stiffness)
+				local sX = Spring.new(mass, damping, stiffness, obj[property].X, 0, obj[property].X)
+				local sY = Spring.new(mass, damping, stiffness, obj[property].Y, 0, obj[property].Y)
+				local sZ = Spring.new(mass, damping, stiffness, obj[property].Z, 0, obj[property].Z)
 				return {
 					springSet = { sX, sY, sZ },
 					updateFunc = function() obj[property] = Vector3.new(sX.Offset, sY.Offset, sZ.Offset) end,
@@ -4696,10 +4701,10 @@ do -- Module: StarterGui.AFEMMax.SBT
 					setOffset = function(offset) sX:SetOffset(offset.X); sY:SetOffset(offset.Y); sZ:SetOffset(offset.Z) end,
 				}
 			end,
-			Color3 = function(obj, property, mass, stiffness, damping)
-				local sR = Spring.new(mass, stiffness, damping, obj[property].R, 0, obj[property].R)
-				local sG = Spring.new(mass, stiffness, damping, obj[property].G, 0, obj[property].G)
-				local sB = Spring.new(mass, stiffness, damping, obj[property].B, 0, obj[property].B)
+			Color3 = function(obj, property, mass, damping, stiffness)
+				local sR = Spring.new(mass, damping, stiffness, obj[property].R, 0, obj[property].R)
+				local sG = Spring.new(mass, damping, stiffness, obj[property].G, 0, obj[property].G)
+				local sB = Spring.new(mass, damping, stiffness, obj[property].B, 0, obj[property].B)
 				return {
 					springSet = { sR, sG, sB },
 					updateFunc = function()
@@ -4715,13 +4720,13 @@ do -- Module: StarterGui.AFEMMax.SBT
 			end,
 		}
 
-		function SpringTween.new(obj, property, mass, stiffness, damping)
+		function SpringTween.new(obj, property, mass, damping, stiffness)
 			assert(obj[property], "Property does not exist")
 			local handler = TypeHandlers[typeof(obj[property])]
 			assert(handler, "Unsupported type: " .. typeof(obj[property]))
 
 			local self = setmetatable({}, SpringTween)
-			local data = handler(obj, property, mass, stiffness, damping)
+			local data = handler(obj, property, mass, damping, stiffness)
 			self.obj = obj
 			self.propertyName = property
 			self.springSet = data.springSet
@@ -4749,13 +4754,22 @@ do -- Module: StarterGui.AFEMMax.SBT
 
 		function SpringTween:SetGoal(goal) self.setGoal(goal) end
 		function SpringTween:SetOffset(offset) self.setOffset(offset) end
-		function SpringTween:SetParameters(mass, stiffness, damping)
+
+		function SpringTween:SetParameters(mass, damping, stiffness)
 			for _, spring in pairs(self.springSet) do
 				spring.Mass = mass
 				spring.Constant = stiffness
 				spring.Damping = damping
 				spring:Reset()
 			end
+		end
+
+		-- Restore the static method that was removed
+		function SpringTween.fromDurationAndBounce(duration, bounce)
+			local mass = 1
+			local stiffness = (2 * math.pi / duration) ^ 2 * mass
+			local damping = 2 * (1 - bounce) * math.sqrt(mass * stiffness)
+			return { mass, damping, stiffness }
 		end
 
 		function SpringTween.OneShot(obj, config, props)
@@ -4775,8 +4789,8 @@ do -- Module: StarterGui.AFEMMax.SBT
 						self.target,
 						property,
 						self.config.mass or 1,
-						self.config.stiffness or 100,
-						self.config.damping or 20
+						self.config.damping or 20,
+						self.config.stiffness or 100
 					)
 					spring:SetGoal(goal)
 					spring:Start()
