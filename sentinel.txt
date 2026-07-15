@@ -1,0 +1,1265 @@
+local TweenService = cloneref(game:GetService("TweenService"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local CoreGui = cloneref(game:GetService("CoreGui"))
+local Debris = cloneref(game:GetService("Debris"))
+local TextService = game:GetService("TextService")
+
+local Library = {
+	Connections = {},
+	TextCache = {},
+	ActiveTweens = {},
+	CacheLimit = 100,
+	CacheCleanupThreshold = 150
+}
+
+local TweenNormal = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TweenFast = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local MouseButton1 = Enum.UserInputType.MouseButton1
+local TouchInput = Enum.UserInputType.Touch
+local MouseMovement = Enum.UserInputType.MouseMovement
+local InputEnd = Enum.UserInputState.End
+
+local White = Color3.fromRGB(255, 255, 255)
+local Grey200 = Color3.fromRGB(200, 200, 200)
+local Grey166 = Color3.fromRGB(166, 166, 166)
+
+local Theme = {
+	Colors = {
+		Success = Color3.fromRGB(46, 204, 113),
+		Warning = Color3.fromRGB(241, 196, 15),
+		Error = Color3.fromRGB(231, 76, 60),
+		Info = Color3.fromRGB(147, 51, 234),
+	},
+	Icons = {
+		Info = "rbxassetid://6022668879",
+		Success = "rbxassetid://6023426926",
+		Warning = "rbxassetid://6031086176",
+		Error = "rbxassetid://6034461619",
+	}
+}
+
+local function Create(ClassName, Properties)
+	local inst = Instance.new(ClassName)
+	for Prop, Value in next, Properties do
+		inst[Prop] = Value
+	end
+	return inst
+end
+
+local function AddUICorner(Parent, Radius)
+	return Create("UICorner", {CornerRadius = UDim.new(0, Radius or 8), Parent = Parent})
+end
+
+local Connections = Library.Connections
+local function TrackConnection(Connection)
+	Connections[#Connections + 1] = Connection
+	return Connection
+end
+
+local function GetTextSize(Text, TextSize, Font, MaxSize)
+	local Key = Text .. TextSize .. tostring(Font) .. tostring(MaxSize)
+	local cached = Library.TextCache[Key]
+	if cached then return cached end
+
+	local cache = Library.TextCache
+	if #cache >= Library.CacheCleanupThreshold then
+		local TempCache = {}
+		local Count = 0
+		for K, V in next, cache do
+			if Count >= Library.CacheLimit then break end
+			TempCache[K] = V
+			Count += 1
+		end
+		Library.TextCache = TempCache
+		cache = TempCache
+	end
+
+	local result = TextService:GetTextSize(Text, TextSize, Font, MaxSize)
+	cache[Key] = result
+	return result
+end
+
+local ActiveTweens = Library.ActiveTweens
+local function CreateTween(Object, Info, Properties)
+	local Tween = TweenService:Create(Object, Info, Properties)
+	ActiveTweens[#ActiveTweens + 1] = Tween
+	Tween.Completed:Connect(function()
+		local Index = table.find(ActiveTweens, Tween)
+		if Index then
+			table.remove(ActiveTweens, Index)
+		end
+		Tween:Destroy()
+	end)
+	return Tween
+end
+
+for _, child in next, CoreGui:GetChildren() do
+	if child.Name:lower():sub(1, 8) == "sentinel" then
+		child:Destroy()
+	end
+end
+
+local function SetupDrag(Frame, Target)
+	local Dragging, DragStart, StartPos
+	TrackConnection(Frame.InputBegan:Connect(function(Input)
+		local inputType = Input.UserInputType
+		if inputType == MouseButton1 or inputType == TouchInput then
+			Dragging = true
+			DragStart = Input.Position
+			StartPos = Target.Position
+			TrackConnection(Input.Changed:Connect(function()
+				if Input.UserInputState == InputEnd then
+					Dragging = false
+				end
+			end))
+		end
+	end))
+
+	TrackConnection(UserInputService.InputChanged:Connect(function(Input)
+		local inputType = Input.UserInputType
+		if Dragging and (inputType == MouseMovement or inputType == TouchInput) then
+			local Delta = Input.Position - DragStart
+			Target.Position = UDim2.new(
+				StartPos.X.Scale, StartPos.X.Offset + Delta.X,
+				StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y
+			)
+		end
+	end))
+end
+
+local Notifications = {
+	Active = 0,
+	Max = 3,
+}
+
+local NotificationUI = Create("ScreenGui", {
+	Name = "sentinel-notifications",
+	Parent = CoreGui,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	ResetOnSpawn = false,
+	DisplayOrder = 10
+})
+
+local NotificationHolder = Create("Frame", {
+	Name = "NotificationHolder",
+	Parent = NotificationUI,
+	AnchorPoint = Vector2.new(1, 0),
+	BackgroundTransparency = 1,
+	Position = UDim2.new(1, -10, 0, 10),
+	Size = UDim2.new(0, 320, 0, 0),
+	ZIndex = 10
+})
+Create("UIListLayout", {
+	Parent = NotificationHolder,
+	HorizontalAlignment = Enum.HorizontalAlignment.Right,
+	VerticalAlignment = Enum.VerticalAlignment.Top,
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	Padding = UDim.new(0, 8)
+})
+
+function Library:Notify(Config)
+	if Notifications.Active >= Notifications.Max then return end
+
+	Config = Config or {}
+
+	local Title = Config.Title
+	if not Title or Title == "" then Title = "Notification" end
+
+	local Desc = Config.Description
+	if not Desc or Desc == "" then Desc = "No description provided" end
+
+	local Duration = Config.Duration or 5
+	local NotifType = Config.Type or "info"
+	local TypeKey = NotifType:sub(1, 1):upper() .. NotifType:sub(2)
+	local Accent = Theme.Colors[TypeKey] or Theme.Colors.Info
+	local Icon = Theme.Icons[TypeKey] or Theme.Icons.Info
+
+	local Notification = Create("Frame", {
+		Name = "Notification",
+		Parent = NotificationHolder,
+		BackgroundColor3 = Color3.fromRGB(28, 28, 32),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 0),
+		ClipsDescendants = true,
+		ZIndex = 10
+	})
+	AddUICorner(Notification, 8)
+	Create("UIStroke", {
+		Parent = Notification,
+		Color = Accent,
+		Thickness = 2,
+		LineJoinMode = Enum.LineJoinMode.Round
+	})
+	Create("ImageLabel", {
+		Name = "Icon",
+		Parent = Notification,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 12, 0, 12),
+		Size = UDim2.new(0, 22, 0, 22),
+		Image = Icon,
+		ImageColor3 = Accent,
+		ZIndex = 10
+	})
+
+	local Content = Create("Frame", {
+		Name = "Content",
+		Parent = Notification,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 42, 0, 12),
+		Size = UDim2.new(1, -80, 1, -24),
+		ZIndex = 10
+	})
+	Create("TextLabel", {
+		Name = "Title",
+		Parent = Content,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 16),
+		Font = Enum.Font.GothamBold,
+		Text = Title,
+		TextColor3 = White,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 10
+	})
+	Create("TextLabel", {
+		Name = "Description",
+		Parent = Content,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 18),
+		Size = UDim2.new(1, 0, 1, -18),
+		Font = Enum.Font.Gotham,
+		Text = Desc,
+		TextColor3 = Grey200,
+		TextSize = 11,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		ZIndex = 10
+	})
+
+	local CloseBtn = Create("ImageButton", {
+		Name = "Close",
+		Parent = Notification,
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -10, 0, 10),
+		Size = UDim2.new(0, 20, 0, 20),
+		Image = "rbxassetid://6035047409",
+		ImageColor3 = Grey166,
+		AutoButtonColor = false,
+		ZIndex = 10
+	})
+
+	local ContentWidth = NotificationHolder.AbsoluteSize.X - 80
+	local DescHeight = GetTextSize(Desc, 11, Enum.Font.Gotham, Vector2.new(ContentWidth, math.huge)).Y
+	local TotalHeight = math.max(60, math.min(90, 46 + DescHeight))
+	CreateTween(Notification, TweenNormal, {Size = UDim2.new(1, 0, 0, TotalHeight)}):Play()
+	Notifications.Active += 1
+
+	local Closed = false
+	local function Close()
+		if Closed or not Notification.Parent then return end
+		Closed = true
+		Notifications.Active = math.max(0, Notifications.Active - 1)
+		CreateTween(Notification, TweenFast, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+		Debris:AddItem(Notification, 0.15)
+	end
+
+	TrackConnection(CloseBtn.MouseButton1Click:Connect(Close))
+	task.delay(Duration, Close)
+end
+
+function Library:Window(Title)
+	local UI = Create("ScreenGui", {
+		Name = "sentinel-library",
+		Parent = CoreGui,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		ResetOnSpawn = false
+	})
+
+	local Main = Create("Frame", {
+		Name = "Main",
+		Parent = UI,
+		BackgroundColor3 = Color3.fromRGB(28, 28, 32),
+		BorderSizePixel = 0,
+		Size = UDim2.new(0, 530, 0, 320),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Active = true,
+		Selectable = true
+	})
+	AddUICorner(Main, 10)
+	Create("UIStroke", {
+		Parent = Main,
+		Color = Color3.fromRGB(20, 20, 24),
+		Transparency = 0.3,
+		Thickness = 1.5,
+		LineJoinMode = Enum.LineJoinMode.Round
+	})
+	SetupDrag(Main, Main)
+
+	local Top = Create("Frame", {
+		Name = "Top",
+		Parent = Main,
+		BackgroundColor3 = Color3.fromRGB(24, 24, 28),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 38)
+	})
+	AddUICorner(Top, 10)
+	Create("Frame", {
+		Name = "Cover",
+		Parent = Top,
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundColor3 = Color3.fromRGB(24, 24, 28),
+		BorderSizePixel = 0,
+		Position = UDim2.new(0.5, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, 6)
+	})
+	Create("Frame", {
+		Name = "Line",
+		Parent = Top,
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundColor3 = White,
+		BackgroundTransparency = 0.920,
+		Position = UDim2.new(0.5, 0, 1, 1),
+		Size = UDim2.new(1, 0, 0, 1)
+	})
+	Create("ImageLabel", {
+		Name = "Logo",
+		Parent = Top,
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 8, 0.5, 0),
+		Size = UDim2.new(0, 26, 0, 30),
+		Image = "rbxassetid://7803241868",
+		ImageColor3 = Color3.fromRGB(147, 51, 234)
+	})
+	Create("TextLabel", {
+		Name = "GameName",
+		Parent = Top,
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 36, 0.5, 0),
+		Size = UDim2.new(0, 165, 0, 22),
+		Font = Enum.Font.Gotham,
+		Text = Title or "SentinelLIB",
+		TextColor3 = Color3.fromRGB(147, 51, 234),
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	local MinimizeBtn = Create("ImageButton", {
+		Name = "Minimize",
+		Parent = Top,
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -40, 0.5, 0),
+		Size = UDim2.new(0, 20, 0, 20),
+		Image = "rbxassetid://118026365011536",
+		ImageColor3 = Grey166
+	})
+
+	local CloseBtn = Create("ImageButton", {
+		Name = "Close",
+		Parent = Top,
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.new(0, 20, 0, 20),
+		Image = "rbxassetid://6035047409",
+		ImageColor3 = Grey166,
+		AutoButtonColor = false
+	})
+
+	local CloseRed = Color3.fromRGB(231, 76, 60)
+	TrackConnection(CloseBtn.MouseEnter:Connect(function()
+		CreateTween(CloseBtn, TweenFast, {ImageColor3 = CloseRed}):Play()
+	end))
+	TrackConnection(CloseBtn.MouseLeave:Connect(function()
+		CreateTween(CloseBtn, TweenFast, {ImageColor3 = Grey166}):Play()
+	end))
+
+	local Overlay = Create("TextButton", {
+		Name = "Overlay",
+		Parent = Main,
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, 0),
+		ZIndex = 99,
+		Text = "",
+		AutoButtonColor = false,
+		Active = true,
+		Modal = true,
+		Visible = false
+	})
+	AddUICorner(Overlay, 10)
+
+	local ConfirmDialog = Create("Frame", {
+		Name = "ConfirmDialog",
+		Parent = Main,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(28, 28, 32),
+		BorderSizePixel = 0,
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 300, 0, 140),
+		ZIndex = 100,
+		Visible = false
+	})
+	AddUICorner(ConfirmDialog, 10)
+	Create("UIStroke", {
+		Parent = ConfirmDialog,
+		Color = Color3.fromRGB(147, 51, 234),
+		Thickness = 2,
+		LineJoinMode = Enum.LineJoinMode.Round
+	})
+	Create("TextLabel", {
+		Name = "Title",
+		Parent = ConfirmDialog,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 15),
+		Size = UDim2.new(1, 0, 0, 25),
+		Font = Enum.Font.GothamBold,
+		Text = "Close UI?",
+		TextColor3 = White,
+		TextSize = 16,
+		ZIndex = 101
+	})
+	Create("TextLabel", {
+		Name = "Description",
+		Parent = ConfirmDialog,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 45),
+		Size = UDim2.new(1, 0, 0, 30),
+		Font = Enum.Font.Gotham,
+		Text = "This will destroy the UI.\nAre you sure?",
+		TextColor3 = Grey200,
+		TextSize = 13,
+		TextWrapped = true,
+		ZIndex = 101
+	})
+
+	local ButtonContainer = Create("Frame", {
+		Name = "ButtonContainer",
+		Parent = ConfirmDialog,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 20, 0, 85),
+		Size = UDim2.new(1, -40, 0, 40),
+		ZIndex = 101
+	})
+
+	local CancelBg = Color3.fromRGB(35, 35, 40)
+	local CancelBgHover = Color3.fromRGB(45, 45, 50)
+	local ConfirmBg = Color3.fromRGB(116, 39, 188)
+	local ConfirmBgHover = Color3.fromRGB(138, 43, 226)
+
+	local CancelBtn = Create("TextButton", {
+		Name = "Cancel",
+		Parent = ButtonContainer,
+		BackgroundColor3 = CancelBg,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0, 0),
+		Size = UDim2.new(0.48, 0, 1, 0),
+		AutoButtonColor = false,
+		Font = Enum.Font.GothamBold,
+		Text = "Cancel",
+		TextColor3 = White,
+		TextSize = 14,
+		ZIndex = 102
+	})
+	AddUICorner(CancelBtn, 8)
+
+	local ConfirmBtn = Create("TextButton", {
+		Name = "Confirm",
+		Parent = ButtonContainer,
+		BackgroundColor3 = ConfirmBg,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0.52, 0, 0, 0),
+		Size = UDim2.new(0.48, 0, 1, 0),
+		AutoButtonColor = false,
+		Font = Enum.Font.GothamBold,
+		Text = "Close",
+		TextColor3 = White,
+		TextSize = 14,
+		ZIndex = 102
+	})
+	AddUICorner(ConfirmBtn, 8)
+
+	TrackConnection(CancelBtn.MouseEnter:Connect(function()
+		CreateTween(CancelBtn, TweenFast, {BackgroundColor3 = CancelBgHover}):Play()
+	end))
+	TrackConnection(CancelBtn.MouseLeave:Connect(function()
+		CreateTween(CancelBtn, TweenFast, {BackgroundColor3 = CancelBg}):Play()
+	end))
+	TrackConnection(ConfirmBtn.MouseEnter:Connect(function()
+		CreateTween(ConfirmBtn, TweenFast, {BackgroundColor3 = ConfirmBgHover}):Play()
+	end))
+	TrackConnection(ConfirmBtn.MouseLeave:Connect(function()
+		CreateTween(ConfirmBtn, TweenFast, {BackgroundColor3 = ConfirmBg}):Play()
+	end))
+	TrackConnection(CancelBtn.MouseButton1Click:Connect(function()
+		Overlay.Visible = false
+		ConfirmDialog.Visible = false
+	end))
+	TrackConnection(ConfirmBtn.MouseButton1Click:Connect(function()
+		Library:Destroy()
+	end))
+	TrackConnection(CloseBtn.MouseButton1Click:Connect(function()
+		Overlay.Visible = true
+		ConfirmDialog.Visible = true
+	end))
+
+	local MinimizedIcon = Create("ImageButton", {
+		Name = "MinimizedIcon",
+		Parent = UI,
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = Color3.fromRGB(147, 51, 234),
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, -20, 0, 20),
+		Size = UDim2.new(0, 40, 0, 40),
+		Visible = false,
+		ZIndex = 10,
+		Image = "rbxassetid://7803241868"
+	})
+	AddUICorner(MinimizedIcon, 10)
+	SetupDrag(MinimizedIcon, MinimizedIcon)
+
+	TrackConnection(MinimizeBtn.MouseButton1Click:Connect(function()
+		Main.Visible = false
+		MinimizedIcon.Visible = true
+	end))
+	TrackConnection(MinimizedIcon.MouseButton1Click:Connect(function()
+		Main.Visible = true
+		MinimizedIcon.Visible = false
+	end))
+
+	local Tabs = Create("Frame", {
+		Name = "Tabs",
+		Parent = Main,
+		BackgroundColor3 = Color3.fromRGB(28, 28, 32),
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0, 39),
+		Size = UDim2.new(0, 124, 1, -39)
+	})
+	AddUICorner(Tabs, 10)
+	Create("Frame", {
+		Name = "Cover",
+		Parent = Tabs,
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = Color3.fromRGB(28, 28, 32),
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 6, 1, 0)
+	})
+
+	local TabsContainer = Create("ScrollingFrame", {
+		Name = "TabsContainer",
+		Parent = Tabs,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		ScrollBarThickness = 0
+	})
+
+	local TabsList = Create("UIListLayout", {
+		Parent = TabsContainer,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6)
+	})
+	Create("UIPadding", {Parent = TabsContainer, PaddingTop = UDim.new(0, 8)})
+
+	local ResizeDebounce
+	TrackConnection(TabsList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		if ResizeDebounce then
+			task.cancel(ResizeDebounce)
+		end
+		ResizeDebounce = task.delay(0.03, function()
+			TabsContainer.CanvasSize = UDim2.new(0, 0, 0, TabsList.AbsoluteContentSize.Y + 16)
+		end)
+	end))
+
+	local Pages = Create("Frame", {
+		Name = "Pages",
+		Parent = Main,
+		BackgroundColor3 = Color3.fromRGB(28, 28, 32),
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 132, 0, 46),
+		Size = UDim2.new(1, -140, 1, -54)
+	})
+	AddUICorner(Pages, 8)
+
+	local TabContents = {}
+	local FirstTabCreated = false
+
+	local TabInactiveColor = Color3.fromRGB(120, 120, 130)
+	local TabActiveColor = White
+
+	function TabContents:Tab(TabTitle)
+		local Button = Create("TextButton", {
+			Name = "TabButton",
+			Parent = TabsContainer,
+			BackgroundColor3 = Color3.fromRGB(147, 51, 234),
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, -14, 0, 32),
+			AutoButtonColor = false,
+			Font = Enum.Font.Gotham,
+			Text = "",
+			TextSize = 14
+		})
+		AddUICorner(Button, 8)
+
+		local TextLabel = Create("TextLabel", {
+			Name = "TextLabel",
+			Parent = Button,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 1, 0),
+			Font = Enum.Font.Gotham,
+			Text = TabTitle or "Tab",
+			TextColor3 = TabInactiveColor,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Center
+		})
+
+		local Page = Create("ScrollingFrame", {
+			Name = "Page",
+			Visible = false,
+			Parent = Pages,
+			Active = true,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 1, 0),
+			ScrollBarThickness = 0
+		})
+
+		local PageList = Create("UIListLayout", {
+			Parent = Page,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 3)
+		})
+		Create("UIPadding", {Parent = Page, PaddingTop = UDim.new(0, 8)})
+
+		local PageResizeDebounce
+		TrackConnection(PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			if PageResizeDebounce then
+				task.cancel(PageResizeDebounce)
+			end
+			PageResizeDebounce = task.delay(0.03, function()
+				if Page.Visible then
+					Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 16)
+				end
+			end)
+		end))
+
+		TrackConnection(Page:GetPropertyChangedSignal("Visible"):Connect(function()
+			if Page.Visible then
+				task.wait(0.01)
+				Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 16)
+			end
+		end))
+
+		TrackConnection(Button.MouseButton1Click:Connect(function()
+			for _, Child in ipairs(Pages:GetChildren()) do
+				if Child:IsA("ScrollingFrame") then
+					Child.Visible = false
+				end
+			end
+			for _, Child in ipairs(TabsContainer:GetChildren()) do
+				if Child.Name == "TabButton" then
+					CreateTween(Child, TweenNormal, {BackgroundTransparency = 1}):Play()
+					local Label = Child:FindFirstChild("TextLabel")
+					if Label then
+						CreateTween(Label, TweenNormal, {TextColor3 = TabInactiveColor}):Play()
+					end
+				end
+			end
+			Page.Visible = true
+			CreateTween(Button, TweenNormal, {BackgroundTransparency = 0.6}):Play()
+			CreateTween(TextLabel, TweenNormal, {TextColor3 = TabActiveColor}):Play()
+		end))
+
+		local Elements = {}
+
+		function Elements:Button(Text, Callback)
+			local BtnBg = Color3.fromRGB(116, 39, 188)
+			local BtnBgHover = Color3.fromRGB(138, 43, 226)
+			local Btn = Create("TextButton", {
+				Name = "Button",
+				Parent = Page,
+				BackgroundColor3 = BtnBg,
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, -10, 0, 36),
+				AutoButtonColor = false,
+				Font = Enum.Font.Gotham,
+				Text = Text or "Button",
+				TextColor3 = White,
+				TextSize = 14
+			})
+			AddUICorner(Btn, 8)
+			TrackConnection(Btn.MouseEnter:Connect(function()
+				CreateTween(Btn, TweenNormal, {BackgroundColor3 = BtnBgHover}):Play()
+			end))
+			TrackConnection(Btn.MouseLeave:Connect(function()
+				CreateTween(Btn, TweenNormal, {BackgroundColor3 = BtnBg}):Play()
+			end))
+			TrackConnection(Btn.MouseButton1Click:Connect(Callback))
+		end
+
+		function Elements:Toggle(Text, Default, Callback)
+			local Toggle = Create("TextButton", {
+				Name = "Toggle",
+				Parent = Page,
+				BackgroundColor3 = Color3.fromRGB(35, 35, 40),
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, -10, 0, 36),
+				AutoButtonColor = false,
+				Text = ""
+			})
+			AddUICorner(Toggle, 8)
+			Create("TextLabel", {
+				Name = "Title",
+				Parent = Toggle,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 10, 0, 0),
+				Size = UDim2.new(1, -50, 1, 0),
+				Font = Enum.Font.Gotham,
+				Text = Text or "Toggle",
+				TextColor3 = White,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left
+			})
+
+			local TogglePurple = Color3.fromRGB(138, 43, 226)
+			local ToggleFrame = Create("Frame", {
+				Name = "ToggleFrame",
+				Parent = Toggle,
+				AnchorPoint = Vector2.new(1, 0.5),
+				BackgroundColor3 = TogglePurple,
+				BackgroundTransparency = Default and 0 or 1,
+				BorderSizePixel = 0,
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.new(0, 20, 0, 20)
+			})
+			Create("UIStroke", {
+				Parent = ToggleFrame,
+				LineJoinMode = Enum.LineJoinMode.Round,
+				Thickness = 2,
+				Color = TogglePurple
+			})
+			AddUICorner(ToggleFrame, 10)
+
+			local Toggled = Default or false
+			TrackConnection(Toggle.MouseButton1Click:Connect(function()
+				Toggled = not Toggled
+				CreateTween(ToggleFrame, TweenFast, {BackgroundTransparency = Toggled and 0 or 1}):Play()
+				if Callback then
+					Callback(Toggled)
+				end
+			end))
+
+			return {
+				Set = function(_, Value)
+					Toggled = Value
+					ToggleFrame.BackgroundTransparency = Toggled and 0 or 1
+					if Callback then
+						Callback(Toggled)
+					end
+				end
+			}
+		end
+
+		function Elements:Label(Text)
+			local Label = Create("TextLabel", {
+				Parent = Page,
+				BackgroundColor3 = Color3.fromRGB(35, 35, 40),
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, -10, 0, 36),
+				Font = Enum.Font.Gotham,
+				Text = Text or "Label",
+				TextColor3 = White,
+				TextSize = 14,
+				TextWrapped = true
+			})
+			AddUICorner(Label, 8)
+			Create("UIPadding", {
+				Parent = Label,
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 10),
+				PaddingTop = UDim.new(0, 10),
+				PaddingBottom = UDim.new(0, 10)
+			})
+
+			local SizeDebounce
+			local function UpdateSize(Txt)
+				if SizeDebounce then
+					task.cancel(SizeDebounce)
+				end
+				SizeDebounce = task.delay(0.02, function()
+					local ContentWidth = Label.AbsoluteSize.X - 20
+					if ContentWidth > 0 then
+						local TextHeight = GetTextSize(Txt, 14, Enum.Font.Gotham, Vector2.new(ContentWidth, math.huge)).Y
+						Label.Size = UDim2.new(1, -10, 0, math.max(36, TextHeight + 20))
+					end
+				end)
+			end
+
+			TrackConnection(Label:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				UpdateSize(Label.Text)
+			end))
+			task.defer(function()
+				UpdateSize(Text or "Label")
+			end)
+
+			return {
+				Set = function(_, NewText)
+					local t = NewText or "Label"
+					Label.Text = t
+					UpdateSize(t)
+				end
+			}
+		end
+
+		function Elements:Slider(Text, Min, Max, Default, Increment, Callback)
+			Min = Min or 0
+			Max = Max or 100
+			Default = Default or Min
+			Increment = Increment or 1
+
+			local Slider = Create("Frame", {
+				Name = "Slider",
+				Parent = Page,
+				BackgroundColor3 = Color3.fromRGB(35, 35, 40),
+				Size = UDim2.new(1, -10, 0, 52)
+			})
+			AddUICorner(Slider, 8)
+			Create("TextLabel", {
+				Name = "Title",
+				Parent = Slider,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 10, 0, 0),
+				Size = UDim2.new(1, -6, 0, 36),
+				Font = Enum.Font.Gotham,
+				Text = Text or "Slider",
+				TextColor3 = White,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left
+			})
+
+			local Value = Create("TextLabel", {
+				Name = "Value",
+				Parent = Slider,
+				AnchorPoint = Vector2.new(1, 0),
+				BackgroundTransparency = 1,
+				Position = UDim2.new(1, -10, 0, 0),
+				Size = UDim2.new(1, 0, 0, 36),
+				Font = Enum.Font.Gotham,
+				Text = tostring(Default),
+				TextColor3 = White,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Right
+			})
+
+			local Bar = Create("Frame", {
+				Name = "Bar",
+				Parent = Slider,
+				AnchorPoint = Vector2.new(0.5, 1),
+				BackgroundColor3 = Color3.fromRGB(50, 50, 55),
+				Position = UDim2.new(0.5, 0, 1, -10),
+				Size = UDim2.new(1, -16, 0, 8)
+			})
+			AddUICorner(Bar, 8)
+
+			local Fill = Create("Frame", {
+				Name = "Fill",
+				Parent = Bar,
+				BackgroundColor3 = Color3.fromRGB(138, 43, 226),
+				Size = UDim2.new((Default - Min) / (Max - Min), 0, 1, 0)
+			})
+			AddUICorner(Fill, 8)
+
+			local Dragging, PendingCallback, LastValue = false, false, Default
+			local Range = Max - Min
+			local Precision = 1000000
+
+			local function Round(Val)
+				if Increment == 0 then return Val end
+				return math.floor((math.floor(Val / Increment + 0.5) * Increment) * Precision + 0.5) / Precision
+			end
+
+			local function Format(Val)
+				local Str = tostring(math.floor(Val * Precision + 0.5) / Precision)
+				if Str:find("%.") then
+					Str = Str:gsub("0+$", ""):gsub("%.$", "")
+				end
+				return Str
+			end
+
+			local function Update(Percent, CallNow)
+				local Val = Round(Min + (Percent * Range))
+				Fill.Size = UDim2.new((Val - Min) / Range, 0, 1, 0)
+				Value.Text = Format(Val)
+				if Val ~= LastValue then
+					LastValue = Val
+					if CallNow and Callback then
+						Callback(Val)
+					else
+						PendingCallback = true
+					end
+				end
+			end
+
+			local function Slide(Input)
+				local Percent = math.clamp((Input.Position.X - Bar.AbsolutePosition.X) / Bar.AbsoluteSize.X, 0, 1)
+				Update(Percent, false)
+			end
+
+			TrackConnection(Bar.InputBegan:Connect(function(Input)
+				local inputType = Input.UserInputType
+				if inputType == MouseButton1 or inputType == TouchInput then
+					Dragging = true
+					Slide(Input)
+					TrackConnection(Input.Changed:Connect(function()
+						if Input.UserInputState == InputEnd then
+							Dragging = false
+							if PendingCallback and Callback then
+								Callback(LastValue)
+								PendingCallback = false
+							end
+						end
+					end))
+				end
+			end))
+
+			TrackConnection(UserInputService.InputChanged:Connect(function(Input)
+				local inputType = Input.UserInputType
+				if Dragging and (inputType == MouseMovement or inputType == TouchInput) then
+					Slide(Input)
+				end
+			end))
+
+			return {
+				Set = function(_, Val)
+					Update((math.clamp(Val, Min, Max) - Min) / Range, true)
+				end
+			}
+		end
+
+		function Elements:InputBox(Text, Placeholder, Callback)
+			local InputBox = Create("Frame", {
+				Name = "InputBox",
+				Parent = Page,
+				BackgroundColor3 = Color3.fromRGB(35, 35, 40),
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, -10, 0, 36)
+			})
+			AddUICorner(InputBox, 8)
+			Create("TextLabel", {
+				Name = "Title",
+				Parent = InputBox,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 10, 0, 0),
+				Size = UDim2.new(0.5, -6, 1, 0),
+				Font = Enum.Font.Gotham,
+				Text = Text or "Input",
+				TextColor3 = White,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left
+			})
+
+			local BoxContainer = Create("Frame", {
+				Name = "BoxContainer",
+				Parent = InputBox,
+				BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.new(0.45, -12, 0, 28)
+			})
+
+			local Box = Create("TextBox", {
+				Name = "Box",
+				Parent = BoxContainer,
+				BackgroundColor3 = Color3.fromRGB(40, 40, 45),
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 1, 0),
+				ClipsDescendants = true,
+				Font = Enum.Font.Gotham,
+				Text = "",
+				PlaceholderText = Placeholder or "",
+				PlaceholderColor3 = Color3.fromRGB(120, 120, 120),
+				TextColor3 = White,
+				TextSize = 14
+			})
+			AddUICorner(Box, 6)
+			TrackConnection(Box.FocusLost:Connect(function(Enter)
+				if Callback and Enter then
+					Callback(Box.Text)
+				end
+			end))
+		end
+
+		function Elements:Dropdown(Text, DefaultOption, Options, Callback)
+			if type(DefaultOption) == "table" then
+				Callback = Options
+				Options = DefaultOption
+				DefaultOption = ""
+			end
+
+			Options = Options or {}
+			DefaultOption = DefaultOption or ""
+
+			if Callback and type(Callback) ~= "function" then
+				Callback = nil
+			end
+
+			local Dropdown = Create("Frame", {
+				Name = "Dropdown",
+				Parent = Page,
+				BackgroundColor3 = Color3.fromRGB(35, 35, 40),
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, -10, 0, 36),
+				ClipsDescendants = true,
+				ZIndex = 10
+			})
+			AddUICorner(Dropdown, 8)
+
+			local Choose = Create("Frame", {
+				Name = "Choose",
+				Parent = Dropdown,
+				BackgroundColor3 = Color3.fromRGB(35, 35, 40),
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 0, 36),
+				ZIndex = 11
+			})
+			AddUICorner(Choose, 8)
+
+			local DropdownText = Text or "Dropdown"
+			local TitleLabel = Create("TextLabel", {
+				Name = "Title",
+				Parent = Choose,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 10, 0, 0),
+				Size = UDim2.new(1, -46, 1, 0),
+				Font = Enum.Font.Gotham,
+				Text = DropdownText,
+				TextColor3 = White,
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 11
+			})
+
+			local Arrow = Create("ImageButton", {
+				Name = "Arrow",
+				Parent = Choose,
+				AnchorPoint = Vector2.new(1, 0.5),
+				BackgroundTransparency = 1,
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.new(0, 20, 0, 20),
+				Image = "rbxassetid://6031091004",
+				ImageColor3 = Color3.fromRGB(138, 43, 226),
+				ScaleType = Enum.ScaleType.Fit,
+				ZIndex = 11
+			})
+
+			local OptionsContainer = Create("ScrollingFrame", {
+				Name = "OptionsContainer",
+				Parent = Dropdown,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 0, 0, 42),
+				Size = UDim2.new(1, 0, 1, -42),
+				CanvasSize = UDim2.new(0, 0, 0, 0),
+				ScrollBarThickness = 0,
+				ScrollingDirection = Enum.ScrollingDirection.Y,
+				Visible = false,
+				ZIndex = 10
+			})
+
+			local OptionList = Create("UIListLayout", {
+				Parent = OptionsContainer,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 4)
+			})
+			Create("UIPadding", {
+				Parent = OptionsContainer,
+				PaddingTop = UDim.new(0, 6),
+				PaddingLeft = UDim.new(0, 6),
+				PaddingRight = UDim.new(0, 6),
+				PaddingBottom = UDim.new(0, 6)
+			})
+
+			local MaxDropdownHeight = 150
+			local CollapsedHeight = 36
+
+			local function UpdatePageCanvas()
+				task.wait(0.01)
+				Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 16)
+			end
+
+			local function ResizeDropdown()
+				local ContentHeight = OptionList.AbsoluteContentSize.Y + 12
+				OptionsContainer.CanvasSize = UDim2.new(0, 0, 0, ContentHeight)
+				Dropdown.Size = UDim2.new(1, -10, 0, 42 + math.min(ContentHeight, MaxDropdownHeight))
+				UpdatePageCanvas()
+			end
+
+			local DropdownResizeDebounce
+			TrackConnection(OptionList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+				if DropdownResizeDebounce then
+					task.cancel(DropdownResizeDebounce)
+				end
+				DropdownResizeDebounce = task.delay(0.02, function()
+					if OptionsContainer.Visible then
+						ResizeDropdown()
+					end
+				end)
+			end))
+
+			local Dropped = false
+			local CurrentOption = DefaultOption
+
+			if DefaultOption ~= "" and table.find(Options, DefaultOption) then
+				if Callback then Callback(DefaultOption) end
+				TitleLabel.Text = DropdownText .. ": " .. DefaultOption
+			else
+				TitleLabel.Text = DropdownText .. ": None"
+			end
+
+			local function CollapseDropdown()
+				Dropdown.Size = UDim2.new(1, -10, 0, CollapsedHeight)
+				UpdatePageCanvas()
+			end
+
+			local function ToggleDropdown()
+				Dropped = not Dropped
+				OptionsContainer.Visible = Dropped
+				Arrow.Rotation = Dropped and 180 or 0
+				if Dropped then
+					ResizeDropdown()
+				else
+					CollapseDropdown()
+				end
+			end
+
+			local OptionBg = Color3.fromRGB(116, 39, 188)
+			local function Refresh(NewOpts)
+				NewOpts = NewOpts or {}
+				for _, Child in ipairs(OptionsContainer:GetChildren()) do
+					if Child:IsA("TextButton") then
+						Child:Destroy()
+					end
+				end
+
+				if #NewOpts == 0 then
+					local NoOpt = Create("TextButton", {
+						Name = "NoOption",
+						Parent = OptionsContainer,
+						BackgroundColor3 = Color3.fromRGB(50, 50, 55),
+						BorderSizePixel = 0,
+						Size = UDim2.new(1, -12, 0, 30),
+						Font = Enum.Font.Gotham,
+						Text = "No Options Available",
+						TextColor3 = Color3.fromRGB(150, 150, 150),
+						TextSize = 14,
+						AutoButtonColor = false,
+						ZIndex = 10
+					})
+					AddUICorner(NoOpt, 6)
+				else
+					for _, Opt in ipairs(NewOpts) do
+						local Btn = Create("TextButton", {
+							Name = "Option",
+							Parent = OptionsContainer,
+							BackgroundColor3 = OptionBg,
+							BorderSizePixel = 0,
+							Size = UDim2.new(1, -12, 0, 30),
+							AutoButtonColor = false,
+							Font = Enum.Font.Gotham,
+							Text = Opt,
+							TextColor3 = White,
+							TextSize = 14,
+							ZIndex = 10
+						})
+						AddUICorner(Btn, 6)
+						TrackConnection(Btn.MouseButton1Click:Connect(function()
+							if Callback then Callback(Opt) end
+							CurrentOption = Opt
+							TitleLabel.Text = DropdownText .. ": " .. Opt
+							Dropped = false
+							OptionsContainer.Visible = false
+							Arrow.Rotation = 0
+							CollapseDropdown()
+						end))
+					end
+				end
+			end
+
+			Refresh(Options)
+			TrackConnection(Arrow.MouseButton1Click:Connect(ToggleDropdown))
+
+			return {
+				Refresh = function(_, NewOpts)
+					Options = NewOpts or {}
+					Refresh(Options)
+				end,
+				Add = function(_, Option)
+					if not table.find(Options, Option) then
+						Options[#Options + 1] = Option
+						Refresh(Options)
+					end
+				end,
+				Remove = function(_, Option)
+					local Index = table.find(Options, Option)
+					if Index then
+						table.remove(Options, Index)
+						if CurrentOption == Option then
+							CurrentOption = ""
+							TitleLabel.Text = DropdownText .. ": None"
+						end
+						Refresh(Options)
+					end
+				end
+			}
+		end
+
+		if not FirstTabCreated then
+			FirstTabCreated = true
+			Page.Visible = true
+			Button.BackgroundTransparency = 0.6
+			TextLabel.TextColor3 = White
+		end
+
+		return Elements
+	end
+
+	return TabContents
+end
+
+function Library:Destroy()
+	for _, Tween in ipairs(self.ActiveTweens) do
+		if Tween then
+			Tween:Cancel()
+			Tween:Destroy()
+		end
+	end
+	self.ActiveTweens = {}
+
+	for _, Conn in ipairs(self.Connections) do
+		if Conn and Conn.Connected then
+			Conn:Disconnect()
+		end
+	end
+	self.Connections = {}
+	self.TextCache = {}
+
+	for _, child in next, CoreGui:GetChildren() do
+		if child.Name:lower():sub(1, 8) == "sentinel" then
+			child:Destroy()
+		end
+	end
+end
+
+return Library
