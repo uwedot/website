@@ -1,1 +1,200 @@
-function parseCsv(t){let e=[],r=[],a=[],n=!1,l=()=>{a.push(r.join("")),r=[]},s=()=>{l(),e.push(a),a=[]};for(let e=0;e<t.length;e++){var o=t[e];n?'"'===o&&'"'===t[e+1]?(r.push('"'),e++):'"'===o?n=!1:r.push(o):'"'===o?n=!0:","===o?l():"\n"===o?s():"\r"!==o&&r.push(o)}return(r.length||a.length)&&s(),e}function normaliseHeader(e){return e.split("\n")[0].replace(/\r/g,"").trim().toLowerCase()}function normaliseKey(e){return e.toLowerCase().replace(/\s+/g," ").trim()}function findHeaderRowIndex(t){for(let e=0;e<Math.min(t.length,10);e++){var r=t[e].map(normaliseHeader);if(r.includes("era")&&r.some(e=>e.includes("name")))return e}return 0}function resolveColumns(r){var e=(...e)=>{for(var t of e)if(-1!==(t=r.indexOf(t)))return t;return r.findIndex(t=>e.some(e=>t.includes(e)))};return{era:e("era"),name:e("name"),quality:e("quality"),link:e("link(s)","link"),notes:e("notes"),leakDate:e("leak date","date"),availLen:e("available length")}}function extractEraDescription(t,e,r){let a="";for(let e=0;e<t.length;e++){var n=(t[e]||"").trim();!n||r.has(e)||URL_PATTERN.test(n)||n.length>a.length&&(a=n)}return a}function buildVaultData(o){var i={},u={};if(!(o.length<2)){let t=findHeaderRowIndex(o),r=resolveColumns(o[t].map(normaliseHeader)),a=new Set([r.era,r.name,r.quality,r.availLen,r.notes]),n="",l="",s="";for(let e=t+1;e<o.length;e++){var c=o[e];if(c&&!c.every(e=>!e.trim())){var m=(c[r.era]||"").trim(),d=(c[r.name]||"").trim();if(!m&&d){var T=STEM_CATEGORY_MAP.get(d.toLowerCase());if(T){s=T;continue}}m&&d&&(CHANGELOG_PATTERN.test(m)||(SUMMARY_PATTERN.test(m)?(n=extractEraDescription(c,r,a),l=m,s=""):SUMMARY_PATTERN.test(d)||(m!==l&&(l=m,s=""),n&&(u[T=normaliseKey(m)]||(u[T]=n),n=""),i[m]||(i[m]=[]),i[m].push([d,(c[r.quality]||"").trim(),0<=r.link?(c[r.link]||"").trim():"",(c[r.notes]||"").trim(),0<=r.leakDate?(c[r.leakDate]||"").trim():"",0<=r.availLen?(c[r.availLen]||"").trim():"","",s]))))}}}return{eraMap:i,eraDescs:u}}async function fetchSheetCsv(e,t,r){if((e=await fetch(`https://docs.google.com/spreadsheets/d/${e}/export?format=csv`+(t?"&gid="+t:""),{signal:r})).ok)return e.text();throw new Error("HTTP "+e.status)}async function handleLoad(t,r){currentController?.abort();let a=new AbortController;currentController=a;var n=setTimeout(()=>a.abort(),FETCH_TIMEOUT_MS);try{var e,l,s=await fetchSheetCsv(t,r,a.signal);clearTimeout(n),currentController===a&&(currentController=null,{eraMap:e,eraDescs:l}=buildVaultData(parseCsv(s)),self.postMessage({type:"SUCCESS",eraMap:e,eraDescs:l}))}catch(e){clearTimeout(n),currentController===a&&(currentController=null,t="AbortError"===e.name||"TimeoutError"===e.name,r=e.message?.startsWith("HTTP"),self.postMessage({type:"ERROR",reason:t?"timeout":r?"http":"network",message:e.message??String(e)}))}}let FETCH_TIMEOUT_MS=12e3,URL_PATTERN=/^https?:/i,SUMMARY_PATTERN=/^\d+\s+(?:total\s+)?(og file|full|tagged|partial(?:\s*\/\s*cut)?|snippet|stem bounce|unavailable)/i,CHANGELOG_PATTERN=/^\((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d+(?:st|nd|rd|th)?,\s*\d{4}\)$/i,STEM_CATEGORIES=["Studio Stems","Instrumentals","Acapellas","TV Tracks","Stem Player Stems","Sessions"],STEM_CATEGORY_MAP=new Map(STEM_CATEGORIES.map(e=>[e.toLowerCase(),e])),currentController=null;self.addEventListener("message",({data:e})=>{"ABORT"===e.type?(currentController?.abort(),currentController=null):"LOAD"===e.type&&handleLoad(e.sheetId,e.gid)});
+'use strict';
+
+const FETCH_TIMEOUT_MS = 12_000;
+const URL_PATTERN      = /^https?:/i;
+
+const SUMMARY_PATTERN   = /^\d+\s+(?:total\s+)?(og file|full|tagged|partial(?:\s*\/\s*cut)?|snippet|stem bounce|unavailable)/i;
+const CHANGELOG_PATTERN = /^\((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d+(?:st|nd|rd|th)?,\s*\d{4}\)$/i;
+
+const STEM_CATEGORIES   = ['Studio Stems', 'Instrumentals', 'Acapellas', 'TV Tracks', 'Stem Player Stems', 'Sessions'];
+const STEM_CATEGORY_MAP = new Map(STEM_CATEGORIES.map(c => [c.toLowerCase(), c]));
+
+function parseCsv(text) {
+  const rows = [];
+  let chars    = [];
+  let row      = [];
+  let inQuotes = false;
+
+  const pushField = () => { row.push(chars.join('')); chars = []; };
+  const pushRow   = () => { pushField(); rows.push(row); row = []; };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') { chars.push('"'); i++; }
+      else if (ch === '"')  inQuotes = false;
+      else                  chars.push(ch);
+    } else {
+      if      (ch === '"')  inQuotes = true;
+      else if (ch === ',')  pushField();
+      else if (ch === '\n') pushRow();
+      else if (ch !== '\r') chars.push(ch);
+    }
+  }
+
+  if (chars.length || row.length) pushRow();
+  return rows;
+}
+
+function normaliseHeader(h) {
+  return h.split('\n')[0].replace(/\r/g, '').trim().toLowerCase();
+}
+
+function normaliseKey(s) {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function findHeaderRowIndex(rows) {
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const candidate = rows[i].map(normaliseHeader);
+    if (candidate.includes('era') && candidate.some(h => h.includes('name'))) return i;
+  }
+  return 0;
+}
+
+function resolveColumns(headers) {
+  const findCol = (...names) => {
+    for (const n of names) {
+      const idx = headers.indexOf(n);
+      if (idx !== -1) return idx;
+    }
+    return headers.findIndex(h => names.some(n => h.includes(n)));
+  };
+
+  return {
+    era:      findCol('era'),
+    name:     findCol('name'),
+    quality:  findCol('quality'),
+    link:     findCol('link(s)', 'link'),
+    notes:    findCol('notes'),
+    leakDate: findCol('leak date', 'date'),
+    availLen: findCol('available length'),
+  };
+}
+
+function extractEraDescription(row, cols, skipSet) {
+  let desc = '';
+  for (let j = 0; j < row.length; j++) {
+    const val = (row[j] || '').trim();
+    if (!val || skipSet.has(j) || URL_PATTERN.test(val)) continue;
+    if (val.length > desc.length) desc = val;
+  }
+  return desc;
+}
+
+function buildVaultData(rows) {
+  const eraMap   = {};
+  const eraDescs = {};
+  if (rows.length < 2) return { eraMap, eraDescs };
+
+  const headerRowIdx = findHeaderRowIndex(rows);
+  const headers      = rows[headerRowIdx].map(normaliseHeader);
+  const cols         = resolveColumns(headers);
+  const skipSet      = new Set([cols.era, cols.name, cols.quality, cols.availLen, cols.notes]);
+
+  let pendingDesc  = '';
+  let currentEra   = '';
+  let currentCat   = '';
+
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every(c => !c.trim())) continue;
+
+    const era  = (row[cols.era]  || '').trim();
+    const name = (row[cols.name] || '').trim();
+
+    if (!era && name) {
+      const catMatch = STEM_CATEGORY_MAP.get(name.toLowerCase());
+      if (catMatch) { currentCat = catMatch; continue; }
+    }
+
+    if (!era || !name) continue;
+    if (CHANGELOG_PATTERN.test(era)) continue;
+
+    if (SUMMARY_PATTERN.test(era)) {
+      pendingDesc = extractEraDescription(row, cols, skipSet);
+      currentEra  = era;
+      currentCat  = '';
+      continue;
+    }
+    if (SUMMARY_PATTERN.test(name)) continue;
+
+    if (era !== currentEra) {
+      currentEra = era;
+      currentCat = '';
+    }
+
+    if (pendingDesc) {
+      const key = normaliseKey(era);
+      if (!eraDescs[key]) eraDescs[key] = pendingDesc;
+      pendingDesc = '';
+    }
+
+    if (!eraMap[era]) eraMap[era] = [];
+    eraMap[era].push([
+      name,
+      (row[cols.quality] || '').trim(),
+      cols.link     >= 0 ? (row[cols.link]     || '').trim() : '',
+      (row[cols.notes]   || '').trim(),
+      cols.leakDate >= 0 ? (row[cols.leakDate] || '').trim() : '',
+      cols.availLen >= 0 ? (row[cols.availLen] || '').trim() : '',
+      '',
+      currentCat,
+    ]);
+  }
+
+  return { eraMap, eraDescs };
+}
+
+async function fetchSheetCsv(sheetId, gid, signal) {
+  const gidParam = gid ? `&gid=${gid}` : '';
+  const res = await fetch(
+    `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`,
+    { signal }
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
+let currentController = null;
+
+async function handleLoad(sheetId, gid) {
+  currentController?.abort();
+
+  const controller  = new AbortController();
+  currentController = controller;
+  const timeoutId   = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const csvText = await fetchSheetCsv(sheetId, gid, controller.signal);
+    clearTimeout(timeoutId);
+    if (currentController !== controller) return;
+    currentController = null;
+
+    const rows = parseCsv(csvText);
+    const { eraMap, eraDescs } = buildVaultData(rows);
+    self.postMessage({ type: 'SUCCESS', eraMap, eraDescs });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (currentController !== controller) return;
+    currentController = null;
+
+    const isAbort = err.name === 'AbortError' || err.name === 'TimeoutError';
+    const isHttp  = err.message?.startsWith('HTTP');
+
+    self.postMessage({
+      type:    'ERROR',
+      reason:  isAbort ? 'timeout' : isHttp ? 'http' : 'network',
+      message: err.message ?? String(err),
+    });
+  }
+}
+
+self.addEventListener('message', ({ data }) => {
+  if (data.type === 'ABORT') {
+    currentController?.abort();
+    currentController = null;
+    return;
+  }
+  if (data.type === 'LOAD') handleLoad(data.sheetId, data.gid);
+});

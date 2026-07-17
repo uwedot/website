@@ -1,24 +1,1232 @@
-function formatTime(e){return!isFinite(e)||e<0?"0:00":(e=Math.floor(e),Math.floor(e/60)+":"+String(e%60).padStart(2,"0"))}function formatCountdown(e){var t;return e<=0?"0s":(t=(e=Math.ceil(e/1e3))%60,0<(e=Math.floor(e/60))?e+`m ${t}s`:t+"s")}function parseDateToTimestamp(e){if(!e)return 0;var t=dateCache.get(e);if(void 0!==t)return t;let a=Date.parse(e);return isNaN(a)&&(t=e.match(/\b(19|20)\d{2}\b/),a=t?new Date(t[0],0,1).getTime():0),500<=dateCache.size&&dateCache.clear(),dateCache.set(e,a),a}function resolveUrl(e){try{return new URL(e).href}catch{return e}}function normaliseKey(e){return e.toLowerCase().replace(/\s+/g," ").trim()}function getQualityClass(e){if(e){var t,a,n=e.toLowerCase();for({test:t,cls:a}of QUALITY_MAP)if(a&&t(n))return a}return"q-other"}function getAvailableLengthClass(e){if(e){var t,a,n=e.toLowerCase();for({test:t,cls:a}of AVAIL_LEN_CLASS_MAP)if(t(n))return a}return"tl-other"}function isQualityVisible(e){var t,a,n=(e||"").toLowerCase();if(!n)return state.activeQualities.has("unavail");for({key:t,test:a}of QUALITY_MAP)if(state.activeQualities.has(t)&&a(n))return!0;return!1}function isPlayable(e,t){return!!e&&!(t=(t||"").toLowerCase()).includes("unavail")&&!t.includes("not avail")&&e.split(/[\s,]+/).some(e=>e.includes(PILLOWS_HOST))}function closeAllLinkDropdowns(){state.hasOpenDropdown&&(document.querySelectorAll(".song-dropdown-menu.open").forEach(e=>{e.classList.remove("open"),e.style.position="",e.style.top="",e.style.left="",(e=e.previousElementSibling)&&e.setAttribute("aria-expanded","false")}),state.hasOpenDropdown=!1)}function positionDropdown(a,n){if(a&&n){var n=n.getBoundingClientRect(),s=a.style.visibility,l=(a.style.visibility="hidden",a.style.position="fixed",a.style.top="0",a.style.left="0",a.style.right="auto",a.style.margin="0",a.offsetHeight||160);a.style.visibility=s;let e=n.bottom+4,t=n.right-a.offsetWidth;t<4&&(t=4),e+l>window.innerHeight-8&&(e=n.top-l-4),a.style.top=e+"px",a.style.left=t+"px"}}function toggleDropdown(e,t){var a=t.classList.toggle("open");e.setAttribute("aria-expanded",String(a)),a&&positionDropdown(t,e)}function closeDropdown(e,t){t.classList.remove("open"),e.setAttribute("aria-expanded","false")}function collapsePanel(e){openPanels.has(e)&&(e.classList.remove("open"),openPanels.delete(e),e=e.previousElementSibling)&&(e.classList.remove("active"),e.setAttribute("aria-expanded","false"))}function collapseAllEraPanels(){for(var e of openPanels)collapsePanel(e)}function openPanel(e,t){e.classList.add("open"),openPanels.add(e),t.classList.add("active"),t.setAttribute("aria-expanded","true")}function buildSongControls({links:e,isUnavailable:t,songName:a,noPlay:n}){let s="",l="",i="",r,o,d,c,u=e.find(e=>e.includes(PILLOWS_HOST)),m=(u&&!t&&(r=u.indexOf(PILLOWS_HOST)+PILLOWS_HOST.length,o=u.slice(r),i=PILLOWS_API+o,n?(d=PILLOWS_DL_API+o,l=`<a class="song-download-btn" href="${escapeHtml(d)}" download target="_blank" rel="noopener noreferrer">Download</a>`):s=`<button type="button" class="song-play-btn" data-name="${escapeHtml(a)}">Play</button>`),"");return 1<e.length?(c=e.map((e,t)=>`<a class="song-dropdown-item" href="${escapeHtml(e)}" target="_blank" rel="noopener noreferrer">Link ${t+1}</a>`).join(""),m=`
+'use strict';
+
+const DefaultSheetId = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
+const StemsSheetGid  = '495336364';
+const StemCategories  = ['Studio Stems', 'Instrumentals', 'Acapellas', 'TV Tracks', 'Stem Player Stems', 'Sessions'];
+
+const ArtistPresets = [
+  { name: 'Kanye West',     id: '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo' },
+  { name: 'Kanye West Alt', id: '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM' },
+  { name: 'Drake',          id: '1v55XAPLzw1iuWxH1OQKajCIYPhW2BXcLoV4mXDZ55DI' },
+  { name: 'Playboi Carti',  id: '1Irtfvymu26CShYowLMMfD-rM0o9CJqE6-BBSlYsAaF4' },
+];
+
+const RecentSongsLimit  = 100;
+const SheetRateWindow   = 60_000;
+const SheetRateMax      = 3;
+const SearchDebounceMs  = 200;
+const ReloadCountdownMs = 5_000;
+
+const TabMarkers = {
+  best:    ['⭐'],
+  special: ['✨'],
+};
+
+const QualityMap = [
+  { key: 'lossless', cls: 'q-lossless', test: l => l.includes('lossless') },
+  { key: 'high',     cls: 'q-high',     test: l => l.includes('high')     },
+  { key: 'cd',       cls: 'q-cd',       test: l => l.includes('cd')       },
+  { key: 'rec',      cls: 'q-rec',      test: l => l.includes('record')   },
+  { key: 'low',      cls: 'q-low',      test: l => l.includes('low')      },
+  { key: 'unavail',  cls: null,         test: l => l.includes('not avail') || l.includes('unavail') },
+];
+
+const AvailLenClassMap = [
+  { test: l => /\bog\b/.test(l),        cls: 'tl-og'        },
+  { test: l => l.includes('lossless'),  cls: 'tl-other'     },
+  { test: l => l.includes('stem'),      cls: 'tl-stem'      },
+  { test: l => l.includes('full'),      cls: 'tl-full'      },
+  { test: l => l.includes('tagged'),    cls: 'tl-tagged'    },
+  { test: l => l.includes('partial'),   cls: 'tl-partial'   },
+  { test: l => l.includes('snippet'),   cls: 'tl-snippet'   },
+  { test: l => l.includes('unavail'),   cls: 'tl-unavail'   },
+  { test: l => l.includes('confirmed'), cls: 'tl-confirmed' },
+  { test: l => l.includes('rumored'),   cls: 'tl-rumored'   },
+  { test: l => l.includes('vox'),       cls: 'tl-vox'       },
+];
+
+const VersionPattern = /[[(](v(?:ersion)?\s*\d+)[\])]/i;
+const UrlPattern     = /^https?:/i;
+const PillowsHost    = 'pillows.su/f/';
+const PillowsApi     = 'https://api.pillows.su/api/get/';
+const PillowsDlApi   = 'https://api.pillows.su/api/download/';
+
+const AllQualityKeys = QualityMap.map(q => q.key);
+
+const State = {
+  PrimarySheetId:        DefaultSheetId,
+  VaultData:             null,
+  EraDescriptions:       {},
+  StemsData:             null,
+  CurrentTab:            'all',
+  ActiveQualities:       new Set(AllQualityKeys),
+  ShowPlayableOnly:      false,
+  IsLoading:             false,
+  HasOpenDropdown:       false,
+  SearchDebounceId:      null,
+  CountdownId:           null,
+  CooldownIntervalId:    null,
+  SheetChangeTimestamps: JSON.parse(localStorage.getItem('sheetChangeTs') || '[]'),
+};
+
+const PlayBtnMap  = new Map();
+const OpenPanels  = new Set();
+const DateCache   = new Map();
+
+const HtmlEscapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const HtmlEscapeRe  = /[&<>"]/g;
+
+function EscapeHtml(str) {
+  return String(str).replace(HtmlEscapeRe, c => HtmlEscapeMap[c]);
+}
+
+function FormatTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return '0:00';
+  const s = Math.floor(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function FormatCountdown(ms) {
+  if (ms <= 0) return '0s';
+  const totalSec = Math.ceil(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+}
+
+function ParseDateToTimestamp(dateStr) {
+  if (!dateStr) return 0;
+  const cached = DateCache.get(dateStr);
+  if (cached !== undefined) return cached;
+
+  let result = Date.parse(dateStr);
+  if (isNaN(result)) {
+    const m = dateStr.match(/\b(19|20)\d{2}\b/);
+    result = m ? new Date(m[0], 0, 1).getTime() : 0;
+  }
+
+  if (DateCache.size >= 500) DateCache.clear();
+  DateCache.set(dateStr, result);
+  return result;
+}
+
+function ResolveUrl(url) {
+  try { return new URL(url).href; } catch { return url; }
+}
+
+function NormaliseKey(s) {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+const Clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+function GetQualityClass(quality) {
+  if (!quality) return 'q-other';
+  const l = quality.toLowerCase();
+  for (const { test, cls } of QualityMap) {
+    if (cls && test(l)) return cls;
+  }
+  return 'q-other';
+}
+
+function GetAvailableLengthClass(availLen) {
+  if (!availLen) return 'tl-other';
+  const l = availLen.toLowerCase();
+  for (const { test, cls } of AvailLenClassMap) {
+    if (test(l)) return cls;
+  }
+  return 'tl-other';
+}
+
+function IsQualityVisible(quality) {
+  const l = (quality || '').toLowerCase();
+  if (!l) return State.ActiveQualities.has('unavail');
+  for (const { key, test } of QualityMap) {
+    if (State.ActiveQualities.has(key) && test(l)) return true;
+  }
+  return false;
+}
+
+function IsPlayable(linkString, quality) {
+  if (!linkString) return false;
+  const q = (quality || '').toLowerCase();
+  if (q.includes('unavail') || q.includes('not avail')) return false;
+  return linkString.split(/[\s,]+/).some(u => u.includes(PillowsHost));
+}
+
+const AudioPlayer = {
+  AudioElement:    null,
+  PlayerElement: null,
+  Elements:      {},
+
+  Init() {
+    this.AudioElement    = document.getElementById('main-audio');
+    this.PlayerElement = document.getElementById('global-player');
+    if (!this.AudioElement || !this.PlayerElement) return;
+
+    this.Elements = {
+      PlayIcon:       document.getElementById('player-play-icon'),
+      PauseIcon:      document.getElementById('player-pause-icon'),
+      PlayPauseBtn:   document.getElementById('player-play-btn'),
+      CloseBtn:       document.getElementById('player-close-btn'),
+      CurrentTimeEl:  document.getElementById('player-current'),
+      DurationEl:     document.getElementById('player-duration'),
+      TrackNameEl:    document.getElementById('player-track-name'),
+      TrackCurrentEl: document.getElementById('player-track-current'),
+      TrackLengthEl:  document.getElementById('player-track-length'),
+      ProgressFill:   document.getElementById('player-fill'),
+      VolFill:        document.getElementById('player-vol-fill'),
+      ScrubberEl:     document.getElementById('player-scrubber'),
+      VolumeSlider:   document.getElementById('player-volume'),
+    };
+
+    this.BindAudioEvents();
+    this.BindControls();
+    this.BindSliders();
+    this.BindMediaSession();
+    this.SetVolume(80);
+  },
+
+  RegisterPlayBtn(btn, resolvedUrl) {
+    if (!PlayBtnMap.has(resolvedUrl)) PlayBtnMap.set(resolvedUrl, new Set());
+    PlayBtnMap.get(resolvedUrl).add(btn);
+  },
+
+  SyncPlayButtons() {
+    const audio   = this.AudioElement;
+    const current = audio.src ? ResolveUrl(audio.src) : '';
+    const playing = !audio.paused;
+    for (const [href, btns] of PlayBtnMap) {
+      const label = (href === current && playing) ? 'Pause' : 'Play';
+      for (const btn of btns) btn.textContent = label;
+    }
+  },
+
+  ClearPlayButtons() {
+    PlayBtnMap.clear();
+  },
+
+  SafePlay() {
+    this.AudioElement.play().catch(() => {});
+  },
+
+  CurrentResolvedSrc() {
+    return this.AudioElement.src ? ResolveUrl(this.AudioElement.src) : '';
+  },
+
+  PlayOrToggle(resolvedUrl, trackName) {
+    const audio = this.AudioElement;
+    if (this.CurrentResolvedSrc() === resolvedUrl) {
+      if (audio.paused) this.SafePlay();
+      else              audio.pause();
+      return;
+    }
+    this.Elements.TrackNameEl.textContent = trackName;
+    this.SetMediaSessionTrack(trackName);
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    audio.src = resolvedUrl;
+    this.PlayerElement.removeAttribute('hidden');
+    this.SafePlay();
+  },
+
+  Close() {
+    const { AudioElement: audio, PlayerElement: playerEl } = this;
+    audio.pause();
+    audio.src = '';
+    audio.load();
+    playerEl.setAttribute('hidden', '');
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+    this.SetPlayState(false);
+    this.SetProgress(0);
+    this.SetCurrentTime('0:00');
+    this.SetDuration('0:00');
+    this.SyncPlayButtons();
+  },
+
+  SetVolume(pct) {
+    const c = Clamp(pct, 0, 100);
+    const { VolFill: volFill, VolumeSlider: volumeSlider } = this.Elements;
+    volFill.style.width = `${c}%`;
+    this.AudioElement.volume = c / 100;
+    volumeSlider.setAttribute('aria-valuenow', Math.round(c));
+  },
+
+  SetPlayState(playing) {
+    const { PlayIcon: playIcon, PauseIcon: pauseIcon, PlayPauseBtn: playPauseBtn } = this.Elements;
+    playIcon.style.display  = playing ? 'none' : '';
+    pauseIcon.style.display = playing ? ''     : 'none';
+    playPauseBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  },
+
+  SetProgress(pct) {
+    const c = Clamp(pct, 0, 100);
+    const { ProgressFill: progressFill, ScrubberEl: scrubberEl } = this.Elements;
+    progressFill.style.width = `${c}%`;
+    scrubberEl.setAttribute('aria-valuenow', Math.round(c));
+  },
+
+  SetCurrentTime(t) {
+    this.Elements.CurrentTimeEl.textContent = this.Elements.TrackCurrentEl.textContent = t;
+  },
+
+  SetDuration(t) {
+    this.Elements.DurationEl.textContent = this.Elements.TrackLengthEl.textContent = t;
+  },
+
+  BindAudioEvents() {
+    const { AudioElement: audio, Elements: els } = this;
+
+    audio.addEventListener('play',  () => { this.SetPlayState(true);  this.SyncPlayButtons(); });
+    audio.addEventListener('pause', () => { this.SetPlayState(false); this.SyncPlayButtons(); });
+    audio.addEventListener('ended', () => {
+      this.SetPlayState(false);
+      this.SetProgress(0);
+      this.SetCurrentTime('0:00');
+      this.SyncPlayButtons();
+    });
+    audio.addEventListener('loadedmetadata', () => this.SetDuration(FormatTime(audio.duration)));
+    audio.addEventListener('error', () => {
+      this.SetPlayState(false);
+      els.TrackNameEl.textContent = 'Playback error, format not supported or unavailable';
+    });
+    audio.addEventListener('timeupdate', () => {
+      if (!audio.duration) return;
+      this.SetProgress((audio.currentTime / audio.duration) * 100);
+      this.SetCurrentTime(FormatTime(audio.currentTime));
+      if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+        navigator.mediaSession.setPositionState({
+          duration:     audio.duration,
+          playbackRate: audio.playbackRate,
+          position:     audio.currentTime,
+        });
+      }
+    });
+  },
+
+  BindControls() {
+    const { AudioElement: audio, Elements: els } = this;
+
+    els.PlayPauseBtn.addEventListener('click', () => {
+      if (audio.paused) this.SafePlay();
+      else              audio.pause();
+    });
+
+    els.CloseBtn.addEventListener('click', () => this.Close());
+  },
+
+  BindSliders() {
+    const { AudioElement: audio, Elements: els } = this;
+    const { ScrubberEl: scrubberEl, VolumeSlider: volumeSlider } = els;
+
+    const pctFromPointer = (ev, el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.width ? Clamp((ev.clientX - rect.left) / rect.width, 0, 1) : 0;
+    };
+    const bindTouchSlider = (el, handler) => {
+      el.addEventListener('touchstart', ev => handler(ev.touches[0]), { passive: true });
+      el.addEventListener('touchmove',  ev => handler(ev.touches[0]), { passive: true });
+    };
+
+    let draggingProgress = false;
+    let draggingVolume   = false;
+
+    scrubberEl.addEventListener('mousedown', ev => {
+      draggingProgress = true;
+      if (audio.duration) audio.currentTime = pctFromPointer(ev, scrubberEl) * audio.duration;
+    });
+    volumeSlider.addEventListener('mousedown', ev => {
+      draggingVolume = true;
+      this.SetVolume(pctFromPointer(ev, volumeSlider) * 100);
+    });
+    window.addEventListener('mousemove', ev => {
+      if (draggingProgress && audio.duration) audio.currentTime = pctFromPointer(ev, scrubberEl) * audio.duration;
+      if (draggingVolume)                     this.SetVolume(pctFromPointer(ev, volumeSlider) * 100);
+    });
+    window.addEventListener('mouseup', () => { draggingProgress = false; draggingVolume = false; });
+
+    bindTouchSlider(scrubberEl,   t => { if (audio.duration) audio.currentTime = pctFromPointer(t, scrubberEl) * audio.duration; });
+    bindTouchSlider(volumeSlider, t => this.SetVolume(pctFromPointer(t, volumeSlider) * 100));
+
+    scrubberEl.addEventListener('keydown', ev => {
+      if (!audio.duration) return;
+      const step = audio.duration * 0.02;
+      if (ev.key === 'ArrowRight') { ev.preventDefault(); audio.currentTime = Math.min(audio.duration, audio.currentTime + step); }
+      if (ev.key === 'ArrowLeft')  { ev.preventDefault(); audio.currentTime = Math.max(0,              audio.currentTime - step); }
+    });
+  },
+
+  SetMediaSessionTrack(trackName) {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:  trackName,
+      artist: 'Mistape',
+    });
+  },
+
+  BindMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    const { AudioElement: audio } = this;
+    const ms = navigator.mediaSession;
+    ms.setActionHandler('play',         () => this.SafePlay());
+    ms.setActionHandler('pause',        () => audio.pause());
+    ms.setActionHandler('stop',         () => { audio.pause(); audio.currentTime = 0; });
+    ms.setActionHandler('seekto',       d => { if (d.seekTime !== undefined && audio.duration) audio.currentTime = d.seekTime; });
+    ms.setActionHandler('seekbackward', d => { audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset || 10)); });
+    ms.setActionHandler('seekforward',  d => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d.seekOffset || 10)); });
+  },
+};
+
+function CloseAllLinkDropdowns() {
+  if (!State.HasOpenDropdown) return;
+  document.querySelectorAll('.song-dropdown-menu.open').forEach(menu => {
+    menu.classList.remove('open');
+    menu.style.position = '';
+    menu.style.top      = '';
+    menu.style.left     = '';
+    const btn = menu.previousElementSibling;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+  State.HasOpenDropdown = false;
+}
+
+function PositionDropdown(menu, btn) {
+  if (!menu || !btn) return;
+
+  const btnRect = btn.getBoundingClientRect();
+  const GAP = 4;
+
+  const prevVis = menu.style.visibility;
+  menu.style.visibility = 'hidden';
+  menu.style.position   = 'fixed';
+  menu.style.top        = '0';
+  menu.style.left       = '0';
+  menu.style.right      = 'auto';
+  menu.style.margin     = '0';
+
+  const menuH = menu.offsetHeight || 160;
+  menu.style.visibility = prevVis;
+
+  let top  = btnRect.bottom + GAP;
+  let left = btnRect.right - menu.offsetWidth;
+  if (left < 4) left = 4;
+  if (top + menuH > window.innerHeight - 8) top = btnRect.top - menuH - GAP;
+
+  menu.style.top  = top  + 'px';
+  menu.style.left = left + 'px';
+}
+
+function ToggleDropdown(btn, menu) {
+  const isOpen = menu.classList.toggle('open');
+  btn.setAttribute('aria-expanded', String(isOpen));
+  if (isOpen) {
+    PositionDropdown(menu, btn);
+  }
+}
+
+function CloseDropdown(btn, menu) {
+  menu.classList.remove('open');
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+function CollapsePanel(panel) {
+  if (!OpenPanels.has(panel)) return;
+  panel.classList.remove('open');
+  OpenPanels.delete(panel);
+  const eraRow = panel.previousElementSibling;
+  if (eraRow) {
+    eraRow.classList.remove('active');
+    eraRow.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function CollapseAllEraPanels() {
+  for (const panel of OpenPanels) CollapsePanel(panel);
+}
+
+function OpenPanel(panel, eraRow) {
+  panel.classList.add('open');
+  OpenPanels.add(panel);
+  eraRow.classList.add('active');
+  eraRow.setAttribute('aria-expanded', 'true');
+}
+
+function BuildSongControls({ links, displayQuality, isUnavailable, songName, noPlay }) {
+  let playBtnHtml = '';
+  let downloadBtnHtml = '';
+  let resolvedDownload = '';
+
+  const pillowsLink = links.find(u => u.includes(PillowsHost));
+  if (pillowsLink && !isUnavailable) {
+    const pathStart = pillowsLink.indexOf(PillowsHost) + PillowsHost.length;
+    const filePath  = pillowsLink.slice(pathStart);
+    resolvedDownload = PillowsApi + filePath;
+    if (noPlay) {
+      const downloadUrl = PillowsDlApi + filePath;
+      downloadBtnHtml = `<a class="song-download-btn" href="${EscapeHtml(downloadUrl)}" download target="_blank" rel="noopener noreferrer">Download</a>`;
+    } else {
+      playBtnHtml = `<button type="button" class="song-play-btn" data-name="${EscapeHtml(songName)}">Play</button>`;
+    }
+  }
+
+  let linksHtml = '';
+  if (links.length > 1) {
+    const items = links.map((url, i) =>
+      `<a class="song-dropdown-item" href="${EscapeHtml(url)}" target="_blank" rel="noopener noreferrer">Link ${i + 1}</a>`
+    ).join('');
+    linksHtml = `
       <div class="song-dropdown">
         <button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false">
           <span>Links</span>
           <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
         </button>
-        <div class="song-dropdown-menu" role="menu">${c}</div>
-      </div>`):1===e.length&&(m=`<a class="song-link-btn" href="${escapeHtml(e[0])}" target="_blank" rel="noopener noreferrer">View</a>`),{playBtnHtml:s,downloadBtnHtml:l,linksHtml:m,resolvedDownload:i}}function buildDatePillHtml(e){var t;return e?(t=new Date(e),isNaN(t)?`<div class="song-date-pill">${escapeHtml(e)}</div>`:`<div class="song-date-pill">${String(t.getUTCDate()).padStart(2,"0")}/${String(t.getUTCMonth()+1).padStart(2,"0")}/${t.getUTCFullYear()}</div>`):""}function buildSongElement({songName:e,quality:t,linkString:a,notes:n,trackNumber:s,availLen:l,recentEra:i,leakDate:r,noPlay:o}){let d=(n||"").trim(),c=""!==d,u=a?a.split(/[\s,]+/).map(e=>e.trim()).filter(e=>URL_PATTERN.test(e)):[],m=(l||"").toLowerCase(),p=m.includes("rumored")||m.includes("confirmed"),g=0<u.length||p?t:"Unavailable",v=(g||"").toLowerCase(),{playBtnHtml:h,downloadBtnHtml:y,linksHtml:E,resolvedDownload:b}=buildSongControls({links:u,displayQuality:g,isUnavailable:!g||v.includes("unavail")||v.includes("not avail"),songName:e,noPlay:o}),S,L=c?'<div class="note-toggle" role="button" tabindex="0" aria-label="Show note"></div>':"",f=VERSION_PATTERN.exec(e),w=f?`<div class="song-version-pill">${escapeHtml(f[1])}</div>`:"",T=f?e.replace(f[0],"").replace(/\s{2,}/g," ").trim():e,A="",I=(i&&(S=buildDatePillHtml(r),A=`<div class="song-top-row"><div class="song-era-pill">${escapeHtml(i)}</div>${S}</div>`),w+(g?`<div class="song-quality ${getQualityClass(g)}">${escapeHtml(g)}</div>`:"")+(l?`<div class="song-type ${getAvailableLengthClass(l)}">${escapeHtml(l)}</div>`:"")),k=document.createElement("div");if(k.className="song-item",k.setAttribute("role","listitem"),k.innerHTML=`
-    <div class="song-num">${s}</div>
+        <div class="song-dropdown-menu" role="menu">${items}</div>
+      </div>`;
+  } else if (links.length === 1) {
+    linksHtml = `<a class="song-link-btn" href="${EscapeHtml(links[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
+  }
+
+  return { playBtnHtml, downloadBtnHtml, linksHtml, resolvedDownload };
+}
+
+function BuildDatePillHtml(leakDate) {
+  if (!leakDate) return '';
+  const parsed = new Date(leakDate);
+  if (isNaN(parsed)) return `<div class="song-date-pill">${EscapeHtml(leakDate)}</div>`;
+  const dd   = String(parsed.getUTCDate()).padStart(2, '0');
+  const mm   = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = parsed.getUTCFullYear();
+  return `<div class="song-date-pill">${dd}/${mm}/${yyyy}</div>`;
+}
+
+function BuildSongElement({ songName, quality, linkString, notes, trackNumber, availLen, recentEra, leakDate, noPlay }) {
+  const safeNotes = (notes || '').trim();
+  const hasNotes  = safeNotes !== '';
+
+  const links = linkString
+    ? linkString.split(/[\s,]+/).map(u => u.trim()).filter(u => UrlPattern.test(u))
+    : [];
+
+  const availLower      = (availLen || '').toLowerCase();
+  const isRumoredOrConf = availLower.includes('rumored') || availLower.includes('confirmed');
+  const displayQuality  = (links.length > 0 || isRumoredOrConf) ? quality : 'Unavailable';
+  const displayQualLow  = (displayQuality || '').toLowerCase();
+  const isUnavailable   = !displayQuality ||
+    displayQualLow.includes('unavail') ||
+    displayQualLow.includes('not avail');
+
+  const { playBtnHtml, downloadBtnHtml, linksHtml, resolvedDownload } = BuildSongControls({
+    links, displayQuality, isUnavailable, songName, noPlay,
+  });
+
+  const noteToggleHtml = hasNotes
+    ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note"></div>`
+    : '';
+
+  const versionMatch    = VersionPattern.exec(songName);
+  const versionPillHtml = versionMatch
+    ? `<div class="song-version-pill">${EscapeHtml(versionMatch[1])}</div>`
+    : '';
+  const displayName = versionMatch
+    ? songName.replace(versionMatch[0], '').replace(/\s{2,}/g, ' ').trim()
+    : songName;
+
+  let topRowHtml = '';
+  if (recentEra) {
+    const datePillHtml = BuildDatePillHtml(leakDate);
+    topRowHtml = `<div class="song-top-row"><div class="song-era-pill">${EscapeHtml(recentEra)}</div>${datePillHtml}</div>`;
+  }
+
+  const pillsHtml =
+    versionPillHtml +
+    (displayQuality ? `<div class="song-quality ${GetQualityClass(displayQuality)}">${EscapeHtml(displayQuality)}</div>` : '') +
+    (availLen       ? `<div class="song-type ${GetAvailableLengthClass(availLen)}">${EscapeHtml(availLen)}</div>` : '');
+
+  const songEl = document.createElement('div');
+  songEl.className = 'song-item';
+  songEl.setAttribute('role', 'listitem');
+  songEl.innerHTML = `
+    <div class="song-num">${trackNumber}</div>
     <div class="song-body">
-      ${A}
-      <div class="song-name" title="${escapeHtml(e)}">${escapeHtml(T)}</div>
-      <div class="song-pills">${I}</div>
+      ${topRowHtml}
+      <div class="song-name" title="${EscapeHtml(songName)}">${EscapeHtml(displayName)}</div>
+      <div class="song-pills">${pillsHtml}</div>
     </div>
-    <div class="song-btns">${h}${y}${E}${L}</div>
-  `,1<u.length){let t=k.querySelector(".song-dropdown-btn"),a=k.querySelector(".song-dropdown-menu");t.addEventListener("click",e=>{e.stopPropagation(),e=a.classList.contains("open"),closeAllLinkDropdowns(),e||(a.classList.add("open"),t.setAttribute("aria-expanded","true"),state.hasOpenDropdown=!0,positionDropdown(a,t))})}let C=k.querySelector(".song-play-btn");if(C&&b&&(AudioPlayer.registerPlayBtn(C,b),C.addEventListener("click",e=>{e.stopPropagation(),closeAllLinkDropdowns(),AudioPlayer.playOrToggle(b,C.dataset.name)})),c){(n=document.createElement("div")).className="song-note",n.textContent=d;let t=k.querySelector(".note-toggle"),a=()=>{var e=k.classList.toggle("expanded");t.setAttribute("aria-label",e?"Hide note":"Show note")};return t.addEventListener("click",e=>{e.stopPropagation(),a()}),t.addEventListener("keydown",e=>{"Enter"!==e.key&&" "!==e.key||(e.preventDefault(),a())}),[k,n]}return[k]}function renderSongs(e,t){let o=document.createDocumentFragment();e.forEach(([e,t,a,n,s,l,i],r)=>{buildSongElement({songName:e,quality:t,linkString:a,notes:n,trackNumber:r+1,availLen:l||"",recentEra:i||"",leakDate:s||""}).forEach(e=>o.appendChild(e))}),t.appendChild(o),AudioPlayer.syncPlayButtons()}function renderStemsSongs(e,t){var a,n,s=new Map;for(a of e){var l=a[7]||"";s.has(l)||s.set(l,[]),s.get(l).push(a)}let i=document.createDocumentFragment(),r=1;for(n of STEM_CATEGORIES){var o,d=s.get(n);d&&d.length&&((o=document.createElement("div")).className="stems-category-divider",o.textContent=n,i.appendChild(o),d.forEach(([e,t,a,n,s,l])=>{buildSongElement({songName:e,quality:t,linkString:a,notes:n,trackNumber:r++,availLen:l||"",recentEra:"",leakDate:s||"",noPlay:!0}).forEach(e=>i.appendChild(e))}))}t.appendChild(i),AudioPlayer.syncPlayButtons()}function buildFlatSongList(e){var t=document.createElement("div");return t.className="songs-flat",t.setAttribute("role","list"),t.setAttribute("aria-label","Recent songs"),renderSongs(e,t),t}function buildEraElement(e,t){var a=document.createElement("div");a.className="era-wrap",a.setAttribute("role","listitem");let n=document.createElement("div"),s=(n.className="era-row",n.setAttribute("role","button"),n.setAttribute("tabindex","0"),n.setAttribute("aria-expanded","false"),n.innerHTML=`
-    <div class="era-row-name">${escapeHtml(e)}</div>
+    <div class="song-btns">${playBtnHtml}${downloadBtnHtml}${linksHtml}${noteToggleHtml}</div>
+  `;
+
+  if (links.length > 1) {
+    const dropBtn  = songEl.querySelector('.song-dropdown-btn');
+    const dropMenu = songEl.querySelector('.song-dropdown-menu');
+    dropBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const wasOpen = dropMenu.classList.contains('open');
+      CloseAllLinkDropdowns();
+      if (!wasOpen) {
+        dropMenu.classList.add('open');
+        dropBtn.setAttribute('aria-expanded', 'true');
+        State.HasOpenDropdown = true;
+        PositionDropdown(dropMenu, dropBtn);
+      }
+    });
+  }
+
+  const playBtn = songEl.querySelector('.song-play-btn');
+  if (playBtn && resolvedDownload) {
+    AudioPlayer.RegisterPlayBtn(playBtn, resolvedDownload);
+    playBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      CloseAllLinkDropdowns();
+      AudioPlayer.PlayOrToggle(resolvedDownload, playBtn.dataset.name);
+    });
+  }
+
+  if (hasNotes) {
+    const noteEl = document.createElement('div');
+    noteEl.className   = 'song-note';
+    noteEl.textContent = safeNotes;
+    const noteToggle = songEl.querySelector('.note-toggle');
+    const toggleNote = () => {
+      const expanded = songEl.classList.toggle('expanded');
+      noteToggle.setAttribute('aria-label', expanded ? 'Hide note' : 'Show note');
+    };
+    noteToggle.addEventListener('click',   ev => { ev.stopPropagation(); toggleNote(); });
+    noteToggle.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleNote(); }
+    });
+    return [songEl, noteEl];
+  }
+
+  return [songEl];
+}
+
+function RenderSongs(songs, container) {
+  const frag = document.createDocumentFragment();
+  songs.forEach(([name, quality, link, notes, leakDate, availLen, recentEra], idx) => {
+    BuildSongElement({
+      songName:    name,
+      quality,
+      linkString:  link,
+      notes,
+      trackNumber: idx + 1,
+      availLen:    availLen  || '',
+      recentEra:   recentEra || '',
+      leakDate:    leakDate  || '',
+    }).forEach(node => frag.appendChild(node));
+  });
+  container.appendChild(frag);
+  AudioPlayer.SyncPlayButtons();
+}
+
+function RenderStemsSongs(songs, container) {
+  const byCategory = new Map();
+  for (const song of songs) {
+    const category = song[7] || '';
+    if (!byCategory.has(category)) byCategory.set(category, []);
+    byCategory.get(category).push(song);
+  }
+
+  const frag = document.createDocumentFragment();
+  let trackNumber = 1;
+  for (const category of StemCategories) {
+    const group = byCategory.get(category);
+    if (!group || !group.length) continue;
+
+    const divider = document.createElement('div');
+    divider.className   = 'stems-category-divider';
+    divider.textContent = category;
+    frag.appendChild(divider);
+
+    group.forEach(([name, quality, link, notes, leakDate, availLen]) => {
+      BuildSongElement({
+        songName:    name,
+        quality,
+        linkString:  link,
+        notes,
+        trackNumber: trackNumber++,
+        availLen:    availLen || '',
+        recentEra:   '',
+        leakDate:    leakDate || '',
+        noPlay:      true,
+      }).forEach(node => frag.appendChild(node));
+    });
+  }
+  container.appendChild(frag);
+  AudioPlayer.SyncPlayButtons();
+}
+
+function BuildFlatSongList(songs) {
+  const wrap = document.createElement('div');
+  wrap.className = 'songs-flat';
+  wrap.setAttribute('role', 'list');
+  wrap.setAttribute('aria-label', 'Recent songs');
+  RenderSongs(songs, wrap);
+  return wrap;
+}
+
+function BuildEraElement(era, songs) {
+  const eraWrap = document.createElement('div');
+  eraWrap.className = 'era-wrap';
+  eraWrap.setAttribute('role', 'listitem');
+
+  const eraRow = document.createElement('div');
+  eraRow.className = 'era-row';
+  eraRow.setAttribute('role', 'button');
+  eraRow.setAttribute('tabindex', '0');
+  eraRow.setAttribute('aria-expanded', 'false');
+  eraRow.innerHTML = `
+    <div class="era-row-name">${EscapeHtml(era)}</div>
     <div class="era-row-right">
-      <div class="era-pill">${t.length}</div>
+      <div class="era-pill">${songs.length}</div>
       <svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="6,9 12,15 18,9"/>
       </svg>
     </div>
-  `,document.createElement("div"));s.className="songs-panel";var l,i=state.eraDescriptions[normaliseKey(e)]||"";i&&((l=document.createElement("div")).className="era-desc-block",l.textContent=i,s.appendChild(l));let r=document.createElement("div"),o=(r.className="songs-inner",r.setAttribute("role","list"),r.setAttribute("aria-label",e+" songs"),s.appendChild(r),()=>{closeAllLinkDropdowns(),openPanels.has(s)?collapsePanel(s):(collapseAllEraPanels(),openPanel(s,n),n.scrollIntoView({behavior:"smooth",block:"nearest"}),r.dataset.loaded||(r.dataset.loaded="1",("stems"===state.currentTab?renderStemsSongs:renderSongs)(t,r)))});return n.addEventListener("click",o),n.addEventListener("keydown",e=>{"Enter"!==e.key&&" "!==e.key||(e.preventDefault(),o())}),a.appendChild(n),a.appendChild(s),a}function buildRecentEras(t){var e,a,n=[];for([e,a]of Object.entries(state.vaultData)){var s,l=e.toLowerCase();for(s of a){var[,i]=s;!isQualityVisible(i)||state.showPlayableOnly&&!isPlayable(s[2],i)||n.push({era:e,eraLow:l,nameLow:s[0].toLowerCase(),name:s[0],quality:i,link:s[2],notes:s[3],leakDate:s[4]||"",availLen:s[5]||""})}}n.sort((e,t)=>parseDateToTimestamp(t.leakDate)-parseDateToTimestamp(e.leakDate));var r=n.slice(0,RECENT_SONGS_LIMIT);return(r=t?r.filter(e=>e.nameLow.includes(t)||e.eraLow.includes(t)):r).length?{"Recent Leaks":r.map(e=>[e.name,e.quality,e.link,e.notes,e.leakDate,e.availLen,e.era])}:{}}function buildStemsEras(l){var t={};if(state.stemsData)for(var[a,n]of Object.entries(state.stemsData)){let s=l?a.toLowerCase():"",e=n.filter(e=>{var[e,t,a,,,,,n]=e;return!!n&&!!isQualityVisible(t)&&!(state.showPlayableOnly&&!isPlayable(a,t)||l&&!e.toLowerCase().includes(l)&&!s.includes(l)&&!n.toLowerCase().includes(l))});e.length&&(t[a]=e)}return t}function buildVisibleEras(a){if("recent"===state.currentTab)return buildRecentEras(a);if("stems"===state.currentTab)return buildStemsEras(a);let n=TAB_MARKERS[state.currentTab]||null;var s,l,i={};for([s,l]of Object.entries(state.vaultData)){let t=a?s.toLowerCase():"",e=l.filter(([,e])=>isQualityVisible(e));state.showPlayableOnly&&(e=e.filter(([,e,t])=>isPlayable(t,e))),n&&(e=e.filter(([t])=>n.some(e=>t.includes(e)))),(e=a?e.filter(([e])=>e.toLowerCase().includes(a)||t.includes(a)):e).length&&(i[s]=e)}return i}function updateNavStats(e){document.getElementById("nav-songs").textContent=e.toLocaleString()}function renderEras(s){var l=document.getElementById("era-list");if(l&&state.vaultData)if("stems"!==state.currentTab||state.stemsData){let a=buildVisibleEras((s||"").trim().toLowerCase()),e=Object.keys(a),t=e.reduce((e,t)=>e+a[t].length,0),n=(collapseAllEraPanels(),closeAllLinkDropdowns(),AudioPlayer.clearPlayButtons(),updateNavStats(t),document.createDocumentFragment());if(e.length)if("recent"===state.currentTab)for(var i of e)n.appendChild(buildFlatSongList(a[i]));else for(var r of e)n.appendChild(buildEraElement(r,a[r]));else(s=document.createElement("div")).className="no-results",s.textContent="No results found.",n.appendChild(s);l.replaceChildren(n),openPanels.clear()}else(s=document.createElement("div")).className="loading-msg",s.textContent="Loading Data…",l.replaceChildren(s),StemsLoader.load()}function getSheetRateState(){let t=Date.now(),e=state.sheetChangeTimestamps.filter(e=>t-e<SHEET_RATE_WINDOW),a=SHEET_RATE_MAX-e.length,n=e[0]??null;return{remaining:a,cooldownMs:a<=0&&n?SHEET_RATE_WINDOW-(t-n):0}}function recordSheetChange(){let t=Date.now();state.sheetChangeTimestamps=state.sheetChangeTimestamps.filter(e=>t-e<SHEET_RATE_WINDOW),state.sheetChangeTimestamps.push(t),localStorage.setItem("sheetChangeTs",JSON.stringify(state.sheetChangeTimestamps))}function syncRecentTabVisibility(){var e,t=document.querySelector('.nav-dropdown-item[data-tab="recent"]');t&&(e=RECENT_ENABLED_IDS.has(state.primarySheetId),t.style.display=e?"":"none",e||"recent"!==state.currentTab||(state.currentTab="all",(t=document.getElementById("nav-btn-text"))&&(t.textContent="Unreleased"),document.querySelectorAll(".nav-dropdown-item").forEach(e=>{e.classList.toggle("active","all"===e.dataset.tab)})))}function syncStemsTabVisibility(){var e,t=document.querySelector('.nav-dropdown-item[data-tab="stems"]');t&&(e=state.primarySheetId===DEFAULT_SHEET_ID,t.style.display=e?"":"none",e||"stems"!==state.currentTab||(state.currentTab="all",(t=document.getElementById("nav-btn-text"))&&(t.textContent="Unreleased"),document.querySelectorAll(".nav-dropdown-item").forEach(e=>{e.classList.toggle("active","all"===e.dataset.tab)})))}function reloadWithSheetId(e){null!==state.countdownId&&(clearTimeout(state.countdownId),state.countdownId=null),VaultLoader.abort(),StemsLoader.abort(),state.primarySheetId=e,state.vaultData=null,state.eraDescriptions={},state.stemsData=null,state.isLoading=!0,AudioPlayer.clearPlayButtons(),syncRecentTabVisibility(),syncStemsTabVisibility();let t=document.getElementById("era-list"),a=Date.now(),n=document.createElement("div"),s=(n.className="loading-msg",t.replaceChildren(n),()=>{var e=Date.now()-a,e=Math.max(0,RELOAD_COUNTDOWN_MS-e);n.textContent=`Loading in ${formatCountdown(e)}…`,e<=0?(state.countdownId=null,n.textContent="Loading Data…",VaultLoader.load(n)):state.countdownId=setTimeout(s,1e3)});s()}function initNav(e,a,n,s){a.addEventListener("click",e=>{e.stopPropagation(),toggleDropdown(a,n)}),document.querySelectorAll(".nav-dropdown-item").forEach(t=>{t.addEventListener("click",()=>{closeDropdown(a,n),t.dataset.tab!==state.currentTab&&(state.currentTab=t.dataset.tab,s.textContent=t.textContent.trim(),document.querySelectorAll(".nav-dropdown-item").forEach(e=>e.classList.toggle("active",e===t)),state.vaultData)&&renderEras(e.value)})})}function initQualityFilter(a,t,n){t.addEventListener("click",e=>{e.stopPropagation(),toggleDropdown(t,n)}),n.addEventListener("click",e=>{if(e=e.target.closest(".filter-item")){var t=e.dataset.quality;if(state.activeQualities.has(t)){if(1===state.activeQualities.size)return;state.activeQualities.delete(t),e.classList.remove("active"),e.setAttribute("aria-checked","false")}else state.activeQualities.add(t),e.classList.add("active"),e.setAttribute("aria-checked","true");state.vaultData&&renderEras(a.value)}})}function initGlobalHandlers(t,a,n,s,l){t.addEventListener("input",e=>{clearTimeout(state.searchDebounceId),state.searchDebounceId=setTimeout(()=>{state.vaultData&&renderEras(e.target.value)},SEARCH_DEBOUNCE_MS)}),document.addEventListener("keydown",e=>{"/"===e.key&&document.activeElement!==t&&(e.preventDefault(),t.focus()),"Escape"===e.key&&(t.blur(),closeDropdown(s,l),closeDropdown(a,n),closeAllLinkDropdowns())}),document.addEventListener("click",e=>{l.contains(e.target)||e.target===s||closeDropdown(s,l),n.contains(e.target)||a.contains(e.target)||closeDropdown(a,n),e.target.closest(".song-dropdown")||closeAllLinkDropdowns()}),window.addEventListener("scroll",()=>{closeAllLinkDropdowns()},{passive:!0}),window.addEventListener("resize",()=>{closeAllLinkDropdowns()})}function initSettings(){let e=document.getElementById("settings-btn"),t=document.getElementById("settings-modal"),a=document.getElementById("settings-close-btn"),n=document.getElementById("settings-apply-btn"),s=document.getElementById("settings-reset-btn"),l=document.getElementById("settings-rate-msg"),i=document.getElementById("playable-only-toggle"),r=document.getElementById("settings-artist-select"),o=()=>{i?.setAttribute("aria-checked",String(state.showPlayableOnly))},d=(i?.addEventListener("click",()=>{state.showPlayableOnly="true"!==i.getAttribute("aria-checked"),o(),state.vaultData&&renderEras(document.getElementById("search-box")?.value??"")}),()=>{clearInterval(state.cooldownIntervalId),state.cooldownIntervalId=null}),c=()=>r?.value??"",u=()=>{var e=getSheetRateState().remaining,t=c();n.disabled=!t||t===state.primarySheetId||e<=0||state.isLoading},m=()=>{var{remaining:e,cooldownMs:t}=getSheetRateState();e<=0?(n.disabled=!0,l.textContent=`Rate limit reached. Try again in ${formatCountdown(t)}.`,l.hidden=!1,state.cooldownIntervalId||(state.cooldownIntervalId=setInterval(()=>{var{remaining:e,cooldownMs:t}=getSheetRateState();0<e?(l.hidden=!0,l.textContent="",d(),u()):l.textContent=`Rate limit reached. Try again in ${formatCountdown(t)}.`},1e3))):(l.hidden=!0,l.textContent="",d())},p=(r?.addEventListener("change",u),e=>{getSheetRateState().remaining<=0?m():(recordSheetChange(),g(),reloadWithSheetId(e))}),g=()=>{t.setAttribute("hidden",""),d()};e.addEventListener("click",e=>{e.stopPropagation(),o(),r&&(e=ARTIST_PRESETS.find(e=>e.id===state.primarySheetId))&&(r.value=e.id),m(),u(),t.removeAttribute("hidden")}),a.addEventListener("click",g),t.addEventListener("click",e=>{e.target===t&&g()}),document.addEventListener("keydown",e=>{"Escape"!==e.key||t.hasAttribute("hidden")||g()}),n.addEventListener("click",()=>{var e=c();e&&e!==state.primarySheetId?p(e):g()}),s.addEventListener("click",()=>{state.primarySheetId===DEFAULT_SHEET_ID?g():p(DEFAULT_SHEET_ID)})}let DEFAULT_SHEET_ID="1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo",STEMS_SHEET_GID="495336364",STEM_CATEGORIES=["Studio Stems","Instrumentals","Acapellas","TV Tracks","Stem Player Stems","Sessions"],ARTIST_PRESETS=[{name:"Kanye West",id:"1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo"},{name:"Kanye West Alt",id:"12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM"},{name:"Drake",id:"1v55XAPLzw1iuWxH1OQKajCIYPhW2BXcLoV4mXDZ55DI"},{name:"Playboi Carti",id:"1Irtfvymu26CShYowLMMfD-rM0o9CJqE6-BBSlYsAaF4"},{name:"Daniel Caesar",id:"1_D-puv6fjwCjrx9x7qAu9oYzUfFzDLrLz1cElaXndso"}],RECENT_SONGS_LIMIT=100,SHEET_RATE_WINDOW=6e4,SHEET_RATE_MAX=3,SEARCH_DEBOUNCE_MS=200,RELOAD_COUNTDOWN_MS=5e3,TAB_MARKERS={best:["⭐"],special:["✨"]},QUALITY_MAP=[{key:"lossless",cls:"q-lossless",test:e=>e.includes("lossless")},{key:"high",cls:"q-high",test:e=>e.includes("high")},{key:"cd",cls:"q-cd",test:e=>e.includes("cd")},{key:"rec",cls:"q-rec",test:e=>e.includes("record")},{key:"low",cls:"q-low",test:e=>e.includes("low")},{key:"unavail",cls:null,test:e=>e.includes("not avail")||e.includes("unavail")}],AVAIL_LEN_CLASS_MAP=[{test:e=>/\bog\b/.test(e),cls:"tl-og"},{test:e=>e.includes("lossless"),cls:"tl-other"},{test:e=>e.includes("stem"),cls:"tl-stem"},{test:e=>e.includes("full"),cls:"tl-full"},{test:e=>e.includes("tagged"),cls:"tl-tagged"},{test:e=>e.includes("partial"),cls:"tl-partial"},{test:e=>e.includes("snippet"),cls:"tl-snippet"},{test:e=>e.includes("unavail"),cls:"tl-unavail"},{test:e=>e.includes("confirmed"),cls:"tl-confirmed"},{test:e=>e.includes("rumored"),cls:"tl-rumored"},{test:e=>e.includes("vox"),cls:"tl-vox"}],VERSION_PATTERN=/[[(](v(?:ersion)?\s*\d+)[\])]/i,URL_PATTERN=/^https?:/i,PILLOWS_HOST="pillows.su/f/",PILLOWS_API="https://api.pillows.su/api/get/",PILLOWS_DL_API="https://api.pillows.su/api/download/",ALL_QUALITY_KEYS=QUALITY_MAP.map(e=>e.key),state={primarySheetId:DEFAULT_SHEET_ID,vaultData:null,eraDescriptions:{},stemsData:null,currentTab:"all",activeQualities:new Set(ALL_QUALITY_KEYS),showPlayableOnly:!1,isLoading:!1,hasOpenDropdown:!1,searchDebounceId:null,countdownId:null,cooldownIntervalId:null,sheetChangeTimestamps:JSON.parse(localStorage.getItem("sheetChangeTs")||"[]")},playBtnMap=new Map,openPanels=new Set,dateCache=new Map,HTML_ESCAPE_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"},HTML_ESCAPE_RE=/[&<>"]/g,escapeHtml=e=>String(e).replace(HTML_ESCAPE_RE,e=>HTML_ESCAPE_MAP[e]),clamp=(e,t,a)=>Math.max(t,Math.min(a,e)),AudioPlayer={audio:null,playerEl:null,els:{},init(){this.audio=document.getElementById("main-audio"),this.playerEl=document.getElementById("global-player"),this.audio&&this.playerEl&&(this.els={playIcon:document.getElementById("player-play-icon"),pauseIcon:document.getElementById("player-pause-icon"),playPauseBtn:document.getElementById("player-play-btn"),closeBtn:document.getElementById("player-close-btn"),currentTimeEl:document.getElementById("player-current"),durationEl:document.getElementById("player-duration"),trackNameEl:document.getElementById("player-track-name"),trackCurrentEl:document.getElementById("player-track-current"),trackLengthEl:document.getElementById("player-track-length"),progressFill:document.getElementById("player-fill"),volFill:document.getElementById("player-vol-fill"),scrubberEl:document.getElementById("player-scrubber"),volumeSlider:document.getElementById("player-volume")},this._bindAudioEvents(),this._bindControls(),this._bindSliders(),this._bindMediaSession(),this.setVolume(80))},registerPlayBtn(e,t){playBtnMap.has(t)||playBtnMap.set(t,new Set),playBtnMap.get(t).add(e)},syncPlayButtons(){var e,t,a=this.audio,n=a.src?resolveUrl(a.src):"",s=!a.paused;for([e,t]of playBtnMap){var l,i=e===n&&s?"Pause":"Play";for(l of t)l.textContent=i}},clearPlayButtons(){playBtnMap.clear()},safePlay(){this.audio.play().catch(()=>{})},currentResolvedSrc(){return this.audio.src?resolveUrl(this.audio.src):""},playOrToggle(e,t){var a=this.audio;this.currentResolvedSrc()===e?a.paused?this.safePlay():a.pause():(this.els.trackNameEl.textContent=t,this.setMediaSessionTrack(t),a.pause(),a.removeAttribute("src"),a.load(),a.src=e,this.playerEl.removeAttribute("hidden"),this.safePlay())},close(){var{audio:e,playerEl:t}=this;e.pause(),e.src="",e.load(),t.setAttribute("hidden",""),"mediaSession"in navigator&&(navigator.mediaSession.metadata=null),this._setPlayState(!1),this._setProgress(0),this._setCurrentTime("0:00"),this._setDuration("0:00"),this.syncPlayButtons()},setVolume(e){var e=clamp(e,0,100),{volFill:t,volumeSlider:a}=this.els;t.style.width=e+"%",this.audio.volume=e/100,a.setAttribute("aria-valuenow",Math.round(e))},_setPlayState(e){var{playIcon:t,pauseIcon:a,playPauseBtn:n}=this.els;t.style.display=e?"none":"",a.style.display=e?"":"none",n.setAttribute("aria-label",e?"Pause":"Play")},_setProgress(e){var e=clamp(e,0,100),{progressFill:t,scrubberEl:a}=this.els;t.style.width=e+"%",a.setAttribute("aria-valuenow",Math.round(e))},_setCurrentTime(e){this.els.currentTimeEl.textContent=this.els.trackCurrentEl.textContent=e},_setDuration(e){this.els.durationEl.textContent=this.els.trackLengthEl.textContent=e},_bindAudioEvents(){let{audio:e,els:t}=this;e.addEventListener("play",()=>{this._setPlayState(!0),this.syncPlayButtons()}),e.addEventListener("pause",()=>{this._setPlayState(!1),this.syncPlayButtons()}),e.addEventListener("ended",()=>{this._setPlayState(!1),this._setProgress(0),this._setCurrentTime("0:00"),this.syncPlayButtons()}),e.addEventListener("loadedmetadata",()=>this._setDuration(formatTime(e.duration))),e.addEventListener("error",()=>{this._setPlayState(!1),t.trackNameEl.textContent="Playback error, format not supported or unavailable"}),e.addEventListener("timeupdate",()=>{e.duration&&(this._setProgress(e.currentTime/e.duration*100),this._setCurrentTime(formatTime(e.currentTime)),"mediaSession"in navigator)&&navigator.mediaSession.setPositionState&&navigator.mediaSession.setPositionState({duration:e.duration,playbackRate:e.playbackRate,position:e.currentTime})})},_bindControls(){let{audio:e,els:t}=this;t.playPauseBtn.addEventListener("click",()=>{e.paused?this.safePlay():e.pause()}),t.closeBtn.addEventListener("click",()=>this.close())},_bindSliders(){let{audio:a,els:e}=this,{scrubberEl:t,volumeSlider:n}=e,s=(e,t)=>(t=t.getBoundingClientRect()).width?clamp((e.clientX-t.left)/t.width,0,1):0,l=(e,t)=>{e.addEventListener("touchstart",e=>t(e.touches[0]),{passive:!0}),e.addEventListener("touchmove",e=>t(e.touches[0]),{passive:!0})},i=!1,r=!1;t.addEventListener("mousedown",e=>{i=!0,a.duration&&(a.currentTime=s(e,t)*a.duration)}),n.addEventListener("mousedown",e=>{r=!0,this.setVolume(100*s(e,n))}),window.addEventListener("mousemove",e=>{i&&a.duration&&(a.currentTime=s(e,t)*a.duration),r&&this.setVolume(100*s(e,n))}),window.addEventListener("mouseup",()=>{i=!1,r=!1}),l(t,e=>{a.duration&&(a.currentTime=s(e,t)*a.duration)}),l(n,e=>this.setVolume(100*s(e,n))),t.addEventListener("keydown",e=>{var t;a.duration&&(t=.02*a.duration,"ArrowRight"===e.key&&(e.preventDefault(),a.currentTime=Math.min(a.duration,a.currentTime+t)),"ArrowLeft"===e.key)&&(e.preventDefault(),a.currentTime=Math.max(0,a.currentTime-t))})},setMediaSessionTrack(e){"mediaSession"in navigator&&(navigator.mediaSession.metadata=new MediaMetadata({title:e,artist:"Mistape"}))},_bindMediaSession(){if("mediaSession"in navigator){let t=this.audio,e=navigator.mediaSession;e.setActionHandler("play",()=>this.safePlay()),e.setActionHandler("pause",()=>t.pause()),e.setActionHandler("stop",()=>{t.pause(),t.currentTime=0}),e.setActionHandler("seekto",e=>{void 0!==e.seekTime&&t.duration&&(t.currentTime=e.seekTime)}),e.setActionHandler("seekbackward",e=>{t.currentTime=Math.max(0,t.currentTime-(e.seekOffset||10))}),e.setActionHandler("seekforward",e=>{t.currentTime=Math.min(t.duration||0,t.currentTime+(e.seekOffset||10))})}}},VaultLoader={worker:new Worker("vault_worker.js"),loadId:0,load(a=null){let t=++this.loadId,n=(state.isLoading=!0,e=>{let t=a;t||(t=document.createElement("div"),document.getElementById("era-list").replaceChildren(t)),t.className="error-msg",t.textContent=e});this.worker.postMessage({type:"ABORT"}),this.worker.postMessage({type:"LOAD",sheetId:state.primarySheetId}),this.worker.onmessage=({data:e})=>{t===this.loadId&&("SUCCESS"===e.type?(state.isLoading=!1,state.vaultData=e.eraMap,state.eraDescriptions=e.eraDescs,renderEras("")):"ERROR"===e.type&&(state.isLoading=!1,e="timeout"===e.reason?"Request timed out, check your connection and try reloading.":"http"===e.reason?`Failed to load sheet (${e.message}), make sure it is publicly shared.`:"Failed to load data, check your connection or sheet permissions.",n(e)))},this.worker.onerror=()=>{t===this.loadId&&(state.isLoading=!1,n("An unexpected error occurred while loading data."))}},abort(){this.worker.postMessage({type:"ABORT"})}},StemsLoader={worker:new Worker("vault_worker.js"),loadId:0,load(){let n=++this.loadId;this.worker.postMessage({type:"ABORT"}),this.worker.postMessage({type:"LOAD",sheetId:state.primarySheetId,gid:STEMS_SHEET_GID}),this.worker.onmessage=({data:e})=>{var t,a;n===this.loadId&&("SUCCESS"===e.type?(state.stemsData=e.eraMap,"stems"===state.currentTab&&renderEras(document.getElementById("search-box")?.value??"")):"ERROR"===e.type&&"stems"===state.currentTab&&(t=document.getElementById("era-list"),e="timeout"===e.reason?"Request timed out, check your connection and try reloading.":"http"===e.reason?`Failed to load stems (${e.message}), make sure the sheet is publicly shared.`:"Failed to load stems, check your connection or sheet permissions.",(a=document.createElement("div")).className="error-msg",a.textContent=e,t.replaceChildren(a)))},this.worker.onerror=()=>{var e,t;n===this.loadId&&"stems"===state.currentTab&&(e=document.getElementById("era-list"),(t=document.createElement("div")).className="error-msg",t.textContent="An unexpected error occurred while loading stems.",e.replaceChildren(t))}},abort(){this.worker.postMessage({type:"ABORT"})}},RECENT_ENABLED_IDS=new Set(ARTIST_PRESETS.filter(e=>e.name.startsWith("Kanye West")).map(e=>e.id));document.addEventListener("DOMContentLoaded",()=>{var e=document.getElementById("search-box"),t=document.getElementById("quality-filter-btn"),a=document.getElementById("quality-filter-menu"),n=document.getElementById("nav-tab-btn"),s=document.getElementById("nav-tab-menu"),l=document.getElementById("nav-btn-text");AudioPlayer.init(),initNav(e,n,s,l),initQualityFilter(e,t,a),initGlobalHandlers(e,n,s,t,a),initSettings(),syncRecentTabVisibility(),syncStemsTabVisibility(),VaultLoader.load()});
+  `;
+
+  const songsPanel = document.createElement('div');
+  songsPanel.className = 'songs-panel';
+
+  const eraDesc = State.EraDescriptions[NormaliseKey(era)] || '';
+  if (eraDesc) {
+    const descBlock = document.createElement('div');
+    descBlock.className   = 'era-desc-block';
+    descBlock.textContent = eraDesc;
+    songsPanel.appendChild(descBlock);
+  }
+
+  const songsInner = document.createElement('div');
+  songsInner.className = 'songs-inner';
+  songsInner.setAttribute('role', 'list');
+  songsInner.setAttribute('aria-label', `${era} songs`);
+  songsPanel.appendChild(songsInner);
+
+  const toggle = () => {
+    CloseAllLinkDropdowns();
+    if (OpenPanels.has(songsPanel)) {
+      CollapsePanel(songsPanel);
+    } else {
+      CollapseAllEraPanels();
+      OpenPanel(songsPanel, eraRow);
+      eraRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (!songsInner.dataset.loaded) {
+        songsInner.dataset.loaded = '1';
+        if (State.CurrentTab === 'stems') RenderStemsSongs(songs, songsInner);
+        else                              RenderSongs(songs, songsInner);
+      }
+    }
+  };
+
+  eraRow.addEventListener('click', toggle);
+  eraRow.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
+  });
+
+  eraWrap.appendChild(eraRow);
+  eraWrap.appendChild(songsPanel);
+  return eraWrap;
+}
+
+function BuildRecentEras(filterLower) {
+  const flat = [];
+  for (const [era, songs] of Object.entries(State.VaultData)) {
+    const eraLow = era.toLowerCase();
+    for (const s of songs) {
+      const [, q] = s;
+      if (!IsQualityVisible(q)) continue;
+      if (State.ShowPlayableOnly && !IsPlayable(s[2], q)) continue;
+      flat.push({ era, eraLow, nameLow: s[0].toLowerCase(), name: s[0], quality: q, link: s[2], notes: s[3], leakDate: s[4] || '', availLen: s[5] || '' });
+    }
+  }
+  flat.sort((a, b) => ParseDateToTimestamp(b.leakDate) - ParseDateToTimestamp(a.leakDate));
+
+  const pool     = flat.slice(0, RecentSongsLimit);
+  const filtered = filterLower
+    ? pool.filter(s => s.nameLow.includes(filterLower))
+    : pool;
+
+  if (!filtered.length) return {};
+  return {
+    'Recent Leaks': filtered.map(s => [s.name, s.quality, s.link, s.notes, s.leakDate, s.availLen, s.era]),
+  };
+}
+
+function BuildStemsEras(filterLower) {
+  const result = {};
+  if (!State.StemsData) return result;
+
+  for (const [era, songs] of Object.entries(State.StemsData)) {
+    const eraLow = filterLower ? era.toLowerCase() : '';
+    const matched = songs.filter(song => {
+      const [name, quality, link, , , , , category] = song;
+      if (!category) return false;
+      if (!IsQualityVisible(quality)) return false;
+      if (State.ShowPlayableOnly && !IsPlayable(link, quality)) return false;
+      if (filterLower && !name.toLowerCase().includes(filterLower)) return false;
+      return true;
+    });
+    if (matched.length) result[era] = matched;
+  }
+  return result;
+}
+
+function BuildVisibleEras(filterLower) {
+  if (State.CurrentTab === 'recent') return BuildRecentEras(filterLower);
+  if (State.CurrentTab === 'stems')  return BuildStemsEras(filterLower);
+
+  const markers = TabMarkers[State.CurrentTab] || null;
+  const result  = {};
+  for (const [era, songs] of Object.entries(State.VaultData)) {
+    const eraLow = filterLower ? era.toLowerCase() : '';
+    let matched = songs.filter(([, q]) => IsQualityVisible(q));
+    if (State.ShowPlayableOnly) matched = matched.filter(([, q, link]) => IsPlayable(link, q));
+    if (markers)     matched = matched.filter(([n]) => markers.some(m => n.includes(m)));
+    if (filterLower) matched = matched.filter(([n]) => n.toLowerCase().includes(filterLower));
+    if (matched.length) result[era] = matched;
+  }
+  return result;
+}
+
+function UpdateNavStats(total) {
+  document.getElementById('nav-songs').textContent = total.toLocaleString();
+}
+
+function RenderEras(searchFilter) {
+  const eraListEl = document.getElementById('era-list');
+  if (!eraListEl || !State.VaultData) return;
+  if (State.CurrentTab === 'stems' && !State.StemsData) {
+    const msgEl = document.createElement('div');
+    msgEl.className   = 'loading-msg';
+    msgEl.textContent = 'Loading Data…';
+    eraListEl.replaceChildren(msgEl);
+    StemsLoader.Load();
+    return;
+  }
+
+  const filterLower = (searchFilter || '').trim().toLowerCase();
+  const visible     = BuildVisibleEras(filterLower);
+  const keys        = Object.keys(visible);
+  const total       = keys.reduce((sum, k) => sum + visible[k].length, 0);
+
+  CollapseAllEraPanels();
+  CloseAllLinkDropdowns();
+  AudioPlayer.ClearPlayButtons();
+  UpdateNavStats(total);
+
+  const frag = document.createDocumentFragment();
+  if (!keys.length) {
+    const empty = document.createElement('div');
+    empty.className   = 'no-results';
+    empty.textContent = 'No results found.';
+    frag.appendChild(empty);
+  } else if (State.CurrentTab === 'recent') {
+    for (const era of keys) frag.appendChild(BuildFlatSongList(visible[era]));
+  } else {
+    for (const era of keys) frag.appendChild(BuildEraElement(era, visible[era]));
+  }
+  eraListEl.replaceChildren(frag);
+  OpenPanels.clear();
+}
+
+function GetSheetRateState() {
+  const now            = Date.now();
+  const recentTs       = State.SheetChangeTimestamps.filter(t => now - t < SheetRateWindow);
+  const remaining      = SheetRateMax - recentTs.length;
+  const oldestInWindow = recentTs[0] ?? null;
+  const cooldownMs     = (remaining <= 0 && oldestInWindow)
+    ? SheetRateWindow - (now - oldestInWindow)
+    : 0;
+  return { remaining, cooldownMs };
+}
+
+function RecordSheetChange() {
+  const now = Date.now();
+  State.SheetChangeTimestamps = State.SheetChangeTimestamps.filter(t => now - t < SheetRateWindow);
+  State.SheetChangeTimestamps.push(now);
+  localStorage.setItem('sheetChangeTs', JSON.stringify(State.SheetChangeTimestamps));
+}
+
+const VaultLoader = {
+  Worker: new Worker('vault_worker.js'),
+  LoadId: 0,
+
+  Load(statusEl = null) {
+    const loadId = ++this.LoadId;
+    State.IsLoading = true;
+
+    const showError = text => {
+      let target = statusEl;
+      if (!target) {
+        target = document.createElement('div');
+        document.getElementById('era-list').replaceChildren(target);
+      }
+      target.className   = 'error-msg';
+      target.textContent = text;
+    };
+
+    this.Worker.postMessage({ type: 'ABORT' });
+    this.Worker.postMessage({ type: 'LOAD', sheetId: State.PrimarySheetId });
+
+    this.Worker.onmessage = ({ data }) => {
+      if (loadId !== this.LoadId) return;
+
+      if (data.type === 'SUCCESS') {
+        State.IsLoading       = false;
+        State.VaultData       = data.eraMap;
+        State.EraDescriptions = data.eraDescs;
+        RenderEras('');
+        return;
+      }
+
+      if (data.type === 'ERROR') {
+        State.IsLoading = false;
+        const errText =
+          data.reason === 'timeout' ? 'Request timed out, check your connection and try reloading.'
+          : data.reason === 'http'  ? `Failed to load sheet (${data.message}), make sure it is publicly shared.`
+          :                           'Failed to load data, check your connection or sheet permissions.';
+        showError(errText);
+      }
+    };
+
+    this.Worker.onerror = () => {
+      if (loadId !== this.LoadId) return;
+      State.IsLoading = false;
+      showError('An unexpected error occurred while loading data.');
+    };
+  },
+
+  Abort() {
+    this.Worker.postMessage({ type: 'ABORT' });
+  },
+};
+
+const StemsLoader = {
+  Worker: new Worker('vault_worker.js'),
+  LoadId: 0,
+
+  Load() {
+    const loadId = ++this.LoadId;
+
+    this.Worker.postMessage({ type: 'ABORT' });
+    this.Worker.postMessage({ type: 'LOAD', sheetId: State.PrimarySheetId, gid: StemsSheetGid });
+
+    this.Worker.onmessage = ({ data }) => {
+      if (loadId !== this.LoadId) return;
+
+      if (data.type === 'SUCCESS') {
+        State.StemsData = data.eraMap;
+        if (State.CurrentTab === 'stems') RenderEras(document.getElementById('search-box')?.value ?? '');
+        return;
+      }
+
+      if (data.type === 'ERROR') {
+        if (State.CurrentTab !== 'stems') return;
+        const eraList = document.getElementById('era-list');
+        const errText =
+          data.reason === 'timeout' ? 'Request timed out, check your connection and try reloading.'
+          : data.reason === 'http'  ? `Failed to load stems (${data.message}), make sure the sheet is publicly shared.`
+          :                           'Failed to load stems, check your connection or sheet permissions.';
+        const errEl = document.createElement('div');
+        errEl.className   = 'error-msg';
+        errEl.textContent = errText;
+        eraList.replaceChildren(errEl);
+      }
+    };
+
+    this.Worker.onerror = () => {
+      if (loadId !== this.LoadId) return;
+      if (State.CurrentTab !== 'stems') return;
+      const eraList = document.getElementById('era-list');
+      const errEl = document.createElement('div');
+      errEl.className   = 'error-msg';
+      errEl.textContent = 'An unexpected error occurred while loading stems.';
+      eraList.replaceChildren(errEl);
+    };
+  },
+
+  Abort() {
+    this.Worker.postMessage({ type: 'ABORT' });
+  },
+};
+
+const RecentEnabledIds = new Set(
+  ArtistPresets.filter(p => p.name.startsWith('Kanye West')).map(p => p.id)
+);
+
+function SyncRecentTabVisibility() {
+  const recentItem = document.querySelector('.nav-dropdown-item[data-tab="recent"]');
+  if (!recentItem) return;
+
+  const IsRecentEnabled = RecentEnabledIds.has(State.PrimarySheetId);
+  recentItem.style.display = IsRecentEnabled ? '' : 'none';
+
+  if (!IsRecentEnabled && State.CurrentTab === 'recent') {
+    State.CurrentTab = 'all';
+    const navBtnLabel = document.getElementById('nav-btn-text');
+    if (navBtnLabel) navBtnLabel.textContent = 'Unreleased';
+    document.querySelectorAll('.nav-dropdown-item').forEach(n => {
+      n.classList.toggle('active', n.dataset.tab === 'all');
+    });
+  }
+}
+
+function SyncStemsTabVisibility() {
+  const stemsItem = document.querySelector('.nav-dropdown-item[data-tab="stems"]');
+  if (!stemsItem) return;
+
+  const isStemsEnabled = State.PrimarySheetId === DefaultSheetId;
+  stemsItem.style.display = isStemsEnabled ? '' : 'none';
+
+  if (!isStemsEnabled && State.CurrentTab === 'stems') {
+    State.CurrentTab = 'all';
+    const navBtnLabel = document.getElementById('nav-btn-text');
+    if (navBtnLabel) navBtnLabel.textContent = 'Unreleased';
+    document.querySelectorAll('.nav-dropdown-item').forEach(n => {
+      n.classList.toggle('active', n.dataset.tab === 'all');
+    });
+  }
+}
+
+function ReloadWithSheetId(newId) {
+  if (State.CountdownId !== null) {
+    clearTimeout(State.CountdownId);
+    State.CountdownId = null;
+  }
+  VaultLoader.Abort();
+  StemsLoader.Abort();
+
+  State.PrimarySheetId  = newId;
+  State.VaultData       = null;
+  State.EraDescriptions = {};
+  State.StemsData       = null;
+  State.IsLoading       = true;
+  AudioPlayer.ClearPlayButtons();
+  SyncRecentTabVisibility();
+  SyncStemsTabVisibility();
+
+  const eraList   = document.getElementById('era-list');
+  const startTime = Date.now();
+  const msgEl     = document.createElement('div');
+  msgEl.className = 'loading-msg';
+  eraList.replaceChildren(msgEl);
+
+  const tick = () => {
+    const elapsed   = Date.now() - startTime;
+    const remaining = Math.max(0, ReloadCountdownMs - elapsed);
+    msgEl.textContent = `Loading in ${FormatCountdown(remaining)}…`;
+    if (remaining <= 0) {
+      State.CountdownId = null;
+      msgEl.textContent = 'Loading Data…';
+      VaultLoader.Load(msgEl);
+    } else {
+      State.CountdownId = setTimeout(tick, 1_000);
+    }
+  };
+
+  tick();
+}
+
+function InitNav(searchBox, navTabBtn, navTabMenu, navBtnLabel) {
+  navTabBtn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    ToggleDropdown(navTabBtn, navTabMenu);
+  });
+  document.querySelectorAll('.nav-dropdown-item').forEach(item => {
+    item.addEventListener('click', () => {
+      CloseDropdown(navTabBtn, navTabMenu);
+      if (item.dataset.tab === State.CurrentTab) return;
+      State.CurrentTab = item.dataset.tab;
+      navBtnLabel.textContent = item.textContent.trim();
+      document.querySelectorAll('.nav-dropdown-item').forEach(n => n.classList.toggle('active', n === item));
+      if (State.VaultData) RenderEras(searchBox.value);
+    });
+  });
+}
+
+function InitQualityFilter(searchBox, filterBtn, filterMenu) {
+  filterBtn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    ToggleDropdown(filterBtn, filterMenu);
+  });
+  filterMenu.addEventListener('click', ev => {
+    const item = ev.target.closest('.filter-item');
+    if (!item) return;
+    const key = item.dataset.quality;
+    if (State.ActiveQualities.has(key)) {
+      if (State.ActiveQualities.size === 1) return;
+      State.ActiveQualities.delete(key);
+      item.classList.remove('active');
+      item.setAttribute('aria-checked', 'false');
+    } else {
+      State.ActiveQualities.add(key);
+      item.classList.add('active');
+      item.setAttribute('aria-checked', 'true');
+    }
+    if (State.VaultData) RenderEras(searchBox.value);
+  });
+}
+
+function InitGlobalHandlers(searchBox, navTabBtn, navTabMenu, filterBtn, filterMenu) {
+  searchBox.addEventListener('input', ev => {
+    clearTimeout(State.SearchDebounceId);
+    State.SearchDebounceId = setTimeout(() => {
+      if (State.VaultData) RenderEras(ev.target.value);
+    }, SearchDebounceMs);
+  });
+
+  document.addEventListener('keydown', ev => {
+    if (ev.key === '/' && document.activeElement !== searchBox) {
+      ev.preventDefault();
+      searchBox.focus();
+    }
+    if (ev.key === 'Escape') {
+      searchBox.blur();
+      CloseDropdown(filterBtn, filterMenu);
+      CloseDropdown(navTabBtn, navTabMenu);
+      CloseAllLinkDropdowns();
+    }
+  });
+
+  document.addEventListener('click', ev => {
+    if (!filterMenu.contains(ev.target) && ev.target !== filterBtn) CloseDropdown(filterBtn, filterMenu);
+    if (!navTabMenu.contains(ev.target) && !navTabBtn.contains(ev.target)) CloseDropdown(navTabBtn, navTabMenu);
+    if (!ev.target.closest('.song-dropdown')) CloseAllLinkDropdowns();
+  });
+
+  window.addEventListener('scroll', () => {
+    CloseAllLinkDropdowns();
+  }, { passive: true });
+
+  window.addEventListener('resize', () => {
+    CloseAllLinkDropdowns();
+  });
+}
+
+function InitSettings() {
+  const settingsBtn    = document.getElementById('settings-btn');
+  const modal          = document.getElementById('settings-modal');
+  const closeBtn       = document.getElementById('settings-close-btn');
+  const applyBtn       = document.getElementById('settings-apply-btn');
+  const resetBtn       = document.getElementById('settings-reset-btn');
+  const rateMsgEl      = document.getElementById('settings-rate-msg');
+  const playableToggle = document.getElementById('playable-only-toggle');
+  const artistSelect   = document.getElementById('settings-artist-select');
+
+  const syncToggleUi = () => {
+    playableToggle?.setAttribute('aria-checked', String(State.ShowPlayableOnly));
+  };
+
+  playableToggle?.addEventListener('click', () => {
+    State.ShowPlayableOnly = playableToggle.getAttribute('aria-checked') !== 'true';
+    syncToggleUi();
+    if (State.VaultData) {
+      const searchBox = document.getElementById('search-box');
+      RenderEras(searchBox?.value ?? '');
+    }
+  });
+
+  const stopCooldown = () => {
+    clearInterval(State.CooldownIntervalId);
+    State.CooldownIntervalId = null;
+  };
+
+  const getSelectedId = () => artistSelect?.value ?? '';
+
+  const syncApplyBtn = () => {
+    const { remaining } = GetSheetRateState();
+    const selectedId    = getSelectedId();
+    applyBtn.disabled   = !selectedId || selectedId === State.PrimarySheetId || remaining <= 0 || State.IsLoading;
+  };
+
+  const updateRateUi = () => {
+    const { remaining, cooldownMs } = GetSheetRateState();
+    if (remaining <= 0) {
+      applyBtn.disabled     = true;
+      rateMsgEl.textContent = `Rate limit reached. Try again in ${FormatCountdown(cooldownMs)}.`;
+      rateMsgEl.hidden      = false;
+      if (!State.CooldownIntervalId) {
+        State.CooldownIntervalId = setInterval(() => {
+          const { remaining: r, cooldownMs: c } = GetSheetRateState();
+          if (r > 0) {
+            rateMsgEl.hidden      = true;
+            rateMsgEl.textContent = '';
+            stopCooldown();
+            syncApplyBtn();
+          } else {
+            rateMsgEl.textContent = `Rate limit reached. Try again in ${FormatCountdown(c)}.`;
+          }
+        }, 1_000);
+      }
+    } else {
+      rateMsgEl.hidden      = true;
+      rateMsgEl.textContent = '';
+      stopCooldown();
+    }
+  };
+
+  const syncArtistSelect = () => {
+    if (!artistSelect) return;
+    const match = ArtistPresets.find(p => p.id === State.PrimarySheetId);
+    if (match) artistSelect.value = match.id;
+  };
+
+  artistSelect?.addEventListener('change', syncApplyBtn);
+
+  const applySheetId = newId => {
+    const { remaining } = GetSheetRateState();
+    if (remaining <= 0) { updateRateUi(); return; }
+    RecordSheetChange();
+    closeModal();
+    ReloadWithSheetId(newId);
+  };
+
+  const openModal = () => {
+    syncToggleUi();
+    syncArtistSelect();
+    updateRateUi();
+    syncApplyBtn();
+    modal.removeAttribute('hidden');
+  };
+
+  const closeModal = () => {
+    modal.setAttribute('hidden', '');
+    stopCooldown();
+  };
+
+  settingsBtn.addEventListener('click', ev => { ev.stopPropagation(); openModal(); });
+  closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', ev => { if (ev.target === modal) closeModal(); });
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && !modal.hasAttribute('hidden')) closeModal();
+  });
+
+  applyBtn.addEventListener('click', () => {
+    const newId = getSelectedId();
+    if (!newId || newId === State.PrimarySheetId) { closeModal(); return; }
+    applySheetId(newId);
+  });
+
+  resetBtn.addEventListener('click', () => {
+    if (State.PrimarySheetId === DefaultSheetId) { closeModal(); return; }
+    applySheetId(DefaultSheetId);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const searchBox   = document.getElementById('search-box');
+  const filterBtn   = document.getElementById('quality-filter-btn');
+  const filterMenu  = document.getElementById('quality-filter-menu');
+  const navTabBtn   = document.getElementById('nav-tab-btn');
+  const navTabMenu  = document.getElementById('nav-tab-menu');
+  const navBtnLabel = document.getElementById('nav-btn-text');
+
+  AudioPlayer.Init();
+  InitNav(searchBox, navTabBtn, navTabMenu, navBtnLabel);
+  InitQualityFilter(searchBox, filterBtn, filterMenu);
+  InitGlobalHandlers(searchBox, navTabBtn, navTabMenu, filterBtn, filterMenu);
+  InitSettings();
+  SyncRecentTabVisibility();
+  SyncStemsTabVisibility();
+  VaultLoader.Load();
+});
