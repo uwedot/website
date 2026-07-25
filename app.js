@@ -1,11 +1,11 @@
 'use strict';
 
-const DefaultSheetId = '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo';
+const DefaultSheetId = '1wQ0WC0U9q10fLWpy9CO8YR128eE8msGXqtZI8_cNyTA';
 const StemsSheetGid  = '495336364';
 const StemCategories  = ['Studio Stems', 'Instrumentals', 'Acapellas', 'TV Tracks', 'Stem Player Stems', 'Sessions'];
 
 const ArtistPresets = [
-  { name: 'Kanye West',     id: '1cC-caBQ4j-OWreS37ackw7Gkkq83Hvi6x-mIRHBLxJo' },
+  { name: 'Kanye West',     id: '1wQ0WC0U9q10fLWpy9CO8YR128eE8msGXqtZI8_cNyTA' },
   { name: 'Kanye West Alt', id: '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM' },
   { name: 'Drake',          id: '1v55XAPLzw1iuWxH1OQKajCIYPhW2BXcLoV4mXDZ55DI' },
   { name: 'Playboi Carti',  id: '1Irtfvymu26CShYowLMMfD-rM0o9CJqE6-BBSlYsAaF4' },
