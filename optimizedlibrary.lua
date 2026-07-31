@@ -71,6 +71,7 @@ local StringFind = string.find
 local TaskDelay = task.delay
 local TaskCancel = task.cancel
 local TaskDefer = task.defer
+local TaskWait = task.wait
 local Pairs = pairs
 local IPairs = ipairs
 local Type = type
