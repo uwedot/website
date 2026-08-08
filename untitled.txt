@@ -140,14 +140,6 @@ local function AddThemeObject(Object, Type)
 	return Object
 end
 
-local function SetTheme()
-	for Name, Objects in OrionLib.ThemeObjects do
-		for _, Object in Objects do
-			Object[ReturnProperty(Object)] = OrionLib.Themes[OrionLib.SelectedTheme][Name]
-		end
-	end
-end
-
 local function PackColor(Color)
 	return { R = Color.R * 255, G = Color.G * 255, B = Color.B * 255 }
 end
