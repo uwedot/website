@@ -6,9 +6,6 @@ const URL_PATTERN      = /^https?:/i;
 const SUMMARY_PATTERN   = /^\d+\s+(?:total\s+)?(og file|full|tagged|partial(?:\s*\/\s*cut)?|snippet|stem bounce|unavailable)/i;
 const CHANGELOG_PATTERN = /^\((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d+(?:st|nd|rd|th)?,\s*\d{4}\)$/i;
 
-const STEM_CATEGORIES   = ['Studio Stems', 'Instrumentals', 'Acapellas', 'TV Tracks', 'Stem Player Stems', 'Sessions'];
-const STEM_CATEGORY_MAP = new Map(STEM_CATEGORIES.map(c => [c.toLowerCase(), c]));
-
 function parseCsv(text) {
   const rows = [];
   let chars    = [];
@@ -94,7 +91,6 @@ function buildVaultData(rows) {
 
   let pendingDesc  = '';
   let currentEra   = '';
-  let currentCat   = '';
 
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const row = rows[i];
@@ -103,25 +99,18 @@ function buildVaultData(rows) {
     const era  = (row[cols.era]  || '').trim();
     const name = (row[cols.name] || '').trim();
 
-    if (!era && name) {
-      const catMatch = STEM_CATEGORY_MAP.get(name.toLowerCase());
-      if (catMatch) { currentCat = catMatch; continue; }
-    }
-
     if (!era || !name) continue;
     if (CHANGELOG_PATTERN.test(era)) continue;
 
     if (SUMMARY_PATTERN.test(era)) {
       pendingDesc = extractEraDescription(row, cols, skipSet);
       currentEra  = era;
-      currentCat  = '';
       continue;
     }
     if (SUMMARY_PATTERN.test(name)) continue;
 
     if (era !== currentEra) {
       currentEra = era;
-      currentCat = '';
     }
 
     if (pendingDesc) {
@@ -138,8 +127,7 @@ function buildVaultData(rows) {
       (row[cols.notes]   || '').trim(),
       cols.leakDate >= 0 ? (row[cols.leakDate] || '').trim() : '',
       cols.availLen >= 0 ? (row[cols.availLen] || '').trim() : '',
-      '',
-      currentCat,
+      '', // recentEra placeholder (unused)
     ]);
   }
 

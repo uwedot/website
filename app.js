@@ -1,25 +1,9 @@
 'use strict';
 
 const DefaultSheetId = '1wQ0WC0U9q10fLWpy9CO8YR128eE8msGXqtZI8_cNyTA';
-const StemsSheetGid  = '495336364';
-const StemCategories  = ['Studio Stems', 'Instrumentals', 'Acapellas', 'TV Tracks', 'Stem Player Stems', 'Sessions'];
-
-const ArtistPresets = [
-  { name: 'Kanye West',     id: '1wQ0WC0U9q10fLWpy9CO8YR128eE8msGXqtZI8_cNyTA' },
-  { name: 'Kanye West Alt', id: '12nGHPPh5dVTfLuBLVQYzC3QgPxKfvp-jgCoNccvEasM' },
-  { name: 'Drake',          id: '1v55XAPLzw1iuWxH1OQKajCIYPhW2BXcLoV4mXDZ55DI' },
-  { name: 'Playboi Carti',  id: '1Irtfvymu26CShYowLMMfD-rM0o9CJqE6-BBSlYsAaF4' },
-];
-
-const RecentSongsLimit  = 100;
-const SheetRateWindow   = 60_000;
-const SheetRateMax      = 3;
-const SearchDebounceMs  = 200;
-const ReloadCountdownMs = 5_000;
 
 const TabMarkers = {
-  best:    ['⭐'],
-  special: ['✨'],
+  grails: ['⭐', '✨'],
 };
 
 const QualityMap = [
@@ -57,16 +41,12 @@ const State = {
   PrimarySheetId:        DefaultSheetId,
   VaultData:             null,
   EraDescriptions:       {},
-  StemsData:             null,
   CurrentTab:            'all',
   ActiveQualities:       new Set(AllQualityKeys),
   ShowPlayableOnly:      false,
   IsLoading:             false,
   HasOpenDropdown:       false,
   SearchDebounceId:      null,
-  CountdownId:           null,
-  CooldownIntervalId:    null,
-  SheetChangeTimestamps: JSON.parse(localStorage.getItem('sheetChangeTs') || '[]'),
 };
 
 const PlayBtnMap  = new Map();
@@ -84,14 +64,6 @@ function FormatTime(seconds) {
   if (!isFinite(seconds) || seconds < 0) return '0:00';
   const s = Math.floor(seconds);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-function FormatCountdown(ms) {
-  if (ms <= 0) return '0s';
-  const totalSec = Math.ceil(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
 }
 
 function ParseDateToTimestamp(dateStr) {
@@ -619,43 +591,6 @@ function RenderSongs(songs, container) {
   AudioPlayer.SyncPlayButtons();
 }
 
-function RenderStemsSongs(songs, container) {
-  const byCategory = new Map();
-  for (const song of songs) {
-    const category = song[7] || '';
-    if (!byCategory.has(category)) byCategory.set(category, []);
-    byCategory.get(category).push(song);
-  }
-
-  const frag = document.createDocumentFragment();
-  let trackNumber = 1;
-  for (const category of StemCategories) {
-    const group = byCategory.get(category);
-    if (!group || !group.length) continue;
-
-    const divider = document.createElement('div');
-    divider.className   = 'stems-category-divider';
-    divider.textContent = category;
-    frag.appendChild(divider);
-
-    group.forEach(([name, quality, link, notes, leakDate, availLen]) => {
-      BuildSongElement({
-        songName:    name,
-        quality,
-        linkString:  link,
-        notes,
-        trackNumber: trackNumber++,
-        availLen:    availLen || '',
-        recentEra:   '',
-        leakDate:    leakDate || '',
-        noPlay:      true,
-      }).forEach(node => frag.appendChild(node));
-    });
-  }
-  container.appendChild(frag);
-  AudioPlayer.SyncPlayButtons();
-}
-
 function BuildFlatSongList(songs) {
   const wrap = document.createElement('div');
   wrap.className = 'songs-flat';
@@ -712,8 +647,7 @@ function BuildEraElement(era, songs) {
       eraRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       if (!songsInner.dataset.loaded) {
         songsInner.dataset.loaded = '1';
-        if (State.CurrentTab === 'stems') RenderStemsSongs(songs, songsInner);
-        else                              RenderSongs(songs, songsInner);
+        RenderSongs(songs, songsInner);
       }
     }
   };
@@ -741,7 +675,8 @@ function BuildRecentEras(filterLower) {
   }
   flat.sort((a, b) => ParseDateToTimestamp(b.leakDate) - ParseDateToTimestamp(a.leakDate));
 
-  const pool     = flat.slice(0, RecentSongsLimit);
+  const limit = 100;
+  const pool     = flat.slice(0, limit);
   const filtered = filterLower
     ? pool.filter(s => s.nameLow.includes(filterLower))
     : pool;
@@ -752,28 +687,8 @@ function BuildRecentEras(filterLower) {
   };
 }
 
-function BuildStemsEras(filterLower) {
-  const result = {};
-  if (!State.StemsData) return result;
-
-  for (const [era, songs] of Object.entries(State.StemsData)) {
-    const eraLow = filterLower ? era.toLowerCase() : '';
-    const matched = songs.filter(song => {
-      const [name, quality, link, , , , , category] = song;
-      if (!category) return false;
-      if (!IsQualityVisible(quality)) return false;
-      if (State.ShowPlayableOnly && !IsPlayable(link, quality)) return false;
-      if (filterLower && !name.toLowerCase().includes(filterLower)) return false;
-      return true;
-    });
-    if (matched.length) result[era] = matched;
-  }
-  return result;
-}
-
 function BuildVisibleEras(filterLower) {
   if (State.CurrentTab === 'recent') return BuildRecentEras(filterLower);
-  if (State.CurrentTab === 'stems')  return BuildStemsEras(filterLower);
 
   const markers = TabMarkers[State.CurrentTab] || null;
   const result  = {};
@@ -795,14 +710,6 @@ function UpdateNavStats(total) {
 function RenderEras(searchFilter) {
   const eraListEl = document.getElementById('era-list');
   if (!eraListEl || !State.VaultData) return;
-  if (State.CurrentTab === 'stems' && !State.StemsData) {
-    const msgEl = document.createElement('div');
-    msgEl.className   = 'loading-msg';
-    msgEl.textContent = 'Loading Data…';
-    eraListEl.replaceChildren(msgEl);
-    StemsLoader.Load();
-    return;
-  }
 
   const filterLower = (searchFilter || '').trim().toLowerCase();
   const visible     = BuildVisibleEras(filterLower);
@@ -827,24 +734,6 @@ function RenderEras(searchFilter) {
   }
   eraListEl.replaceChildren(frag);
   OpenPanels.clear();
-}
-
-function GetSheetRateState() {
-  const now            = Date.now();
-  const recentTs       = State.SheetChangeTimestamps.filter(t => now - t < SheetRateWindow);
-  const remaining      = SheetRateMax - recentTs.length;
-  const oldestInWindow = recentTs[0] ?? null;
-  const cooldownMs     = (remaining <= 0 && oldestInWindow)
-    ? SheetRateWindow - (now - oldestInWindow)
-    : 0;
-  return { remaining, cooldownMs };
-}
-
-function RecordSheetChange() {
-  const now = Date.now();
-  State.SheetChangeTimestamps = State.SheetChangeTimestamps.filter(t => now - t < SheetRateWindow);
-  State.SheetChangeTimestamps.push(now);
-  localStorage.setItem('sheetChangeTs', JSON.stringify(State.SheetChangeTimestamps));
 }
 
 const VaultLoader = {
@@ -901,132 +790,6 @@ const VaultLoader = {
   },
 };
 
-const StemsLoader = {
-  Worker: new Worker('vault_worker.js'),
-  LoadId: 0,
-
-  Load() {
-    const loadId = ++this.LoadId;
-
-    this.Worker.postMessage({ type: 'ABORT' });
-    this.Worker.postMessage({ type: 'LOAD', sheetId: State.PrimarySheetId, gid: StemsSheetGid });
-
-    this.Worker.onmessage = ({ data }) => {
-      if (loadId !== this.LoadId) return;
-
-      if (data.type === 'SUCCESS') {
-        State.StemsData = data.eraMap;
-        if (State.CurrentTab === 'stems') RenderEras(document.getElementById('search-box')?.value ?? '');
-        return;
-      }
-
-      if (data.type === 'ERROR') {
-        if (State.CurrentTab !== 'stems') return;
-        const eraList = document.getElementById('era-list');
-        const errText =
-          data.reason === 'timeout' ? 'Request timed out, check your connection and try reloading.'
-          : data.reason === 'http'  ? `Failed to load stems (${data.message}), make sure the sheet is publicly shared.`
-          :                           'Failed to load stems, check your connection or sheet permissions.';
-        const errEl = document.createElement('div');
-        errEl.className   = 'error-msg';
-        errEl.textContent = errText;
-        eraList.replaceChildren(errEl);
-      }
-    };
-
-    this.Worker.onerror = () => {
-      if (loadId !== this.LoadId) return;
-      if (State.CurrentTab !== 'stems') return;
-      const eraList = document.getElementById('era-list');
-      const errEl = document.createElement('div');
-      errEl.className   = 'error-msg';
-      errEl.textContent = 'An unexpected error occurred while loading stems.';
-      eraList.replaceChildren(errEl);
-    };
-  },
-
-  Abort() {
-    this.Worker.postMessage({ type: 'ABORT' });
-  },
-};
-
-const RecentEnabledIds = new Set(
-  ArtistPresets.filter(p => p.name.startsWith('Kanye West')).map(p => p.id)
-);
-
-function SyncRecentTabVisibility() {
-  const recentItem = document.querySelector('.nav-dropdown-item[data-tab="recent"]');
-  if (!recentItem) return;
-
-  const IsRecentEnabled = RecentEnabledIds.has(State.PrimarySheetId);
-  recentItem.style.display = IsRecentEnabled ? '' : 'none';
-
-  if (!IsRecentEnabled && State.CurrentTab === 'recent') {
-    State.CurrentTab = 'all';
-    const navBtnLabel = document.getElementById('nav-btn-text');
-    if (navBtnLabel) navBtnLabel.textContent = 'Unreleased';
-    document.querySelectorAll('.nav-dropdown-item').forEach(n => {
-      n.classList.toggle('active', n.dataset.tab === 'all');
-    });
-  }
-}
-
-function SyncStemsTabVisibility() {
-  const stemsItem = document.querySelector('.nav-dropdown-item[data-tab="stems"]');
-  if (!stemsItem) return;
-
-  const isStemsEnabled = State.PrimarySheetId === DefaultSheetId;
-  stemsItem.style.display = isStemsEnabled ? '' : 'none';
-
-  if (!isStemsEnabled && State.CurrentTab === 'stems') {
-    State.CurrentTab = 'all';
-    const navBtnLabel = document.getElementById('nav-btn-text');
-    if (navBtnLabel) navBtnLabel.textContent = 'Unreleased';
-    document.querySelectorAll('.nav-dropdown-item').forEach(n => {
-      n.classList.toggle('active', n.dataset.tab === 'all');
-    });
-  }
-}
-
-function ReloadWithSheetId(newId) {
-  if (State.CountdownId !== null) {
-    clearTimeout(State.CountdownId);
-    State.CountdownId = null;
-  }
-  VaultLoader.Abort();
-  StemsLoader.Abort();
-
-  State.PrimarySheetId  = newId;
-  State.VaultData       = null;
-  State.EraDescriptions = {};
-  State.StemsData       = null;
-  State.IsLoading       = true;
-  AudioPlayer.ClearPlayButtons();
-  SyncRecentTabVisibility();
-  SyncStemsTabVisibility();
-
-  const eraList   = document.getElementById('era-list');
-  const startTime = Date.now();
-  const msgEl     = document.createElement('div');
-  msgEl.className = 'loading-msg';
-  eraList.replaceChildren(msgEl);
-
-  const tick = () => {
-    const elapsed   = Date.now() - startTime;
-    const remaining = Math.max(0, ReloadCountdownMs - elapsed);
-    msgEl.textContent = `Loading in ${FormatCountdown(remaining)}…`;
-    if (remaining <= 0) {
-      State.CountdownId = null;
-      msgEl.textContent = 'Loading Data…';
-      VaultLoader.Load(msgEl);
-    } else {
-      State.CountdownId = setTimeout(tick, 1_000);
-    }
-  };
-
-  tick();
-}
-
 function InitNav(searchBox, navTabBtn, navTabMenu, navBtnLabel) {
   navTabBtn.addEventListener('click', ev => {
     ev.stopPropagation();
@@ -1072,7 +835,7 @@ function InitGlobalHandlers(searchBox, navTabBtn, navTabMenu, filterBtn, filterM
     clearTimeout(State.SearchDebounceId);
     State.SearchDebounceId = setTimeout(() => {
       if (State.VaultData) RenderEras(ev.target.value);
-    }, SearchDebounceMs);
+    }, 200);
   });
 
   document.addEventListener('keydown', ev => {
@@ -1107,11 +870,7 @@ function InitSettings() {
   const settingsBtn    = document.getElementById('settings-btn');
   const modal          = document.getElementById('settings-modal');
   const closeBtn       = document.getElementById('settings-close-btn');
-  const applyBtn       = document.getElementById('settings-apply-btn');
-  const resetBtn       = document.getElementById('settings-reset-btn');
-  const rateMsgEl      = document.getElementById('settings-rate-msg');
   const playableToggle = document.getElementById('playable-only-toggle');
-  const artistSelect   = document.getElementById('settings-artist-select');
 
   const syncToggleUi = () => {
     playableToggle?.setAttribute('aria-checked', String(State.ShowPlayableOnly));
@@ -1126,72 +885,13 @@ function InitSettings() {
     }
   });
 
-  const stopCooldown = () => {
-    clearInterval(State.CooldownIntervalId);
-    State.CooldownIntervalId = null;
-  };
-
-  const getSelectedId = () => artistSelect?.value ?? '';
-
-  const syncApplyBtn = () => {
-    const { remaining } = GetSheetRateState();
-    const selectedId    = getSelectedId();
-    applyBtn.disabled   = !selectedId || selectedId === State.PrimarySheetId || remaining <= 0 || State.IsLoading;
-  };
-
-  const updateRateUi = () => {
-    const { remaining, cooldownMs } = GetSheetRateState();
-    if (remaining <= 0) {
-      applyBtn.disabled     = true;
-      rateMsgEl.textContent = `Rate limit reached. Try again in ${FormatCountdown(cooldownMs)}.`;
-      rateMsgEl.hidden      = false;
-      if (!State.CooldownIntervalId) {
-        State.CooldownIntervalId = setInterval(() => {
-          const { remaining: r, cooldownMs: c } = GetSheetRateState();
-          if (r > 0) {
-            rateMsgEl.hidden      = true;
-            rateMsgEl.textContent = '';
-            stopCooldown();
-            syncApplyBtn();
-          } else {
-            rateMsgEl.textContent = `Rate limit reached. Try again in ${FormatCountdown(c)}.`;
-          }
-        }, 1_000);
-      }
-    } else {
-      rateMsgEl.hidden      = true;
-      rateMsgEl.textContent = '';
-      stopCooldown();
-    }
-  };
-
-  const syncArtistSelect = () => {
-    if (!artistSelect) return;
-    const match = ArtistPresets.find(p => p.id === State.PrimarySheetId);
-    if (match) artistSelect.value = match.id;
-  };
-
-  artistSelect?.addEventListener('change', syncApplyBtn);
-
-  const applySheetId = newId => {
-    const { remaining } = GetSheetRateState();
-    if (remaining <= 0) { updateRateUi(); return; }
-    RecordSheetChange();
-    closeModal();
-    ReloadWithSheetId(newId);
-  };
-
   const openModal = () => {
     syncToggleUi();
-    syncArtistSelect();
-    updateRateUi();
-    syncApplyBtn();
     modal.removeAttribute('hidden');
   };
 
   const closeModal = () => {
     modal.setAttribute('hidden', '');
-    stopCooldown();
   };
 
   settingsBtn.addEventListener('click', ev => { ev.stopPropagation(); openModal(); });
@@ -1199,17 +899,6 @@ function InitSettings() {
   modal.addEventListener('click', ev => { if (ev.target === modal) closeModal(); });
   document.addEventListener('keydown', ev => {
     if (ev.key === 'Escape' && !modal.hasAttribute('hidden')) closeModal();
-  });
-
-  applyBtn.addEventListener('click', () => {
-    const newId = getSelectedId();
-    if (!newId || newId === State.PrimarySheetId) { closeModal(); return; }
-    applySheetId(newId);
-  });
-
-  resetBtn.addEventListener('click', () => {
-    if (State.PrimarySheetId === DefaultSheetId) { closeModal(); return; }
-    applySheetId(DefaultSheetId);
   });
 }
 
@@ -1226,7 +915,5 @@ document.addEventListener('DOMContentLoaded', () => {
   InitQualityFilter(searchBox, filterBtn, filterMenu);
   InitGlobalHandlers(searchBox, navTabBtn, navTabMenu, filterBtn, filterMenu);
   InitSettings();
-  SyncRecentTabVisibility();
-  SyncStemsTabVisibility();
   VaultLoader.Load();
 });
