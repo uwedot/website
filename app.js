@@ -7,149 +7,140 @@ const TabMarkers = {
 };
 
 const QualityMap = [
-  { key: 'lossless', cls: 'q-lossless', test: l => l.includes('lossless') },
-  { key: 'high',     cls: 'q-high',     test: l => l.includes('high')     },
-  { key: 'cd',       cls: 'q-cd',       test: l => l.includes('cd')       },
-  { key: 'rec',      cls: 'q-rec',      test: l => l.includes('record')   },
-  { key: 'low',      cls: 'q-low',      test: l => l.includes('low')      },
-  { key: 'unavail',  cls: null,         test: l => l.includes('not avail') || l.includes('unavail') },
+  { Key: 'lossless', Cls: 'q-lossless', Test: L => L.includes('lossless') },
+  { Key: 'high', Cls: 'q-high', Test: L => L.includes('high') },
+  { Key: 'cd', Cls: 'q-cd', Test: L => L.includes('cd') },
+  { Key: 'rec', Cls: 'q-rec', Test: L => L.includes('record') },
+  { Key: 'low', Cls: 'q-low', Test: L => L.includes('low') },
+  { Key: 'unavail', Cls: null, Test: L => L.includes('not avail') || L.includes('unavail') },
 ];
 
 const AvailLenClassMap = [
-  { test: l => /\bog\b/.test(l),        cls: 'tl-og'        },
-  { test: l => l.includes('lossless'),  cls: 'tl-other'     },
-  { test: l => l.includes('stem'),      cls: 'tl-stem'      },
-  { test: l => l.includes('full'),      cls: 'tl-full'      },
-  { test: l => l.includes('tagged'),    cls: 'tl-tagged'    },
-  { test: l => l.includes('partial'),   cls: 'tl-partial'   },
-  { test: l => l.includes('snippet'),   cls: 'tl-snippet'   },
-  { test: l => l.includes('unavail'),   cls: 'tl-unavail'   },
-  { test: l => l.includes('confirmed'), cls: 'tl-confirmed' },
-  { test: l => l.includes('rumored'),   cls: 'tl-rumored'   },
-  { test: l => l.includes('vox'),       cls: 'tl-vox'       },
+  { Test: L => /\bog\b/.test(L), Cls: 'tl-og' },
+  { Test: L => L.includes('lossless'), Cls: 'tl-other' },
+  { Test: L => L.includes('stem'), Cls: 'tl-stem' },
+  { Test: L => L.includes('full'), Cls: 'tl-full' },
+  { Test: L => L.includes('tagged'), Cls: 'tl-tagged' },
+  { Test: L => L.includes('partial'), Cls: 'tl-partial' },
+  { Test: L => L.includes('snippet'), Cls: 'tl-snippet' },
+  { Test: L => L.includes('unavail'), Cls: 'tl-unavail' },
+  { Test: L => L.includes('confirmed'), Cls: 'tl-confirmed' },
+  { Test: L => L.includes('rumored'), Cls: 'tl-rumored' },
+  { Test: L => L.includes('vox'), Cls: 'tl-vox' },
 ];
 
 const VersionPattern = /[[(](v(?:ersion)?\s*\d+)[\])]/i;
-const UrlPattern     = /^https?:/i;
-const PillowsHost    = 'pillows.su/f/';
-const PillowsApi     = 'https://api.pillows.su/api/get/';
-const PillowsDlApi   = 'https://api.pillows.su/api/download/';
-
-const AllQualityKeys = QualityMap.map(q => q.key);
+const UrlPattern = /^https?:/i;
+const PillowsHost = 'pillows.su/f/';
+const PillowsApi = 'https://api.pillows.su/api/get/';
+const AllQualityKeys = QualityMap.map(Q => Q.Key);
 
 const State = {
-  PrimarySheetId:        DefaultSheetId,
-  VaultData:             null,
-  EraDescriptions:       {},
-  CurrentTab:            'all',
-  ActiveQualities:       new Set(AllQualityKeys),
-  ShowPlayableOnly:      false,
-  IsLoading:             false,
-  HasOpenDropdown:       false,
-  SearchDebounceId:      null,
+  PrimarySheetId: DefaultSheetId,
+  VaultData: null,
+  EraDescriptions: {},
+  CurrentTab: 'all',
+  ActiveQualities: new Set(AllQualityKeys),
+  ShowPlayableOnly: false,
+  IsLoading: false,
+  HasOpenDropdown: false,
+  SearchDebounceId: null,
 };
 
-const PlayBtnMap  = new Map();
-const OpenPanels  = new Set();
-const DateCache   = new Map();
+const PlayBtnMap = new Map();
+const OpenPanels = new Set();
 
 const HtmlEscapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
-const HtmlEscapeRe  = /[&<>"]/g;
+const HtmlEscapeRe = /[&<>"]/g;
 
-function EscapeHtml(str) {
-  return String(str).replace(HtmlEscapeRe, c => HtmlEscapeMap[c]);
+function EscapeHtml(Str) {
+  return String(Str).replace(HtmlEscapeRe, C => HtmlEscapeMap[C]);
 }
 
-function FormatTime(seconds) {
-  if (!isFinite(seconds) || seconds < 0) return '0:00';
-  const s = Math.floor(seconds);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+function FormatTime(Seconds) {
+  if (!isFinite(Seconds) || Seconds < 0) return '0:00';
+  const S = Math.floor(Seconds);
+  return `${Math.floor(S / 60)}:${String(S % 60).padStart(2, '0')}`;
 }
 
-function ParseDateToTimestamp(dateStr) {
-  if (!dateStr) return 0;
-  const cached = DateCache.get(dateStr);
-  if (cached !== undefined) return cached;
-
-  let result = Date.parse(dateStr);
-  if (isNaN(result)) {
-    const m = dateStr.match(/\b(19|20)\d{2}\b/);
-    result = m ? new Date(m[0], 0, 1).getTime() : 0;
+function ParseDateToTimestamp(DateStr) {
+  if (!DateStr) return 0;
+  let Result = Date.parse(DateStr);
+  if (isNaN(Result)) {
+    const M = DateStr.match(/\b(19|20)\d{2}\b/);
+    Result = M ? new Date(M[0], 0, 1).getTime() : 0;
   }
-
-  if (DateCache.size >= 500) DateCache.clear();
-  DateCache.set(dateStr, result);
-  return result;
+  return Result;
 }
 
-function ResolveUrl(url) {
-  try { return new URL(url).href; } catch { return url; }
+function ResolveUrl(Url) {
+  try { return new URL(Url).href; } catch { return Url; }
 }
 
-function NormaliseKey(s) {
-  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+function NormaliseKey(S) {
+  return S.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-const Clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const Clamp = (V, Lo, Hi) => Math.max(Lo, Math.min(Hi, V));
 
-function GetQualityClass(quality) {
-  if (!quality) return 'q-other';
-  const l = quality.toLowerCase();
-  for (const { test, cls } of QualityMap) {
-    if (cls && test(l)) return cls;
+function GetQualityClass(Quality) {
+  if (!Quality) return 'q-other';
+  const L = Quality.toLowerCase();
+  for (const { Test, Cls } of QualityMap) {
+    if (Cls && Test(L)) return Cls;
   }
   return 'q-other';
 }
 
-function GetAvailableLengthClass(availLen) {
-  if (!availLen) return 'tl-other';
-  const l = availLen.toLowerCase();
-  for (const { test, cls } of AvailLenClassMap) {
-    if (test(l)) return cls;
+function GetAvailableLengthClass(AvailLen) {
+  if (!AvailLen) return 'tl-other';
+  const L = AvailLen.toLowerCase();
+  for (const { Test, Cls } of AvailLenClassMap) {
+    if (Test(L)) return Cls;
   }
   return 'tl-other';
 }
 
-function IsQualityVisible(quality) {
-  const l = (quality || '').toLowerCase();
-  if (!l) return State.ActiveQualities.has('unavail');
-  for (const { key, test } of QualityMap) {
-    if (State.ActiveQualities.has(key) && test(l)) return true;
+function IsQualityVisible(Quality) {
+  const L = (Quality || '').toLowerCase();
+  if (!L) return State.ActiveQualities.has('unavail');
+  for (const { Key, Test } of QualityMap) {
+    if (State.ActiveQualities.has(Key) && Test(L)) return true;
   }
   return false;
 }
 
-function IsPlayable(linkString, quality) {
-  if (!linkString) return false;
-  const q = (quality || '').toLowerCase();
-  if (q.includes('unavail') || q.includes('not avail')) return false;
-  return linkString.split(/[\s,]+/).some(u => u.includes(PillowsHost));
+function IsPlayable(LinkString, Quality) {
+  if (!LinkString) return false;
+  const Q = (Quality || '').toLowerCase();
+  if (Q.includes('unavail') || Q.includes('not avail')) return false;
+  return LinkString.split(/[\s,]+/).some(U => U.includes(PillowsHost));
 }
 
 const AudioPlayer = {
-  AudioElement:    null,
+  AudioElement: null,
   PlayerElement: null,
-  Elements:      {},
+  Elements: {},
 
   Init() {
-    this.AudioElement    = document.getElementById('main-audio');
+    this.AudioElement = document.getElementById('main-audio');
     this.PlayerElement = document.getElementById('global-player');
     if (!this.AudioElement || !this.PlayerElement) return;
 
     this.Elements = {
-      PlayIcon:       document.getElementById('player-play-icon'),
-      PauseIcon:      document.getElementById('player-pause-icon'),
-      PlayPauseBtn:   document.getElementById('player-play-btn'),
-      CloseBtn:       document.getElementById('player-close-btn'),
-      CurrentTimeEl:  document.getElementById('player-current'),
-      DurationEl:     document.getElementById('player-duration'),
-      TrackNameEl:    document.getElementById('player-track-name'),
+      PlayIcon: document.getElementById('player-play-icon'),
+      PauseIcon: document.getElementById('player-pause-icon'),
+      PlayPauseBtn: document.getElementById('player-play-btn'),
+      CloseBtn: document.getElementById('player-close-btn'),
+      CurrentTimeEl: document.getElementById('player-current'),
+      DurationEl: document.getElementById('player-duration'),
+      TrackNameEl: document.getElementById('player-track-name'),
       TrackCurrentEl: document.getElementById('player-track-current'),
-      TrackLengthEl:  document.getElementById('player-track-length'),
-      ProgressFill:   document.getElementById('player-fill'),
-      VolFill:        document.getElementById('player-vol-fill'),
-      ScrubberEl:     document.getElementById('player-scrubber'),
-      VolumeSlider:   document.getElementById('player-volume'),
+      TrackLengthEl: document.getElementById('player-track-length'),
+      ProgressFill: document.getElementById('player-fill'),
+      VolFill: document.getElementById('player-vol-fill'),
+      ScrubberEl: document.getElementById('player-scrubber'),
+      VolumeSlider: document.getElementById('player-volume'),
     };
 
     this.BindAudioEvents();
@@ -159,18 +150,18 @@ const AudioPlayer = {
     this.SetVolume(80);
   },
 
-  RegisterPlayBtn(btn, resolvedUrl) {
-    if (!PlayBtnMap.has(resolvedUrl)) PlayBtnMap.set(resolvedUrl, new Set());
-    PlayBtnMap.get(resolvedUrl).add(btn);
+  RegisterPlayBtn(Btn, ResolvedUrl) {
+    if (!PlayBtnMap.has(ResolvedUrl)) PlayBtnMap.set(ResolvedUrl, new Set());
+    PlayBtnMap.get(ResolvedUrl).add(Btn);
   },
 
   SyncPlayButtons() {
-    const audio   = this.AudioElement;
-    const current = audio.src ? ResolveUrl(audio.src) : '';
-    const playing = !audio.paused;
-    for (const [href, btns] of PlayBtnMap) {
-      const label = (href === current && playing) ? 'Pause' : 'Play';
-      for (const btn of btns) btn.textContent = label;
+    const Audio = this.AudioElement;
+    const Current = Audio.src ? ResolveUrl(Audio.src) : '';
+    const Playing = !Audio.paused;
+    for (const [Href, Btns] of PlayBtnMap) {
+      const Label = (Href === Current && Playing) ? 'Pause' : 'Play';
+      for (const Btn of Btns) Btn.textContent = Label;
     }
   },
 
@@ -186,29 +177,29 @@ const AudioPlayer = {
     return this.AudioElement.src ? ResolveUrl(this.AudioElement.src) : '';
   },
 
-  PlayOrToggle(resolvedUrl, trackName) {
-    const audio = this.AudioElement;
-    if (this.CurrentResolvedSrc() === resolvedUrl) {
-      if (audio.paused) this.SafePlay();
-      else              audio.pause();
+  PlayOrToggle(ResolvedUrl, TrackName) {
+    const Audio = this.AudioElement;
+    if (this.CurrentResolvedSrc() === ResolvedUrl) {
+      if (Audio.paused) this.SafePlay();
+      else Audio.pause();
       return;
     }
-    this.Elements.TrackNameEl.textContent = trackName;
-    this.SetMediaSessionTrack(trackName);
-    audio.pause();
-    audio.removeAttribute('src');
-    audio.load();
-    audio.src = resolvedUrl;
+    this.Elements.TrackNameEl.textContent = TrackName;
+    this.SetMediaSessionTrack(TrackName);
+    Audio.pause();
+    Audio.removeAttribute('src');
+    Audio.load();
+    Audio.src = ResolvedUrl;
     this.PlayerElement.removeAttribute('hidden');
     this.SafePlay();
   },
 
   Close() {
-    const { AudioElement: audio, PlayerElement: playerEl } = this;
-    audio.pause();
-    audio.src = '';
-    audio.load();
-    playerEl.setAttribute('hidden', '');
+    const { AudioElement: Audio, PlayerElement: PlayerEl } = this;
+    Audio.pause();
+    Audio.src = '';
+    Audio.load();
+    PlayerEl.setAttribute('hidden', '');
     if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
     this.SetPlayState(false);
     this.SetProgress(0);
@@ -217,522 +208,510 @@ const AudioPlayer = {
     this.SyncPlayButtons();
   },
 
-  SetVolume(pct) {
-    const c = Clamp(pct, 0, 100);
-    const { VolFill: volFill, VolumeSlider: volumeSlider } = this.Elements;
-    volFill.style.width = `${c}%`;
-    this.AudioElement.volume = c / 100;
-    volumeSlider.setAttribute('aria-valuenow', Math.round(c));
+  SetVolume(Pct) {
+    const C = Clamp(Pct, 0, 100);
+    const { VolFill, VolumeSlider } = this.Elements;
+    VolFill.style.width = `${C}%`;
+    this.AudioElement.volume = C / 100;
+    VolumeSlider.setAttribute('aria-valuenow', Math.round(C));
   },
 
-  SetPlayState(playing) {
-    const { PlayIcon: playIcon, PauseIcon: pauseIcon, PlayPauseBtn: playPauseBtn } = this.Elements;
-    playIcon.style.display  = playing ? 'none' : '';
-    pauseIcon.style.display = playing ? ''     : 'none';
-    playPauseBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  SetPlayState(Playing) {
+    const { PlayIcon, PauseIcon, PlayPauseBtn } = this.Elements;
+    PlayIcon.style.display = Playing ? 'none' : '';
+    PauseIcon.style.display = Playing ? '' : 'none';
+    PlayPauseBtn.setAttribute('aria-label', Playing ? 'Pause' : 'Play');
   },
 
-  SetProgress(pct) {
-    const c = Clamp(pct, 0, 100);
-    const { ProgressFill: progressFill, ScrubberEl: scrubberEl } = this.Elements;
-    progressFill.style.width = `${c}%`;
-    scrubberEl.setAttribute('aria-valuenow', Math.round(c));
+  SetProgress(Pct) {
+    const C = Clamp(Pct, 0, 100);
+    const { ProgressFill, ScrubberEl } = this.Elements;
+    ProgressFill.style.width = `${C}%`;
+    ScrubberEl.setAttribute('aria-valuenow', Math.round(C));
   },
 
-  SetCurrentTime(t) {
-    this.Elements.CurrentTimeEl.textContent = this.Elements.TrackCurrentEl.textContent = t;
+  SetCurrentTime(T) {
+    this.Elements.CurrentTimeEl.textContent = this.Elements.TrackCurrentEl.textContent = T;
   },
 
-  SetDuration(t) {
-    this.Elements.DurationEl.textContent = this.Elements.TrackLengthEl.textContent = t;
+  SetDuration(T) {
+    this.Elements.DurationEl.textContent = this.Elements.TrackLengthEl.textContent = T;
   },
 
   BindAudioEvents() {
-    const { AudioElement: audio, Elements: els } = this;
+    const { AudioElement: Audio, Elements: Els } = this;
 
-    audio.addEventListener('play',  () => { this.SetPlayState(true);  this.SyncPlayButtons(); });
-    audio.addEventListener('pause', () => { this.SetPlayState(false); this.SyncPlayButtons(); });
-    audio.addEventListener('ended', () => {
+    Audio.addEventListener('play', () => { this.SetPlayState(true); this.SyncPlayButtons(); });
+    Audio.addEventListener('pause', () => { this.SetPlayState(false); this.SyncPlayButtons(); });
+    Audio.addEventListener('ended', () => {
       this.SetPlayState(false);
       this.SetProgress(0);
       this.SetCurrentTime('0:00');
       this.SyncPlayButtons();
     });
-    audio.addEventListener('loadedmetadata', () => this.SetDuration(FormatTime(audio.duration)));
-    audio.addEventListener('error', () => {
+    Audio.addEventListener('loadedmetadata', () => this.SetDuration(FormatTime(Audio.duration)));
+    Audio.addEventListener('error', () => {
       this.SetPlayState(false);
-      els.TrackNameEl.textContent = 'Playback error, format not supported or unavailable';
+      Els.TrackNameEl.textContent = 'Playback error, format not supported or unavailable';
     });
-    audio.addEventListener('timeupdate', () => {
-      if (!audio.duration) return;
-      this.SetProgress((audio.currentTime / audio.duration) * 100);
-      this.SetCurrentTime(FormatTime(audio.currentTime));
+    Audio.addEventListener('timeupdate', () => {
+      if (!Audio.duration) return;
+      this.SetProgress((Audio.currentTime / Audio.duration) * 100);
+      this.SetCurrentTime(FormatTime(Audio.currentTime));
       if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
         navigator.mediaSession.setPositionState({
-          duration:     audio.duration,
-          playbackRate: audio.playbackRate,
-          position:     audio.currentTime,
+          duration: Audio.duration,
+          playbackRate: Audio.playbackRate,
+          position: Audio.currentTime,
         });
       }
     });
   },
 
   BindControls() {
-    const { AudioElement: audio, Elements: els } = this;
+    const { AudioElement: Audio, Elements: Els } = this;
 
-    els.PlayPauseBtn.addEventListener('click', () => {
-      if (audio.paused) this.SafePlay();
-      else              audio.pause();
+    Els.PlayPauseBtn.addEventListener('click', () => {
+      if (Audio.paused) this.SafePlay();
+      else Audio.pause();
     });
 
-    els.CloseBtn.addEventListener('click', () => this.Close());
+    Els.CloseBtn.addEventListener('click', () => this.Close());
   },
 
   BindSliders() {
-    const { AudioElement: audio, Elements: els } = this;
-    const { ScrubberEl: scrubberEl, VolumeSlider: volumeSlider } = els;
+    const { AudioElement: Audio, Elements: Els } = this;
+    const { ScrubberEl, VolumeSlider } = Els;
 
-    const pctFromPointer = (ev, el) => {
-      const rect = el.getBoundingClientRect();
-      return rect.width ? Clamp((ev.clientX - rect.left) / rect.width, 0, 1) : 0;
+    const PctFromPointer = (Ev, El) => {
+      const Rect = El.getBoundingClientRect();
+      return Rect.width ? Clamp((Ev.clientX - Rect.left) / Rect.width, 0, 1) : 0;
     };
-    const bindTouchSlider = (el, handler) => {
-      el.addEventListener('touchstart', ev => handler(ev.touches[0]), { passive: true });
-      el.addEventListener('touchmove',  ev => handler(ev.touches[0]), { passive: true });
+    const BindTouchSlider = (El, Handler) => {
+      El.addEventListener('touchstart', Ev => Handler(Ev.touches[0]), { passive: true });
+      El.addEventListener('touchmove', Ev => Handler(Ev.touches[0]), { passive: true });
     };
 
-    let draggingProgress = false;
-    let draggingVolume   = false;
+    let DraggingProgress = false;
+    let DraggingVolume = false;
 
-    scrubberEl.addEventListener('mousedown', ev => {
-      draggingProgress = true;
-      if (audio.duration) audio.currentTime = pctFromPointer(ev, scrubberEl) * audio.duration;
+    ScrubberEl.addEventListener('mousedown', Ev => {
+      DraggingProgress = true;
+      if (Audio.duration) Audio.currentTime = PctFromPointer(Ev, ScrubberEl) * Audio.duration;
     });
-    volumeSlider.addEventListener('mousedown', ev => {
-      draggingVolume = true;
-      this.SetVolume(pctFromPointer(ev, volumeSlider) * 100);
+    VolumeSlider.addEventListener('mousedown', Ev => {
+      DraggingVolume = true;
+      this.SetVolume(PctFromPointer(Ev, VolumeSlider) * 100);
     });
-    window.addEventListener('mousemove', ev => {
-      if (draggingProgress && audio.duration) audio.currentTime = pctFromPointer(ev, scrubberEl) * audio.duration;
-      if (draggingVolume)                     this.SetVolume(pctFromPointer(ev, volumeSlider) * 100);
+    window.addEventListener('mousemove', Ev => {
+      if (DraggingProgress && Audio.duration) Audio.currentTime = PctFromPointer(Ev, ScrubberEl) * Audio.duration;
+      if (DraggingVolume) this.SetVolume(PctFromPointer(Ev, VolumeSlider) * 100);
     });
-    window.addEventListener('mouseup', () => { draggingProgress = false; draggingVolume = false; });
+    window.addEventListener('mouseup', () => { DraggingProgress = false; DraggingVolume = false; });
 
-    bindTouchSlider(scrubberEl,   t => { if (audio.duration) audio.currentTime = pctFromPointer(t, scrubberEl) * audio.duration; });
-    bindTouchSlider(volumeSlider, t => this.SetVolume(pctFromPointer(t, volumeSlider) * 100));
+    BindTouchSlider(ScrubberEl, T => { if (Audio.duration) Audio.currentTime = PctFromPointer(T, ScrubberEl) * Audio.duration; });
+    BindTouchSlider(VolumeSlider, T => this.SetVolume(PctFromPointer(T, VolumeSlider) * 100));
 
-    scrubberEl.addEventListener('keydown', ev => {
-      if (!audio.duration) return;
-      const step = audio.duration * 0.02;
-      if (ev.key === 'ArrowRight') { ev.preventDefault(); audio.currentTime = Math.min(audio.duration, audio.currentTime + step); }
-      if (ev.key === 'ArrowLeft')  { ev.preventDefault(); audio.currentTime = Math.max(0,              audio.currentTime - step); }
+    ScrubberEl.addEventListener('keydown', Ev => {
+      if (!Audio.duration) return;
+      const Step = Audio.duration * 0.02;
+      if (Ev.key === 'ArrowRight') { Ev.preventDefault(); Audio.currentTime = Math.min(Audio.duration, Audio.currentTime + Step); }
+      if (Ev.key === 'ArrowLeft') { Ev.preventDefault(); Audio.currentTime = Math.max(0, Audio.currentTime - Step); }
     });
   },
 
-  SetMediaSessionTrack(trackName) {
+  SetMediaSessionTrack(TrackName) {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
-      title:  trackName,
+      title: TrackName,
       artist: 'Mistape',
     });
   },
 
   BindMediaSession() {
     if (!('mediaSession' in navigator)) return;
-    const { AudioElement: audio } = this;
-    const ms = navigator.mediaSession;
-    ms.setActionHandler('play',         () => this.SafePlay());
-    ms.setActionHandler('pause',        () => audio.pause());
-    ms.setActionHandler('stop',         () => { audio.pause(); audio.currentTime = 0; });
-    ms.setActionHandler('seekto',       d => { if (d.seekTime !== undefined && audio.duration) audio.currentTime = d.seekTime; });
-    ms.setActionHandler('seekbackward', d => { audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset || 10)); });
-    ms.setActionHandler('seekforward',  d => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d.seekOffset || 10)); });
+    const { AudioElement: Audio } = this;
+    const Ms = navigator.mediaSession;
+    Ms.setActionHandler('play', () => this.SafePlay());
+    Ms.setActionHandler('pause', () => Audio.pause());
+    Ms.setActionHandler('stop', () => { Audio.pause(); Audio.currentTime = 0; });
+    Ms.setActionHandler('seekto', D => { if (D.seekTime !== undefined && Audio.duration) Audio.currentTime = D.seekTime; });
+    Ms.setActionHandler('seekbackward', D => { Audio.currentTime = Math.max(0, Audio.currentTime - (D.seekOffset || 10)); });
+    Ms.setActionHandler('seekforward', D => { Audio.currentTime = Math.min(Audio.duration || 0, Audio.currentTime + (D.seekOffset || 10)); });
   },
 };
 
 function CloseAllLinkDropdowns() {
   if (!State.HasOpenDropdown) return;
-  document.querySelectorAll('.song-dropdown-menu.open').forEach(menu => {
-    menu.classList.remove('open');
-    menu.style.position = '';
-    menu.style.top      = '';
-    menu.style.left     = '';
-    const btn = menu.previousElementSibling;
-    if (btn) btn.setAttribute('aria-expanded', 'false');
+  document.querySelectorAll('.song-dropdown-menu.open').forEach(Menu => {
+    Menu.classList.remove('open');
+    Menu.style.position = '';
+    Menu.style.top = '';
+    Menu.style.left = '';
+    const Btn = Menu.previousElementSibling;
+    if (Btn) Btn.setAttribute('aria-expanded', 'false');
   });
   State.HasOpenDropdown = false;
 }
 
-function PositionDropdown(menu, btn) {
-  if (!menu || !btn) return;
+function PositionDropdown(Menu, Btn) {
+  if (!Menu || !Btn) return;
 
-  const btnRect = btn.getBoundingClientRect();
-  const GAP = 4;
+  const BtnRect = Btn.getBoundingClientRect();
+  const Gap = 4;
 
-  const prevVis = menu.style.visibility;
-  menu.style.visibility = 'hidden';
-  menu.style.position   = 'fixed';
-  menu.style.top        = '0';
-  menu.style.left       = '0';
-  menu.style.right      = 'auto';
-  menu.style.margin     = '0';
+  const PrevVis = Menu.style.visibility;
+  Menu.style.visibility = 'hidden';
+  Menu.style.position = 'fixed';
+  Menu.style.top = '0';
+  Menu.style.left = '0';
+  Menu.style.right = 'auto';
+  Menu.style.margin = '0';
 
-  const menuH = menu.offsetHeight || 160;
-  menu.style.visibility = prevVis;
+  const MenuH = Menu.offsetHeight || 160;
+  Menu.style.visibility = PrevVis;
 
-  let top  = btnRect.bottom + GAP;
-  let left = btnRect.right - menu.offsetWidth;
-  if (left < 4) left = 4;
-  if (top + menuH > window.innerHeight - 8) top = btnRect.top - menuH - GAP;
+  let Top = BtnRect.bottom + Gap;
+  let Left = BtnRect.right - Menu.offsetWidth;
+  if (Left < 4) Left = 4;
+  if (Top + MenuH > window.innerHeight - 8) Top = BtnRect.top - MenuH - Gap;
 
-  menu.style.top  = top  + 'px';
-  menu.style.left = left + 'px';
+  Menu.style.top = Top + 'px';
+  Menu.style.left = Left + 'px';
 }
 
-function ToggleDropdown(btn, menu) {
-  const isOpen = menu.classList.toggle('open');
-  btn.setAttribute('aria-expanded', String(isOpen));
-  if (isOpen) {
-    PositionDropdown(menu, btn);
+function ToggleDropdown(Btn, Menu) {
+  const IsOpen = Menu.classList.toggle('open');
+  Btn.setAttribute('aria-expanded', String(IsOpen));
+  if (IsOpen) {
+    PositionDropdown(Menu, Btn);
   }
 }
 
-function CloseDropdown(btn, menu) {
-  menu.classList.remove('open');
-  btn.setAttribute('aria-expanded', 'false');
+function CloseDropdown(Btn, Menu) {
+  Menu.classList.remove('open');
+  Btn.setAttribute('aria-expanded', 'false');
 }
 
-function CollapsePanel(panel) {
-  if (!OpenPanels.has(panel)) return;
-  panel.classList.remove('open');
-  OpenPanels.delete(panel);
-  const eraRow = panel.previousElementSibling;
-  if (eraRow) {
-    eraRow.classList.remove('active');
-    eraRow.setAttribute('aria-expanded', 'false');
+function CollapsePanel(Panel) {
+  if (!OpenPanels.has(Panel)) return;
+  Panel.classList.remove('open');
+  OpenPanels.delete(Panel);
+  const EraRow = Panel.previousElementSibling;
+  if (EraRow) {
+    EraRow.classList.remove('active');
+    EraRow.setAttribute('aria-expanded', 'false');
   }
 }
 
 function CollapseAllEraPanels() {
-  for (const panel of OpenPanels) CollapsePanel(panel);
+  for (const Panel of OpenPanels) CollapsePanel(Panel);
 }
 
-function OpenPanel(panel, eraRow) {
-  panel.classList.add('open');
-  OpenPanels.add(panel);
-  eraRow.classList.add('active');
-  eraRow.setAttribute('aria-expanded', 'true');
+function OpenPanel(Panel, EraRow) {
+  Panel.classList.add('open');
+  OpenPanels.add(Panel);
+  EraRow.classList.add('active');
+  EraRow.setAttribute('aria-expanded', 'true');
 }
 
-function BuildSongControls({ links, displayQuality, isUnavailable, songName, noPlay }) {
-  let playBtnHtml = '';
-  let downloadBtnHtml = '';
-  let resolvedDownload = '';
+function BuildSongElement({ SongName, Quality, LinkString, Notes, TrackNumber, AvailLen, RecentEra, LeakDate }) {
+  const SafeNotes = (Notes || '').trim();
+  const HasNotes = SafeNotes !== '';
 
-  const pillowsLink = links.find(u => u.includes(PillowsHost));
-  if (pillowsLink && !isUnavailable) {
-    const pathStart = pillowsLink.indexOf(PillowsHost) + PillowsHost.length;
-    const filePath  = pillowsLink.slice(pathStart);
-    resolvedDownload = PillowsApi + filePath;
-    if (noPlay) {
-      const downloadUrl = PillowsDlApi + filePath;
-      downloadBtnHtml = `<a class="song-download-btn" href="${EscapeHtml(downloadUrl)}" download target="_blank" rel="noopener noreferrer">Download</a>`;
-    } else {
-      playBtnHtml = `<button type="button" class="song-play-btn" data-name="${EscapeHtml(songName)}">Play</button>`;
-    }
+  const Links = LinkString
+    ? LinkString.split(/[\s,]+/).map(U => U.trim()).filter(U => UrlPattern.test(U))
+    : [];
+
+  const AvailLower = (AvailLen || '').toLowerCase();
+  const IsRumoredOrConf = AvailLower.includes('rumored') || AvailLower.includes('confirmed');
+  const DisplayQuality = (Links.length > 0 || IsRumoredOrConf) ? Quality : 'Unavailable';
+  const DisplayQualLow = (DisplayQuality || '').toLowerCase();
+  const IsUnavailable = !DisplayQuality ||
+    DisplayQualLow.includes('unavail') ||
+    DisplayQualLow.includes('not avail');
+
+  let PlayBtnHtml = '';
+  let ResolvedDownload = '';
+  let LinksHtml = '';
+
+  const PillowsLink = Links.find(U => U.includes(PillowsHost));
+  if (PillowsLink && !IsUnavailable) {
+    const PathStart = PillowsLink.indexOf(PillowsHost) + PillowsHost.length;
+    const FilePath = PillowsLink.slice(PathStart);
+    ResolvedDownload = PillowsApi + FilePath;
+    PlayBtnHtml = `<button type="button" class="song-play-btn" data-name="${EscapeHtml(SongName)}">Play</button>`;
   }
 
-  let linksHtml = '';
-  if (links.length > 1) {
-    const items = links.map((url, i) =>
-      `<a class="song-dropdown-item" href="${EscapeHtml(url)}" target="_blank" rel="noopener noreferrer">Link ${i + 1}</a>`
+  if (Links.length > 1) {
+    const Items = Links.map((Url, I) =>
+      `<a class="song-dropdown-item" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">Link ${I + 1}</a>`
     ).join('');
-    linksHtml = `
+    LinksHtml = `
       <div class="song-dropdown">
         <button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false">
           <span>Links</span>
           <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
         </button>
-        <div class="song-dropdown-menu" role="menu">${items}</div>
+        <div class="song-dropdown-menu" role="menu">${Items}</div>
       </div>`;
-  } else if (links.length === 1) {
-    linksHtml = `<a class="song-link-btn" href="${EscapeHtml(links[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
+  } else if (Links.length === 1) {
+    LinksHtml = `<a class="song-link-btn" href="${EscapeHtml(Links[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
   }
 
-  return { playBtnHtml, downloadBtnHtml, linksHtml, resolvedDownload };
-}
-
-function BuildDatePillHtml(leakDate) {
-  if (!leakDate) return '';
-  const parsed = new Date(leakDate);
-  if (isNaN(parsed)) return `<div class="song-date-pill">${EscapeHtml(leakDate)}</div>`;
-  const dd   = String(parsed.getUTCDate()).padStart(2, '0');
-  const mm   = String(parsed.getUTCMonth() + 1).padStart(2, '0');
-  const yyyy = parsed.getUTCFullYear();
-  return `<div class="song-date-pill">${dd}/${mm}/${yyyy}</div>`;
-}
-
-function BuildSongElement({ songName, quality, linkString, notes, trackNumber, availLen, recentEra, leakDate, noPlay }) {
-  const safeNotes = (notes || '').trim();
-  const hasNotes  = safeNotes !== '';
-
-  const links = linkString
-    ? linkString.split(/[\s,]+/).map(u => u.trim()).filter(u => UrlPattern.test(u))
-    : [];
-
-  const availLower      = (availLen || '').toLowerCase();
-  const isRumoredOrConf = availLower.includes('rumored') || availLower.includes('confirmed');
-  const displayQuality  = (links.length > 0 || isRumoredOrConf) ? quality : 'Unavailable';
-  const displayQualLow  = (displayQuality || '').toLowerCase();
-  const isUnavailable   = !displayQuality ||
-    displayQualLow.includes('unavail') ||
-    displayQualLow.includes('not avail');
-
-  const { playBtnHtml, downloadBtnHtml, linksHtml, resolvedDownload } = BuildSongControls({
-    links, displayQuality, isUnavailable, songName, noPlay,
-  });
-
-  const noteToggleHtml = hasNotes
+  const NoteToggleHtml = HasNotes
     ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note"></div>`
     : '';
 
-  const versionMatch    = VersionPattern.exec(songName);
-  const versionPillHtml = versionMatch
-    ? `<div class="song-version-pill">${EscapeHtml(versionMatch[1])}</div>`
+  const VersionMatch = VersionPattern.exec(SongName);
+  const VersionPillHtml = VersionMatch
+    ? `<div class="song-version-pill">${EscapeHtml(VersionMatch[1])}</div>`
     : '';
-  const displayName = versionMatch
-    ? songName.replace(versionMatch[0], '').replace(/\s{2,}/g, ' ').trim()
-    : songName;
+  const DisplayName = VersionMatch
+    ? SongName.replace(VersionMatch[0], '').replace(/\s{2,}/g, ' ').trim()
+    : SongName;
 
-  let topRowHtml = '';
-  if (recentEra) {
-    const datePillHtml = BuildDatePillHtml(leakDate);
-    topRowHtml = `<div class="song-top-row"><div class="song-era-pill">${EscapeHtml(recentEra)}</div>${datePillHtml}</div>`;
+  let DatePillHtml = '';
+  if (LeakDate) {
+    const Parsed = new Date(LeakDate);
+    if (isNaN(Parsed)) {
+      DatePillHtml = `<div class="song-date-pill">${EscapeHtml(LeakDate)}</div>`;
+    } else {
+      const Dd = String(Parsed.getUTCDate()).padStart(2, '0');
+      const Mm = String(Parsed.getUTCMonth() + 1).padStart(2, '0');
+      const Yyyy = Parsed.getUTCFullYear();
+      DatePillHtml = `<div class="song-date-pill">${Dd}/${Mm}/${Yyyy}</div>`;
+    }
   }
 
-  const pillsHtml =
-    versionPillHtml +
-    (displayQuality ? `<div class="song-quality ${GetQualityClass(displayQuality)}">${EscapeHtml(displayQuality)}</div>` : '') +
-    (availLen       ? `<div class="song-type ${GetAvailableLengthClass(availLen)}">${EscapeHtml(availLen)}</div>` : '');
+  let TopRowHtml = '';
+  if (RecentEra) {
+    TopRowHtml = `<div class="song-top-row"><div class="song-era-pill">${EscapeHtml(RecentEra)}</div>${DatePillHtml}</div>`;
+  }
 
-  const songEl = document.createElement('div');
-  songEl.className = 'song-item';
-  songEl.setAttribute('role', 'listitem');
-  songEl.innerHTML = `
-    <div class="song-num">${trackNumber}</div>
+  const PillsHtml =
+    VersionPillHtml +
+    (DisplayQuality ? `<div class="song-quality ${GetQualityClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : '') +
+    (AvailLen ? `<div class="song-type ${GetAvailableLengthClass(AvailLen)}">${EscapeHtml(AvailLen)}</div>` : '');
+
+  const SongEl = document.createElement('div');
+  SongEl.className = 'song-item';
+  SongEl.setAttribute('role', 'listitem');
+  SongEl.innerHTML = `
+    <div class="song-num">${TrackNumber}</div>
     <div class="song-body">
-      ${topRowHtml}
-      <div class="song-name" title="${EscapeHtml(songName)}">${EscapeHtml(displayName)}</div>
-      <div class="song-pills">${pillsHtml}</div>
+      ${TopRowHtml}
+      <div class="song-name" title="${EscapeHtml(SongName)}">${EscapeHtml(DisplayName)}</div>
+      <div class="song-pills">${PillsHtml}</div>
     </div>
-    <div class="song-btns">${playBtnHtml}${downloadBtnHtml}${linksHtml}${noteToggleHtml}</div>
+    <div class="song-btns">${PlayBtnHtml}${LinksHtml}${NoteToggleHtml}</div>
   `;
 
-  if (links.length > 1) {
-    const dropBtn  = songEl.querySelector('.song-dropdown-btn');
-    const dropMenu = songEl.querySelector('.song-dropdown-menu');
-    dropBtn.addEventListener('click', ev => {
-      ev.stopPropagation();
-      const wasOpen = dropMenu.classList.contains('open');
+  if (Links.length > 1) {
+    const DropBtn = SongEl.querySelector('.song-dropdown-btn');
+    const DropMenu = SongEl.querySelector('.song-dropdown-menu');
+    DropBtn.addEventListener('click', Ev => {
+      Ev.stopPropagation();
+      const WasOpen = DropMenu.classList.contains('open');
       CloseAllLinkDropdowns();
-      if (!wasOpen) {
-        dropMenu.classList.add('open');
-        dropBtn.setAttribute('aria-expanded', 'true');
+      if (!WasOpen) {
+        DropMenu.classList.add('open');
+        DropBtn.setAttribute('aria-expanded', 'true');
         State.HasOpenDropdown = true;
-        PositionDropdown(dropMenu, dropBtn);
+        PositionDropdown(DropMenu, DropBtn);
       }
     });
   }
 
-  const playBtn = songEl.querySelector('.song-play-btn');
-  if (playBtn && resolvedDownload) {
-    AudioPlayer.RegisterPlayBtn(playBtn, resolvedDownload);
-    playBtn.addEventListener('click', ev => {
-      ev.stopPropagation();
+  const PlayBtn = SongEl.querySelector('.song-play-btn');
+  if (PlayBtn && ResolvedDownload) {
+    AudioPlayer.RegisterPlayBtn(PlayBtn, ResolvedDownload);
+    PlayBtn.addEventListener('click', Ev => {
+      Ev.stopPropagation();
       CloseAllLinkDropdowns();
-      AudioPlayer.PlayOrToggle(resolvedDownload, playBtn.dataset.name);
+      AudioPlayer.PlayOrToggle(ResolvedDownload, PlayBtn.dataset.name);
     });
   }
 
-  if (hasNotes) {
-    const noteEl = document.createElement('div');
-    noteEl.className   = 'song-note';
-    noteEl.textContent = safeNotes;
-    const noteToggle = songEl.querySelector('.note-toggle');
-    const toggleNote = () => {
-      const expanded = songEl.classList.toggle('expanded');
-      noteToggle.setAttribute('aria-label', expanded ? 'Hide note' : 'Show note');
+  if (HasNotes) {
+    const NoteEl = document.createElement('div');
+    NoteEl.className = 'song-note';
+    NoteEl.textContent = SafeNotes;
+    const NoteToggle = SongEl.querySelector('.note-toggle');
+    const ToggleNote = () => {
+      const Expanded = SongEl.classList.toggle('expanded');
+      NoteToggle.setAttribute('aria-label', Expanded ? 'Hide note' : 'Show note');
     };
-    noteToggle.addEventListener('click',   ev => { ev.stopPropagation(); toggleNote(); });
-    noteToggle.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleNote(); }
+    NoteToggle.addEventListener('click', Ev => { Ev.stopPropagation(); ToggleNote(); });
+    NoteToggle.addEventListener('keydown', Ev => {
+      if (Ev.key === 'Enter' || Ev.key === ' ') { Ev.preventDefault(); ToggleNote(); }
     });
-    return [songEl, noteEl];
+    return [SongEl, NoteEl];
   }
 
-  return [songEl];
+  return [SongEl];
 }
 
-function RenderSongs(songs, container) {
-  const frag = document.createDocumentFragment();
-  songs.forEach(([name, quality, link, notes, leakDate, availLen, recentEra], idx) => {
+function RenderSongs(Songs, Container) {
+  const Frag = document.createDocumentFragment();
+  Songs.forEach(([Name, Quality, Link, Notes, LeakDate, AvailLen, RecentEra], Idx) => {
     BuildSongElement({
-      songName:    name,
-      quality,
-      linkString:  link,
-      notes,
-      trackNumber: idx + 1,
-      availLen:    availLen  || '',
-      recentEra:   recentEra || '',
-      leakDate:    leakDate  || '',
-    }).forEach(node => frag.appendChild(node));
+      SongName: Name,
+      Quality,
+      LinkString: Link,
+      Notes,
+      TrackNumber: Idx + 1,
+      AvailLen: AvailLen || '',
+      RecentEra: RecentEra || '',
+      LeakDate: LeakDate || '',
+    }).forEach(Node => Frag.appendChild(Node));
   });
-  container.appendChild(frag);
+  Container.appendChild(Frag);
   AudioPlayer.SyncPlayButtons();
 }
 
-function BuildFlatSongList(songs) {
-  const wrap = document.createElement('div');
-  wrap.className = 'songs-flat';
-  wrap.setAttribute('role', 'list');
-  wrap.setAttribute('aria-label', 'Recent songs');
-  RenderSongs(songs, wrap);
-  return wrap;
-}
+function BuildEraElement(Era, Songs) {
+  const EraWrap = document.createElement('div');
+  EraWrap.className = 'era-wrap';
+  EraWrap.setAttribute('role', 'listitem');
 
-function BuildEraElement(era, songs) {
-  const eraWrap = document.createElement('div');
-  eraWrap.className = 'era-wrap';
-  eraWrap.setAttribute('role', 'listitem');
-
-  const eraRow = document.createElement('div');
-  eraRow.className = 'era-row';
-  eraRow.setAttribute('role', 'button');
-  eraRow.setAttribute('tabindex', '0');
-  eraRow.setAttribute('aria-expanded', 'false');
-  eraRow.innerHTML = `
-    <div class="era-row-name">${EscapeHtml(era)}</div>
+  const EraRow = document.createElement('div');
+  EraRow.className = 'era-row';
+  EraRow.setAttribute('role', 'button');
+  EraRow.setAttribute('tabindex', '0');
+  EraRow.setAttribute('aria-expanded', 'false');
+  EraRow.innerHTML = `
+    <div class="era-row-name">${EscapeHtml(Era)}</div>
     <div class="era-row-right">
-      <div class="era-pill">${songs.length}</div>
+      <div class="era-pill">${Songs.length}</div>
       <svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="6,9 12,15 18,9"/>
       </svg>
     </div>
   `;
 
-  const songsPanel = document.createElement('div');
-  songsPanel.className = 'songs-panel';
+  const SongsPanel = document.createElement('div');
+  SongsPanel.className = 'songs-panel';
 
-  const eraDesc = State.EraDescriptions[NormaliseKey(era)] || '';
-  if (eraDesc) {
-    const descBlock = document.createElement('div');
-    descBlock.className   = 'era-desc-block';
-    descBlock.textContent = eraDesc;
-    songsPanel.appendChild(descBlock);
+  const EraDesc = State.EraDescriptions[NormaliseKey(Era)] || '';
+  if (EraDesc) {
+    const DescBlock = document.createElement('div');
+    DescBlock.className = 'era-desc-block';
+    DescBlock.textContent = EraDesc;
+    SongsPanel.appendChild(DescBlock);
   }
 
-  const songsInner = document.createElement('div');
-  songsInner.className = 'songs-inner';
-  songsInner.setAttribute('role', 'list');
-  songsInner.setAttribute('aria-label', `${era} songs`);
-  songsPanel.appendChild(songsInner);
+  const SongsInner = document.createElement('div');
+  SongsInner.className = 'songs-inner';
+  SongsInner.setAttribute('role', 'list');
+  SongsInner.setAttribute('aria-label', `${Era} songs`);
+  SongsPanel.appendChild(SongsInner);
 
-  const toggle = () => {
+  const Toggle = () => {
     CloseAllLinkDropdowns();
-    if (OpenPanels.has(songsPanel)) {
-      CollapsePanel(songsPanel);
+    if (OpenPanels.has(SongsPanel)) {
+      CollapsePanel(SongsPanel);
     } else {
       CollapseAllEraPanels();
-      OpenPanel(songsPanel, eraRow);
-      eraRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      if (!songsInner.dataset.loaded) {
-        songsInner.dataset.loaded = '1';
-        RenderSongs(songs, songsInner);
+      OpenPanel(SongsPanel, EraRow);
+      EraRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (!SongsInner.dataset.loaded) {
+        SongsInner.dataset.loaded = '1';
+        RenderSongs(Songs, SongsInner);
       }
     }
   };
 
-  eraRow.addEventListener('click', toggle);
-  eraRow.addEventListener('keydown', ev => {
-    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
+  EraRow.addEventListener('click', Toggle);
+  EraRow.addEventListener('keydown', Ev => {
+    if (Ev.key === 'Enter' || Ev.key === ' ') { Ev.preventDefault(); Toggle(); }
   });
 
-  eraWrap.appendChild(eraRow);
-  eraWrap.appendChild(songsPanel);
-  return eraWrap;
+  EraWrap.appendChild(EraRow);
+  EraWrap.appendChild(SongsPanel);
+  return EraWrap;
 }
 
-function BuildRecentEras(filterLower) {
-  const flat = [];
-  for (const [era, songs] of Object.entries(State.VaultData)) {
-    const eraLow = era.toLowerCase();
-    for (const s of songs) {
-      const [, q] = s;
-      if (!IsQualityVisible(q)) continue;
-      if (State.ShowPlayableOnly && !IsPlayable(s[2], q)) continue;
-      flat.push({ era, eraLow, nameLow: s[0].toLowerCase(), name: s[0], quality: q, link: s[2], notes: s[3], leakDate: s[4] || '', availLen: s[5] || '' });
+function BuildRecentEras(FilterLower) {
+  const Flat = [];
+  for (const [Era, Songs] of Object.entries(State.VaultData)) {
+    const EraLow = Era.toLowerCase();
+    for (const S of Songs) {
+      const [, Q] = S;
+      if (!IsQualityVisible(Q)) continue;
+      if (State.ShowPlayableOnly && !IsPlayable(S[2], Q)) continue;
+      Flat.push({ Era, EraLow, NameLow: S[0].toLowerCase(), Name: S[0], Quality: Q, Link: S[2], Notes: S[3], LeakDate: S[4] || '', AvailLen: S[5] || '' });
     }
   }
-  flat.sort((a, b) => ParseDateToTimestamp(b.leakDate) - ParseDateToTimestamp(a.leakDate));
+  Flat.sort((A, B) => ParseDateToTimestamp(B.LeakDate) - ParseDateToTimestamp(A.LeakDate));
 
-  const limit = 100;
-  const pool     = flat.slice(0, limit);
-  const filtered = filterLower
-    ? pool.filter(s => s.nameLow.includes(filterLower))
-    : pool;
+  const Limit = 100;
+  const Pool = Flat.slice(0, Limit);
+  const Filtered = FilterLower
+    ? Pool.filter(S => S.NameLow.includes(FilterLower))
+    : Pool;
 
-  if (!filtered.length) return {};
+  if (!Filtered.length) return {};
   return {
-    'Recent Leaks': filtered.map(s => [s.name, s.quality, s.link, s.notes, s.leakDate, s.availLen, s.era]),
+    'Recent Leaks': Filtered.map(S => [S.Name, S.Quality, S.Link, S.Notes, S.LeakDate, S.AvailLen, S.Era]),
   };
 }
 
-function BuildVisibleEras(filterLower) {
-  if (State.CurrentTab === 'recent') return BuildRecentEras(filterLower);
+function BuildVisibleEras(FilterLower) {
+  if (State.CurrentTab === 'recent') return BuildRecentEras(FilterLower);
 
-  const markers = TabMarkers[State.CurrentTab] || null;
-  const result  = {};
-  for (const [era, songs] of Object.entries(State.VaultData)) {
-    const eraLow = filterLower ? era.toLowerCase() : '';
-    let matched = songs.filter(([, q]) => IsQualityVisible(q));
-    if (State.ShowPlayableOnly) matched = matched.filter(([, q, link]) => IsPlayable(link, q));
-    if (markers)     matched = matched.filter(([n]) => markers.some(m => n.includes(m)));
-    if (filterLower) matched = matched.filter(([n]) => n.toLowerCase().includes(filterLower));
-    if (matched.length) result[era] = matched;
+  const Markers = TabMarkers[State.CurrentTab] || null;
+  const Result = {};
+  for (const [Era, Songs] of Object.entries(State.VaultData)) {
+    const EraLow = FilterLower ? Era.toLowerCase() : '';
+    let Matched = Songs.filter(([, Q]) => IsQualityVisible(Q));
+    if (State.ShowPlayableOnly) Matched = Matched.filter(([, Q, Link]) => IsPlayable(Link, Q));
+    if (Markers) Matched = Matched.filter(([N]) => Markers.some(M => N.includes(M)));
+    if (FilterLower) Matched = Matched.filter(([N]) => N.toLowerCase().includes(FilterLower));
+    if (Matched.length) Result[Era] = Matched;
   }
-  return result;
+  return Result;
 }
 
-function UpdateNavStats(total) {
-  document.getElementById('nav-songs').textContent = total.toLocaleString();
+function UpdateNavStats(Total) {
+  document.getElementById('nav-songs').textContent = Total.toLocaleString();
 }
 
-function RenderEras(searchFilter) {
-  const eraListEl = document.getElementById('era-list');
-  if (!eraListEl || !State.VaultData) return;
+function RenderEras(SearchFilter) {
+  const EraListEl = document.getElementById('era-list');
+  if (!EraListEl || !State.VaultData) return;
 
-  const filterLower = (searchFilter || '').trim().toLowerCase();
-  const visible     = BuildVisibleEras(filterLower);
-  const keys        = Object.keys(visible);
-  const total       = keys.reduce((sum, k) => sum + visible[k].length, 0);
+  const FilterLower = (SearchFilter || '').trim().toLowerCase();
+  const Visible = BuildVisibleEras(FilterLower);
+  const Keys = Object.keys(Visible);
+  const Total = Keys.reduce((Sum, K) => Sum + Visible[K].length, 0);
 
   CollapseAllEraPanels();
   CloseAllLinkDropdowns();
   AudioPlayer.ClearPlayButtons();
-  UpdateNavStats(total);
+  UpdateNavStats(Total);
 
-  const frag = document.createDocumentFragment();
-  if (!keys.length) {
-    const empty = document.createElement('div');
-    empty.className   = 'no-results';
-    empty.textContent = 'No results found.';
-    frag.appendChild(empty);
+  const Frag = document.createDocumentFragment();
+  if (!Keys.length) {
+    const Empty = document.createElement('div');
+    Empty.className = 'no-results';
+    Empty.textContent = 'No results found.';
+    Frag.appendChild(Empty);
   } else if (State.CurrentTab === 'recent') {
-    for (const era of keys) frag.appendChild(BuildFlatSongList(visible[era]));
+    for (const Era of Keys) {
+      const Wrap = document.createElement('div');
+      Wrap.className = 'songs-flat';
+      Wrap.setAttribute('role', 'list');
+      Wrap.setAttribute('aria-label', 'Recent songs');
+      RenderSongs(Visible[Era], Wrap);
+      Frag.appendChild(Wrap);
+    }
   } else {
-    for (const era of keys) frag.appendChild(BuildEraElement(era, visible[era]));
+    for (const Era of Keys) {
+      Frag.appendChild(BuildEraElement(Era, Visible[Era]));
+    }
   }
-  eraListEl.replaceChildren(frag);
+  EraListEl.replaceChildren(Frag);
   OpenPanels.clear();
 }
 
@@ -740,48 +719,48 @@ const VaultLoader = {
   Worker: new Worker('vault_worker.js'),
   LoadId: 0,
 
-  Load(statusEl = null) {
-    const loadId = ++this.LoadId;
+  Load(StatusEl = null) {
+    const LoadId = ++this.LoadId;
     State.IsLoading = true;
 
-    const showError = text => {
-      let target = statusEl;
-      if (!target) {
-        target = document.createElement('div');
-        document.getElementById('era-list').replaceChildren(target);
+    const ShowError = Text => {
+      let Target = StatusEl;
+      if (!Target) {
+        Target = document.createElement('div');
+        document.getElementById('era-list').replaceChildren(Target);
       }
-      target.className   = 'error-msg';
-      target.textContent = text;
+      Target.className = 'error-msg';
+      Target.textContent = Text;
     };
 
     this.Worker.postMessage({ type: 'ABORT' });
     this.Worker.postMessage({ type: 'LOAD', sheetId: State.PrimarySheetId });
 
     this.Worker.onmessage = ({ data }) => {
-      if (loadId !== this.LoadId) return;
+      if (LoadId !== this.LoadId) return;
 
       if (data.type === 'SUCCESS') {
-        State.IsLoading       = false;
-        State.VaultData       = data.eraMap;
-        State.EraDescriptions = data.eraDescs;
+        State.IsLoading = false;
+        State.VaultData = data.EraMap;
+        State.EraDescriptions = data.EraDescs;
         RenderEras('');
         return;
       }
 
       if (data.type === 'ERROR') {
         State.IsLoading = false;
-        const errText =
+        const ErrText =
           data.reason === 'timeout' ? 'Request timed out, check your connection and try reloading.'
-          : data.reason === 'http'  ? `Failed to load sheet (${data.message}), make sure it is publicly shared.`
-          :                           'Failed to load data, check your connection or sheet permissions.';
-        showError(errText);
+          : data.reason === 'http' ? `Failed to load sheet (${data.message}), make sure it is publicly shared.`
+          : 'Failed to load data, check your connection or sheet permissions.';
+        ShowError(ErrText);
       }
     };
 
     this.Worker.onerror = () => {
-      if (loadId !== this.LoadId) return;
+      if (LoadId !== this.LoadId) return;
       State.IsLoading = false;
-      showError('An unexpected error occurred while loading data.');
+      ShowError('An unexpected error occurred while loading data.');
     };
   },
 
@@ -790,130 +769,110 @@ const VaultLoader = {
   },
 };
 
-function InitNav(searchBox, navTabBtn, navTabMenu, navBtnLabel) {
-  navTabBtn.addEventListener('click', ev => {
-    ev.stopPropagation();
-    ToggleDropdown(navTabBtn, navTabMenu);
+document.addEventListener('DOMContentLoaded', () => {
+  const SearchBox = document.getElementById('search-box');
+  const FilterBtn = document.getElementById('quality-filter-btn');
+  const FilterMenu = document.getElementById('quality-filter-menu');
+  const NavTabBtn = document.getElementById('nav-tab-btn');
+  const NavTabMenu = document.getElementById('nav-tab-menu');
+  const NavBtnLabel = document.getElementById('nav-btn-text');
+
+  AudioPlayer.Init();
+
+  NavTabBtn.addEventListener('click', Ev => {
+    Ev.stopPropagation();
+    ToggleDropdown(NavTabBtn, NavTabMenu);
   });
-  document.querySelectorAll('.nav-dropdown-item').forEach(item => {
-    item.addEventListener('click', () => {
-      CloseDropdown(navTabBtn, navTabMenu);
-      if (item.dataset.tab === State.CurrentTab) return;
-      State.CurrentTab = item.dataset.tab;
-      navBtnLabel.textContent = item.textContent.trim();
-      document.querySelectorAll('.nav-dropdown-item').forEach(n => n.classList.toggle('active', n === item));
-      if (State.VaultData) RenderEras(searchBox.value);
+  document.querySelectorAll('.nav-dropdown-item').forEach(Item => {
+    Item.addEventListener('click', () => {
+      CloseDropdown(NavTabBtn, NavTabMenu);
+      if (Item.dataset.tab === State.CurrentTab) return;
+      State.CurrentTab = Item.dataset.tab;
+      NavBtnLabel.textContent = Item.textContent.trim();
+      document.querySelectorAll('.nav-dropdown-item').forEach(N => N.classList.toggle('active', N === Item));
+      if (State.VaultData) RenderEras(SearchBox.value);
     });
   });
-}
 
-function InitQualityFilter(searchBox, filterBtn, filterMenu) {
-  filterBtn.addEventListener('click', ev => {
-    ev.stopPropagation();
-    ToggleDropdown(filterBtn, filterMenu);
+  FilterBtn.addEventListener('click', Ev => {
+    Ev.stopPropagation();
+    ToggleDropdown(FilterBtn, FilterMenu);
   });
-  filterMenu.addEventListener('click', ev => {
-    const item = ev.target.closest('.filter-item');
-    if (!item) return;
-    const key = item.dataset.quality;
-    if (State.ActiveQualities.has(key)) {
+  FilterMenu.addEventListener('click', Ev => {
+    const Item = Ev.target.closest('.filter-item');
+    if (!Item) return;
+    const Key = Item.dataset.quality;
+    if (State.ActiveQualities.has(Key)) {
       if (State.ActiveQualities.size === 1) return;
-      State.ActiveQualities.delete(key);
-      item.classList.remove('active');
-      item.setAttribute('aria-checked', 'false');
+      State.ActiveQualities.delete(Key);
+      Item.classList.remove('active');
+      Item.setAttribute('aria-checked', 'false');
     } else {
-      State.ActiveQualities.add(key);
-      item.classList.add('active');
-      item.setAttribute('aria-checked', 'true');
+      State.ActiveQualities.add(Key);
+      Item.classList.add('active');
+      Item.setAttribute('aria-checked', 'true');
     }
-    if (State.VaultData) RenderEras(searchBox.value);
+    if (State.VaultData) RenderEras(SearchBox.value);
   });
-}
 
-function InitGlobalHandlers(searchBox, navTabBtn, navTabMenu, filterBtn, filterMenu) {
-  searchBox.addEventListener('input', ev => {
+  SearchBox.addEventListener('input', Ev => {
     clearTimeout(State.SearchDebounceId);
     State.SearchDebounceId = setTimeout(() => {
-      if (State.VaultData) RenderEras(ev.target.value);
+      if (State.VaultData) RenderEras(Ev.target.value);
     }, 200);
   });
 
-  document.addEventListener('keydown', ev => {
-    if (ev.key === '/' && document.activeElement !== searchBox) {
-      ev.preventDefault();
-      searchBox.focus();
+  document.addEventListener('keydown', Ev => {
+    if (Ev.key === '/' && document.activeElement !== SearchBox) {
+      Ev.preventDefault();
+      SearchBox.focus();
     }
-    if (ev.key === 'Escape') {
-      searchBox.blur();
-      CloseDropdown(filterBtn, filterMenu);
-      CloseDropdown(navTabBtn, navTabMenu);
+    if (Ev.key === 'Escape') {
+      SearchBox.blur();
+      CloseDropdown(FilterBtn, FilterMenu);
+      CloseDropdown(NavTabBtn, NavTabMenu);
       CloseAllLinkDropdowns();
     }
   });
 
-  document.addEventListener('click', ev => {
-    if (!filterMenu.contains(ev.target) && ev.target !== filterBtn) CloseDropdown(filterBtn, filterMenu);
-    if (!navTabMenu.contains(ev.target) && !navTabBtn.contains(ev.target)) CloseDropdown(navTabBtn, navTabMenu);
-    if (!ev.target.closest('.song-dropdown')) CloseAllLinkDropdowns();
+  document.addEventListener('click', Ev => {
+    if (!FilterMenu.contains(Ev.target) && Ev.target !== FilterBtn) CloseDropdown(FilterBtn, FilterMenu);
+    if (!NavTabMenu.contains(Ev.target) && !NavTabBtn.contains(Ev.target)) CloseDropdown(NavTabBtn, NavTabMenu);
+    if (!Ev.target.closest('.song-dropdown')) CloseAllLinkDropdowns();
   });
 
-  window.addEventListener('scroll', () => {
-    CloseAllLinkDropdowns();
-  }, { passive: true });
+  window.addEventListener('scroll', CloseAllLinkDropdowns, { passive: true });
+  window.addEventListener('resize', CloseAllLinkDropdowns);
 
-  window.addEventListener('resize', () => {
-    CloseAllLinkDropdowns();
-  });
-}
+  const SettingsBtn = document.getElementById('settings-btn');
+  const Modal = document.getElementById('settings-modal');
+  const CloseBtn = document.getElementById('settings-close-btn');
+  const PlayableToggle = document.getElementById('playable-only-toggle');
 
-function InitSettings() {
-  const settingsBtn    = document.getElementById('settings-btn');
-  const modal          = document.getElementById('settings-modal');
-  const closeBtn       = document.getElementById('settings-close-btn');
-  const playableToggle = document.getElementById('playable-only-toggle');
-
-  const syncToggleUi = () => {
-    playableToggle?.setAttribute('aria-checked', String(State.ShowPlayableOnly));
+  const SyncToggleUi = () => {
+    PlayableToggle?.setAttribute('aria-checked', String(State.ShowPlayableOnly));
   };
 
-  playableToggle?.addEventListener('click', () => {
-    State.ShowPlayableOnly = playableToggle.getAttribute('aria-checked') !== 'true';
-    syncToggleUi();
+  PlayableToggle?.addEventListener('click', () => {
+    State.ShowPlayableOnly = PlayableToggle.getAttribute('aria-checked') !== 'true';
+    SyncToggleUi();
     if (State.VaultData) {
-      const searchBox = document.getElementById('search-box');
-      RenderEras(searchBox?.value ?? '');
+      RenderEras(SearchBox.value);
     }
   });
 
-  const openModal = () => {
-    syncToggleUi();
-    modal.removeAttribute('hidden');
+  const OpenModal = () => {
+    SyncToggleUi();
+    Modal.removeAttribute('hidden');
   };
+  const CloseModal = () => { Modal.setAttribute('hidden', ''); };
 
-  const closeModal = () => {
-    modal.setAttribute('hidden', '');
-  };
-
-  settingsBtn.addEventListener('click', ev => { ev.stopPropagation(); openModal(); });
-  closeBtn.addEventListener('click', closeModal);
-  modal.addEventListener('click', ev => { if (ev.target === modal) closeModal(); });
-  document.addEventListener('keydown', ev => {
-    if (ev.key === 'Escape' && !modal.hasAttribute('hidden')) closeModal();
+  SettingsBtn.addEventListener('click', Ev => { Ev.stopPropagation(); OpenModal(); });
+  CloseBtn.addEventListener('click', CloseModal);
+  Modal.addEventListener('click', Ev => { if (Ev.target === Modal) CloseModal(); });
+  document.addEventListener('keydown', Ev => {
+    if (Ev.key === 'Escape' && !Modal.hasAttribute('hidden')) CloseModal();
   });
-}
 
-document.addEventListener('DOMContentLoaded', () => {
-  const searchBox   = document.getElementById('search-box');
-  const filterBtn   = document.getElementById('quality-filter-btn');
-  const filterMenu  = document.getElementById('quality-filter-menu');
-  const navTabBtn   = document.getElementById('nav-tab-btn');
-  const navTabMenu  = document.getElementById('nav-tab-menu');
-  const navBtnLabel = document.getElementById('nav-btn-text');
-
-  AudioPlayer.Init();
-  InitNav(searchBox, navTabBtn, navTabMenu, navBtnLabel);
-  InitQualityFilter(searchBox, filterBtn, filterMenu);
-  InitGlobalHandlers(searchBox, navTabBtn, navTabMenu, filterBtn, filterMenu);
-  InitSettings();
   VaultLoader.Load();
 });

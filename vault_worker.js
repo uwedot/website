@@ -1,188 +1,173 @@
 'use strict';
 
-const FETCH_TIMEOUT_MS = 12_000;
-const URL_PATTERN      = /^https?:/i;
+const FetchTimeoutMs = 12000;
+const UrlPattern = /^https?:/i;
+const SummaryPattern = /^\d+\s+(?:total\s+)?(og file|full|tagged|partial(?:\s*\/\s*cut)?|snippet|stem bounce|unavailable)/i;
+const ChangelogPattern = /^\((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d+(?:st|nd|rd|th)?,\s*\d{4}\)$/i;
 
-const SUMMARY_PATTERN   = /^\d+\s+(?:total\s+)?(og file|full|tagged|partial(?:\s*\/\s*cut)?|snippet|stem bounce|unavailable)/i;
-const CHANGELOG_PATTERN = /^\((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d+(?:st|nd|rd|th)?,\s*\d{4}\)$/i;
+function ParseCsv(Text) {
+  const Rows = [];
+  let Chars = [];
+  let Row = [];
+  let InQuotes = false;
 
-function parseCsv(text) {
-  const rows = [];
-  let chars    = [];
-  let row      = [];
-  let inQuotes = false;
+  const PushField = () => { Row.push(Chars.join('')); Chars = []; };
+  const PushRow = () => { PushField(); Rows.push(Row); Row = []; };
 
-  const pushField = () => { row.push(chars.join('')); chars = []; };
-  const pushRow   = () => { pushField(); rows.push(row); row = []; };
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"' && text[i + 1] === '"') { chars.push('"'); i++; }
-      else if (ch === '"')  inQuotes = false;
-      else                  chars.push(ch);
+  for (let I = 0; I < Text.length; I++) {
+    const Ch = Text[I];
+    if (InQuotes) {
+      if (Ch === '"' && Text[I + 1] === '"') { Chars.push('"'); I++; }
+      else if (Ch === '"') InQuotes = false;
+      else Chars.push(Ch);
     } else {
-      if      (ch === '"')  inQuotes = true;
-      else if (ch === ',')  pushField();
-      else if (ch === '\n') pushRow();
-      else if (ch !== '\r') chars.push(ch);
+      if (Ch === '"') InQuotes = true;
+      else if (Ch === ',') PushField();
+      else if (Ch === '\n') PushRow();
+      else if (Ch !== '\r') Chars.push(Ch);
     }
   }
 
-  if (chars.length || row.length) pushRow();
-  return rows;
+  if (Chars.length || Row.length) PushRow();
+  return Rows;
 }
 
-function normaliseHeader(h) {
-  return h.split('\n')[0].replace(/\r/g, '').trim().toLowerCase();
-}
+function BuildVaultData(Rows) {
+  const EraMap = {};
+  const EraDescs = {};
+  if (Rows.length < 2) return { EraMap, EraDescs };
 
-function normaliseKey(s) {
-  return s.toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function findHeaderRowIndex(rows) {
-  for (let i = 0; i < Math.min(rows.length, 10); i++) {
-    const candidate = rows[i].map(normaliseHeader);
-    if (candidate.includes('era') && candidate.some(h => h.includes('name'))) return i;
-  }
-  return 0;
-}
-
-function resolveColumns(headers) {
-  const findCol = (...names) => {
-    for (const n of names) {
-      const idx = headers.indexOf(n);
-      if (idx !== -1) return idx;
+  let HeaderRowIdx = 0;
+  for (let I = 0; I < Math.min(Rows.length, 10); I++) {
+    const Headers = Rows[I].map(H => H.split('\n')[0].replace(/\r/g, '').trim().toLowerCase());
+    if (Headers.includes('era') && Headers.some(H => H.includes('name'))) {
+      HeaderRowIdx = I;
+      break;
     }
-    return headers.findIndex(h => names.some(n => h.includes(n)));
-  };
-
-  return {
-    era:      findCol('era'),
-    name:     findCol('name'),
-    quality:  findCol('quality'),
-    link:     findCol('link(s)', 'link'),
-    notes:    findCol('notes'),
-    leakDate: findCol('leak date', 'date'),
-    availLen: findCol('available length'),
-  };
-}
-
-function extractEraDescription(row, cols, skipSet) {
-  let desc = '';
-  for (let j = 0; j < row.length; j++) {
-    const val = (row[j] || '').trim();
-    if (!val || skipSet.has(j) || URL_PATTERN.test(val)) continue;
-    if (val.length > desc.length) desc = val;
   }
-  return desc;
-}
 
-function buildVaultData(rows) {
-  const eraMap   = {};
-  const eraDescs = {};
-  if (rows.length < 2) return { eraMap, eraDescs };
+  const Headers = Rows[HeaderRowIdx].map(H => H.split('\n')[0].replace(/\r/g, '').trim().toLowerCase());
 
-  const headerRowIdx = findHeaderRowIndex(rows);
-  const headers      = rows[headerRowIdx].map(normaliseHeader);
-  const cols         = resolveColumns(headers);
-  const skipSet      = new Set([cols.era, cols.name, cols.quality, cols.availLen, cols.notes]);
+  const FindCol = (...Names) => {
+    for (const N of Names) {
+      const Idx = Headers.indexOf(N);
+      if (Idx !== -1) return Idx;
+    }
+    return Headers.findIndex(H => Names.some(N => H.includes(N)));
+  };
 
-  let pendingDesc  = '';
-  let currentEra   = '';
+  const Cols = {
+    Era: FindCol('era', 'all'),
+    Name: FindCol('name'),
+    Quality: FindCol('quality'),
+    Link: FindCol('link(s)'),
+    Notes: FindCol('notes'),
+    LeakDate: FindCol('leak date'),
+    AvailLen: FindCol('available length'),
+  };
 
-  for (let i = headerRowIdx + 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.every(c => !c.trim())) continue;
+  const SkipSet = new Set([Cols.Era, Cols.Name, Cols.Quality, Cols.AvailLen, Cols.Notes]);
 
-    const era  = (row[cols.era]  || '').trim();
-    const name = (row[cols.name] || '').trim();
+  let PendingDesc = '';
+  let CurrentEra = '';
 
-    if (!era || !name) continue;
-    if (CHANGELOG_PATTERN.test(era)) continue;
+  for (let I = HeaderRowIdx + 1; I < Rows.length; I++) {
+    const Row = Rows[I];
+    if (!Row || Row.every(C => !C.trim())) continue;
 
-    if (SUMMARY_PATTERN.test(era)) {
-      pendingDesc = extractEraDescription(row, cols, skipSet);
-      currentEra  = era;
+    const Era = (Row[Cols.Era] || '').trim();
+    const Name = (Row[Cols.Name] || '').trim();
+
+    if (!Era || !Name) continue;
+    if (ChangelogPattern.test(Era)) continue;
+
+    if (SummaryPattern.test(Era)) {
+      let Desc = '';
+      for (let J = 0; J < Row.length; J++) {
+        const Val = (Row[J] || '').trim();
+        if (!Val || SkipSet.has(J) || UrlPattern.test(Val)) continue;
+        if (Val.length > Desc.length) Desc = Val;
+      }
+      PendingDesc = Desc;
+      CurrentEra = Era;
       continue;
     }
-    if (SUMMARY_PATTERN.test(name)) continue;
+    if (SummaryPattern.test(Name)) continue;
 
-    if (era !== currentEra) {
-      currentEra = era;
+    if (Era !== CurrentEra) {
+      CurrentEra = Era;
     }
 
-    if (pendingDesc) {
-      const key = normaliseKey(era);
-      if (!eraDescs[key]) eraDescs[key] = pendingDesc;
-      pendingDesc = '';
+    if (PendingDesc) {
+      const Key = Era.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!EraDescs[Key]) EraDescs[Key] = PendingDesc;
+      PendingDesc = '';
     }
 
-    if (!eraMap[era]) eraMap[era] = [];
-    eraMap[era].push([
-      name,
-      (row[cols.quality] || '').trim(),
-      cols.link     >= 0 ? (row[cols.link]     || '').trim() : '',
-      (row[cols.notes]   || '').trim(),
-      cols.leakDate >= 0 ? (row[cols.leakDate] || '').trim() : '',
-      cols.availLen >= 0 ? (row[cols.availLen] || '').trim() : '',
-      '', // recentEra placeholder (unused)
+    if (!EraMap[Era]) EraMap[Era] = [];
+    EraMap[Era].push([
+      Name,
+      (Row[Cols.Quality] || '').trim(),
+      Cols.Link >= 0 ? (Row[Cols.Link] || '').trim() : '',
+      (Row[Cols.Notes] || '').trim(),
+      Cols.LeakDate >= 0 ? (Row[Cols.LeakDate] || '').trim() : '',
+      Cols.AvailLen >= 0 ? (Row[Cols.AvailLen] || '').trim() : '',
+      '',
     ]);
   }
 
-  return { eraMap, eraDescs };
+  return { EraMap, EraDescs };
 }
 
-async function fetchSheetCsv(sheetId, gid, signal) {
-  const gidParam = gid ? `&gid=${gid}` : '';
-  const res = await fetch(
-    `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`,
-    { signal }
+async function FetchSheetCsv(SheetId, Gid, Signal) {
+  const GidParam = Gid ? `&gid=${Gid}` : '';
+  const Res = await fetch(
+    `https://docs.google.com/spreadsheets/d/${SheetId}/export?format=csv${GidParam}`,
+    { Signal }
   );
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
+  if (!Res.ok) throw new Error(`HTTP ${Res.status}`);
+  return Res.text();
 }
 
-let currentController = null;
+let CurrentController = null;
 
-async function handleLoad(sheetId, gid) {
-  currentController?.abort();
+async function HandleLoad(SheetId, Gid) {
+  CurrentController?.abort();
 
-  const controller  = new AbortController();
-  currentController = controller;
-  const timeoutId   = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const Controller = new AbortController();
+  CurrentController = Controller;
+  const TimeoutId = setTimeout(() => Controller.abort(), FetchTimeoutMs);
 
   try {
-    const csvText = await fetchSheetCsv(sheetId, gid, controller.signal);
-    clearTimeout(timeoutId);
-    if (currentController !== controller) return;
-    currentController = null;
+    const CsvText = await FetchSheetCsv(SheetId, Gid, Controller.signal);
+    clearTimeout(TimeoutId);
+    if (CurrentController !== Controller) return;
+    CurrentController = null;
 
-    const rows = parseCsv(csvText);
-    const { eraMap, eraDescs } = buildVaultData(rows);
-    self.postMessage({ type: 'SUCCESS', eraMap, eraDescs });
-  } catch (err) {
-    clearTimeout(timeoutId);
-    if (currentController !== controller) return;
-    currentController = null;
+    const Rows = ParseCsv(CsvText);
+    const { EraMap, EraDescs } = BuildVaultData(Rows);
+    self.postMessage({ type: 'SUCCESS', EraMap, EraDescs });
+  } catch (Err) {
+    clearTimeout(TimeoutId);
+    if (CurrentController !== Controller) return;
+    CurrentController = null;
 
-    const isAbort = err.name === 'AbortError' || err.name === 'TimeoutError';
-    const isHttp  = err.message?.startsWith('HTTP');
+    const IsAbort = Err.name === 'AbortError' || Err.name === 'TimeoutError';
+    const IsHttp = Err.message?.startsWith('HTTP');
 
     self.postMessage({
-      type:    'ERROR',
-      reason:  isAbort ? 'timeout' : isHttp ? 'http' : 'network',
-      message: err.message ?? String(err),
+      type: 'ERROR',
+      reason: IsAbort ? 'timeout' : IsHttp ? 'http' : 'network',
+      message: Err.message ?? String(Err),
     });
   }
 }
 
 self.addEventListener('message', ({ data }) => {
   if (data.type === 'ABORT') {
-    currentController?.abort();
-    currentController = null;
+    CurrentController?.abort();
+    CurrentController = null;
     return;
   }
-  if (data.type === 'LOAD') handleLoad(data.sheetId, data.gid);
+  if (data.type === 'LOAD') HandleLoad(data.sheetId, data.gid);
 });
