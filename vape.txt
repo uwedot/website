@@ -470,14 +470,28 @@ function lib:Window(text, preset, closebind)
 				callback(value)
 			end
 			
-			Handle.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
-			end)
-			Handle.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-			end)
+			local function StartDrag(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = true
+					Update(input)
+				end
+			end
+			
+			local function EndDrag(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = false
+				end
+			end
+			
+			Handle.InputBegan:Connect(StartDrag)
+			Track.InputBegan:Connect(StartDrag)
+			Handle.InputEnded:Connect(EndDrag)
+			Track.InputEnded:Connect(EndDrag)
+			
 			UserInputService.InputChanged:Connect(function(input)
-				if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then Update(input) end
+				if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+					Update(input)
+				end
 			end)
 			
 			Update({Position = Vector2.new(Track.AbsolutePosition.X + ((start-min)/(max-min))*Track.AbsoluteSize.X, 0)})
@@ -763,8 +777,12 @@ function lib:Window(text, preset, closebind)
 			
 			local satValConn, hueConn
 			
+			local function IsTouchOrMouse(input)
+				return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+			end
+			
 			SatValMap.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 and not rainbow then
+				if IsTouchOrMouse(input) and not rainbow then
 					satValConn = RunService.RenderStepped:Connect(function()
 						s = math.clamp((Mouse.X - SatValMap.AbsolutePosition.X) / SatValMap.AbsoluteSize.X, 0, 1)
 						v = 1 - math.clamp((Mouse.Y - SatValMap.AbsolutePosition.Y) / SatValMap.AbsoluteSize.Y, 0, 1)
@@ -774,11 +792,11 @@ function lib:Window(text, preset, closebind)
 				end
 			end)
 			SatValMap.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 and satValConn then satValConn:Disconnect() end
+				if IsTouchOrMouse(input) and satValConn then satValConn:Disconnect() end
 			end)
 			
 			HueBar.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 and not rainbow then
+				if IsTouchOrMouse(input) and not rainbow then
 					hueConn = RunService.RenderStepped:Connect(function()
 						h = 1 - math.clamp((Mouse.Y - HueBar.AbsolutePosition.Y) / HueBar.AbsoluteSize.Y, 0, 1)
 						HueSel.Position = UDim2.new(0.48, 0, 1-h, 0)
@@ -787,7 +805,7 @@ function lib:Window(text, preset, closebind)
 				end
 			end)
 			HueBar.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 and hueConn then hueConn:Disconnect() end
+				if IsTouchOrMouse(input) and hueConn then hueConn:Disconnect() end
 			end)
 			
 			ExpandBtn.MouseButton1Click:Connect(function()
