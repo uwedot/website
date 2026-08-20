@@ -149,6 +149,7 @@ function Library.Window(TitleText: string, PresetColor: Color3?, CloseBind: Enum
 		ContentFrame.Size = UDim2.new(0, 373, 0, 254)
 		ContentFrame.ScrollBarThickness = 3
 		ContentFrame.Visible = false
+		ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 		ContentFrame.Parent = TabFolder
 
 		local ContentLayout = Instance.new("UIListLayout")
@@ -178,7 +179,10 @@ function Library.Window(TitleText: string, PresetColor: Color3?, CloseBind: Enum
 			for _, Child in TabButtonHolder:GetChildren() do
 				if Child:IsA("TextButton") then
 					local ChildIndicator = Child:FindFirstChildWhichIsA("Frame")
-					if ChildIndicator and ChildIndicator ~= Indicator then SetActive(false) end
+					if ChildIndicator and ChildIndicator ~= Indicator then 
+						CreateTween(ChildIndicator, {Size = UDim2.new(0, 0, 0, 2)}, 0.2)
+						CreateTween(Child:FindFirstChildOfClass("TextLabel"), {TextColor3 = Color3.fromRGB(150, 150, 150)}, 0.3, Enum.EasingStyle.Quad)
+					end
 				end
 			end
 			SetActive(true)
@@ -249,6 +253,7 @@ function Library.Window(TitleText: string, PresetColor: Color3?, CloseBind: Enum
 
 			local Circle = Instance.new("Frame")
 			Circle.BackgroundColor3 = Toggled and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(50, 50, 50)
+			-- FIX: Set position immediately based on state, don't rely solely on tween for init
 			Circle.Position = Toggled and UDim2.new(0.587, 0, 0.222, 0) or UDim2.new(0.127, 0, 0.222, 0)
 			Circle.Size = UDim2.new(0, 10, 0, 10)
 			Circle.Parent = Box
@@ -261,7 +266,14 @@ function Library.Window(TitleText: string, PresetColor: Color3?, CloseBind: Enum
 				CreateTween(Circle, {BackgroundColor3 = State and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(50, 50, 50), Position = State and UDim2.new(0.587, 0, 0.222, 0) or UDim2.new(0.127, 0, 0.222, 0)}, 0.3, Enum.EasingStyle.Quad)
 			end
 
-			if DefaultState then UpdateVisuals(true) end
+			-- FIX: If default is true, force visuals immediately without waiting for click
+			if DefaultState then 
+				Circle.Position = UDim2.new(0.587, 0, 0.222, 0)
+				Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				Box.BackgroundTransparency = 1
+				Fill.BackgroundTransparency = 0
+				Button.BackgroundColor3 = Color3.fromRGB(37, 37, 37)
+			end
 
 			Button.MouseButton1Click:Connect(function()
 				Toggled = not Toggled
