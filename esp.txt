@@ -1,0 +1,256 @@
+local RunService = game:GetService("RunService")
+local Workspace = game.Workspace
+local LocalPlayer = game.Players.LocalPlayer
+
+local DistFormat = "[%dm]"
+
+local CornerOffsets = {
+	Vector3.new(-1, -1, -1), Vector3.new(1, -1, -1),
+	Vector3.new(1, -1, 1), Vector3.new(-1, -1, 1),
+	Vector3.new(-1, 1, -1), Vector3.new(1, 1, -1),
+	Vector3.new(1, 1, 1), Vector3.new(-1, 1, 1)
+}
+
+local BasePartTypes = {
+	Part = true, MeshPart = true, UnionOperation = true
+}
+
+local EspUtility = {}
+EspUtility.Trackers = {}
+EspUtility.TrackerList = {}
+
+local NewDrawing = Drawing.new
+
+local function GetMagnitude(P1, P2)
+	local Dx, Dy, Dz = P2.X - P1.X, P2.Y - P1.Y, P2.Z - P1.Z
+	return math.sqrt(Dx * Dx + Dy * Dy + Dz * Dz)
+end
+
+local function GetRootFromModel(Model)
+	local Children = Model:GetChildren()
+	for I = 1, #Children do
+		local Child = Children[I]
+		local NameLower = string.lower(Child.Name)
+		if BasePartTypes[Child.ClassName] and
+			(NameLower == "humanoidrootpart" or NameLower == "root" or
+				NameLower == "rootpart" or NameLower == "core") then
+			return Child
+		end
+	end
+
+	local Primary = Model.PrimaryPart
+	if Primary and BasePartTypes[Primary.ClassName] then
+		return Primary
+	end
+
+	local MaxVol, Largest = 0, nil
+	for I = 1, #Children do
+		local C = Children[I]
+		if BasePartTypes[C.ClassName] then
+			local S = C.Size
+			local Vol = S.X * S.Y * S.Z
+			if Vol > MaxVol then
+				MaxVol, Largest = Vol, C
+			end
+		end
+	end
+	return Largest
+end
+
+local function UpdateTracker(Tracker)
+	local Obj = Tracker.Object
+	if not Obj or not Obj.Parent then
+		EspUtility.Destroy(Tracker)
+		return
+	end
+
+	local MinX, MinY, MaxX, MaxY = Tracker.GetBounds(Tracker)
+	Tracker.OffScreen = (MinX == nil)
+
+	if Tracker.OffScreen or not Tracker.Visible then
+		if Tracker.Square then
+			Tracker.Square.Visible = false
+		end
+		for I = 1, #Tracker.DrawingList do
+			Tracker.DrawingList[I].Drawing.Visible = false
+		end
+		return
+	end
+
+	local Sq = Tracker.Square
+	if Sq then
+		Sq.Position = Vector2.new(MinX, MinY)
+		Sq.Size = Vector2.new(MaxX - MinX, MaxY - MinY)
+		Sq.Visible = true
+	end
+
+	local BoxWidth = MaxX - MinX
+	Tracker.CenterX = MinX + (BoxWidth * 0.5)
+	Tracker.TopY = MinY
+
+	local List = Tracker.DrawingList
+	for I = 1, #List do
+		local Data = List[I]
+		local Draw = Data.Drawing
+
+		if Data.Callback then
+			Draw.Text = Data.Callback(Tracker)
+		end
+
+		local FontSize = Draw.Size or 20
+		local Len = #Draw.Text
+		local EstWidth = Len * (FontSize * 0.45)
+
+		Draw.Position = Vector2.new(
+			Tracker.CenterX - (EstWidth * 0.5),
+			Tracker.TopY - 5 - ((Data.YOffset + 1) * FontSize)
+		)
+		Draw.Visible = true
+	end
+end
+
+function EspUtility.NewTracker(Object, CustomName, Color)
+	local IsModel = Object.ClassName == "Model"
+	local IsValid = IsModel or BasePartTypes[Object.ClassName]
+
+	if not IsValid then
+		warn("[ESP] Invalid object type:", Object)
+		return nil
+	end
+
+	local TargetObj = Object
+	if IsModel then
+		TargetObj = GetRootFromModel(Object)
+		if not TargetObj then
+			warn("[ESP] Model has no valid parts:", Object.Name)
+			return nil
+		end
+	end
+
+	local Addr = TargetObj.Address
+	if EspUtility.Trackers[Addr] then
+		return EspUtility.Trackers[Addr]
+	end
+
+	local Self = {
+		Name = CustomName or Object.Name,
+		Object = TargetObj,
+		Color = Color or Color3.fromRGB(255, 255, 255),
+		IsModel = IsModel,
+		Visible = true,
+		OffScreen = false,
+		Square = nil,
+		DrawingList = {},
+		CenterX = 0,
+		TopY = 0
+	}
+
+	local Sq = NewDrawing("Square")
+	Sq.Color = Self.Color
+	Sq.Filled = false
+	Sq.Visible = false
+	Self.Square = Sq
+
+	local DistText = NewDrawing("Text")
+	DistText.Outline = true
+	DistText.Color = Color3.fromRGB(200, 200, 200)
+	table.insert(Self.DrawingList, {
+		Drawing = DistText,
+		Callback = function(T)
+			local Char = LocalPlayer.Character
+			local Hrp = Char and Char:FindFirstChild("HumanoidRootPart")
+			local D = Hrp and GetMagnitude(Hrp.Position, T.Object.Position) or 0
+			return string.format(DistFormat, math.floor(D))
+		end,
+		YOffset = 0
+	})
+
+	local NameText = NewDrawing("Text")
+	NameText.Outline = true
+	NameText.Color = Self.Color
+	NameText.Text = Self.Name .. (IsModel and " [M]" or "")
+	table.insert(Self.DrawingList, {
+		Drawing = NameText,
+		YOffset = 1
+	})
+
+	Self.GetBounds = function()
+		local Pos = TargetObj.Position
+		local Size = TargetObj.Size
+		local Half = Size * 0.5
+
+		if not IsModel then
+			local MnX, MnY, MxX, MxY = math.huge, math.huge, -math.huge, -math.huge
+			for I = 1, 8 do
+				local Off = CornerOffsets[I]
+				local Wp = Vector3.new(
+					Pos.X + Off.X * Half.X,
+					Pos.Y + Off.Y * Half.Y,
+					Pos.Z + Off.Z * Half.Z
+				)
+				local Sp, OnScreen = Workspace.CurrentCamera:WorldToScreenPoint(Wp)
+				if not OnScreen then
+					return nil
+				end
+				if Sp.X < MnX then MnX = Sp.X end
+				if Sp.Y < MnY then MnY = Sp.Y end
+				if Sp.X > MxX then MxX = Sp.X end
+				if Sp.Y > MxY then MxY = Sp.Y end
+			end
+			return MnX, MnY, MxX, MxY
+		else
+			local Center, CVis = Workspace.CurrentCamera:WorldToScreenPoint(Pos)
+			local Top, TVis = Workspace.CurrentCamera:WorldToScreenPoint(Pos + Vector3.new(0, Half.Y, 0))
+			if not CVis or not TVis then
+				return nil
+			end
+
+			local H = math.abs(Center.Y - Top.Y) * 5
+			local W = H * 1.2
+			local Hw, Hh = W * 0.5, H * 0.5
+			return Center.X - Hw, Center.Y - Hh, Center.X + Hw, Center.Y + Hh
+		end
+	end
+
+	EspUtility.Trackers[Addr] = Self
+	table.insert(EspUtility.TrackerList, Self)
+	return Self
+end
+
+function EspUtility.Destroy(Tracker)
+	if not Tracker then
+		return
+	end
+
+	local Addr = Tracker.Object and Tracker.Object.Address
+	if Addr then
+		EspUtility.Trackers[Addr] = nil
+	end
+
+	local List = EspUtility.TrackerList
+	for I = #List, 1, -1 do
+		if List[I] == Tracker then
+			table.remove(List, I)
+			break
+		end
+	end
+
+	if Tracker.Square then
+		Tracker.Square:Remove()
+	end
+	for I = 1, #Tracker.DrawingList do
+		Tracker.DrawingList[I].Drawing:Remove()
+	end
+
+	table.clear(Tracker)
+end
+
+RunService.RenderStepped:Connect(function()
+	local List = EspUtility.TrackerList
+	for I = #List, 1, -1 do
+		UpdateTracker(List[I])
+	end
+end)
+
+_G.EspUtility = EspUtility
+return EspUtility
