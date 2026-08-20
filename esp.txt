@@ -127,9 +127,9 @@ function EspUtility.NewTracker(Object, CustomName, Color)
 		end
 	end
 
-	local Addr = TargetObj.Address
-	if EspUtility.Trackers[Addr] then
-		return EspUtility.Trackers[Addr]
+	local Key = TargetObj:GetFullName()
+	if EspUtility.Trackers[Key] then
+		return EspUtility.Trackers[Key]
 	end
 
 	local Self = {
@@ -212,7 +212,7 @@ function EspUtility.NewTracker(Object, CustomName, Color)
 		end
 	end
 
-	EspUtility.Trackers[Addr] = Self
+	EspUtility.Trackers[Key] = Self
 	table.insert(EspUtility.TrackerList, Self)
 	return Self
 end
@@ -222,9 +222,9 @@ function EspUtility.Destroy(Tracker)
 		return
 	end
 
-	local Addr = Tracker.Object and Tracker.Object.Address
-	if Addr then
-		EspUtility.Trackers[Addr] = nil
+	local Key = Tracker.Object and Tracker.Object:GetFullName()
+	if Key then
+		EspUtility.Trackers[Key] = nil
 	end
 
 	local List = EspUtility.TrackerList
