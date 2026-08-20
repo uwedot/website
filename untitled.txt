@@ -1,0 +1,263 @@
+if getgenv().NotifyToast then return end
+
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+
+local SlideInTime = 0.4
+local SlideOutTime = 0.05
+local ScaleTime = 0.11
+local ScaleDown = 0.96
+local StartY = -1
+local EndYBase = 21
+local DefaultDuration = 2
+local BgColor = Color3.fromHex("#23262C")
+local TextColor = Color3.fromRGB(247, 247, 248)
+local WidthOffset = -24
+local TitleSize = 20
+local SubSize = 15
+local IconSize = 36
+local IconTextSize = 26
+local CornerRad = 6
+local MinHeight = 55
+local RemovePrev = true
+
+local CurrentToast: ScreenGui? = nil
+local ImgCounter = 0
+
+local function WriteTempImg(Data: string): string?
+	ImgCounter += 1
+	local Path = "./temp/img/" .. ImgCounter .. ".png"
+	if not isfolder("./temp/img") then makefolder("./temp/img") end
+	writefile(Path, Data)
+	task.delay(10, function()
+		if isfile(Path) then delfile(Path) end
+	end)
+	return getcustomasset(Path)
+end
+
+export type ToastConfig = {
+	Title: string?,
+	Content: string?,
+	Subtitle: string?,
+	Duration: number?,
+	Icon: (string | number)?,
+	IconColor: (Color3 | string)?,
+	IconCornerRadius: (number | boolean)?,
+	Callback: (() -> ())?
+}
+
+local function NotifyToast(Config: ToastConfig?)
+	Config = Config or {}
+	if RemovePrev and CurrentToast and CurrentToast.Parent then
+		CurrentToast:Destroy()
+	end
+
+	local ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = "Toast_" .. HttpService:GenerateGUID(false)
+	ScreenGui.DisplayOrder = 9
+	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	ScreenGui.AutoLocalize = false
+	ScreenGui.ResetOnSpawn = false
+	ScreenGui.ScreenInsets = Enum.ScreenInsets.None
+	ScreenGui.Parent = CoreGui
+	CurrentToast = ScreenGui
+
+	local Container = Instance.new("TextButton")
+	Container.AnchorPoint = Vector2.new(0.5, 0.5)
+	Container.Position = UDim2.new(0.5, 0, 0, StartY)
+	Container.BackgroundTransparency = 1
+	Container.Text = ""
+	Container.AutomaticSize = Enum.AutomaticSize.Y
+	Container.Size = UDim2.new(1, WidthOffset, 0, 0)
+	Container.Parent = ScreenGui
+
+	Instance.new("UISizeConstraint", Container).MaxSize = Vector2.new(400, math.huge)
+	Instance.new("UISizeConstraint", Container).MinSize = Vector2.new(0, MinHeight)
+
+	local Bg = Instance.new("Frame")
+	Bg.BackgroundColor3 = BgColor
+	Bg.BorderSizePixel = 0
+	Bg.Size = UDim2.new(1, 0, 1, 0)
+	Bg.AutomaticSize = Enum.AutomaticSize.Y
+	Bg.Parent = Container
+
+	local Corner = Instance.new("UICorner")
+	Corner.CornerRadius = UDim.new(0, CornerRad)
+	Corner.Parent = Bg
+
+	local Inner = Instance.new("Frame")
+	Inner.BackgroundTransparency = 1
+	Inner.Size = UDim2.new(1, 0, 1, 0)
+	Inner.AutomaticSize = Enum.AutomaticSize.Y
+	Inner.Parent = Bg
+
+	local HList = Instance.new("UIListLayout")
+	HList.Padding = UDim.new(0, 12)
+	HList.FillDirection = Enum.FillDirection.Horizontal
+	HList.SortOrder = Enum.SortOrder.LayoutOrder
+	HList.VerticalAlignment = Enum.VerticalAlignment.Center
+	HList.Parent = Inner
+
+	local Padding = Instance.new("UIPadding")
+	Padding.PaddingLeft = UDim.new(0, 12)
+	Padding.PaddingRight = UDim.new(0, 12)
+	Padding.PaddingTop = UDim.new(0, 12)
+	Padding.PaddingBottom = UDim.new(0, 12)
+	Padding.Parent = Inner
+
+	local MsgFrame = Instance.new("Frame")
+	MsgFrame.BackgroundTransparency = 1
+	MsgFrame.LayoutOrder = 2
+	MsgFrame.AutomaticSize = Enum.AutomaticSize.Y
+	MsgFrame.Size = UDim2.new(1, 0, 1, 0)
+	MsgFrame.Parent = Inner
+
+	local VList = Instance.new("UIListLayout")
+	VList.Padding = UDim.new(0, 12)
+	VList.SortOrder = Enum.SortOrder.LayoutOrder
+	VList.VerticalAlignment = Enum.VerticalAlignment.Center
+	VList.Parent = MsgFrame
+
+	local TextFrame = Instance.new("Frame")
+	TextFrame.BackgroundTransparency = 1
+	TextFrame.AutomaticSize = Enum.AutomaticSize.Y
+	TextFrame.Size = UDim2.new(1, -48, 0, 0)
+	TextFrame.Parent = MsgFrame
+
+	local VList2 = Instance.new("UIListLayout")
+	VList2.SortOrder = Enum.SortOrder.LayoutOrder
+	VList2.VerticalAlignment = Enum.VerticalAlignment.Center
+	VList2.Parent = TextFrame
+
+	local Title = Instance.new("TextLabel")
+	Title.FontFace = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
+	Title.TextColor3 = TextColor
+	Title.TextSize = TitleSize
+	Title.TextWrapped = true
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.BackgroundTransparency = 1
+	Title.RichText = true
+	Title.LayoutOrder = 1
+	Title.AutomaticSize = Enum.AutomaticSize.Y
+	Title.Size = UDim2.new(1, 0, 0, 0)
+	Title.Text = Config.Title or ""
+	Title.Visible = Title.Text ~= ""
+	Title.Parent = TextFrame
+
+	local Subtitle = Instance.new("TextLabel")
+	Subtitle.FontFace = Font.new("rbxasset://fonts/families/BuilderSans.json")
+	Subtitle.TextColor3 = TextColor
+	Subtitle.TextSize = SubSize
+	Subtitle.TextWrapped = true
+	Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+	Subtitle.BackgroundTransparency = 1
+	Subtitle.RichText = true
+	Subtitle.LayoutOrder = 2
+	Subtitle.AutomaticSize = Enum.AutomaticSize.Y
+	Subtitle.Size = UDim2.new(1, 0, 0, 0)
+	Subtitle.Text = Config.Content or Config.Subtitle or ""
+	Subtitle.Visible = Subtitle.Text ~= ""
+	Subtitle.Parent = TextFrame
+
+	local ShowIcon = Config.Icon and Config.Icon ~= ""
+	if ShowIcon then
+		local IconObj: GuiObject
+		local IconColor = Config.IconColor
+		if type(IconColor) == "string" and string.match(IconColor, "^#") then
+			IconColor = Color3.fromHex(IconColor)
+		end
+		IconColor = IconColor or TextColor
+
+		local IconVal = Config.Icon
+		local IsUrl = type(IconVal) == "string" and string.match(IconVal, "^https?://")
+		local IsAsset = type(IconVal) == "number" or (type(IconVal) == "string" and (string.match(IconVal, "^rbxassetid://") or string.match(IconVal, "^rbxasset://")))
+
+		if IsUrl then
+			local Req = http_request or (syn and syn.request) or request
+			local Success, Res = pcall(function() return Req({Url = IconVal, Method = "GET"}).Body end)
+			if Success and Res then
+				local Asset = WriteTempImg(Res)
+				if Asset then
+					IconObj = Instance.new("ImageLabel")
+					IconObj.Image = Asset
+					IconObj.ImageColor3 = IconColor :: Color3
+				end
+			end
+		elseif IsAsset then
+			IconObj = Instance.new("ImageLabel")
+			IconObj.Image = type(IconVal) == "number" and "rbxassetid://" .. IconVal or IconVal
+			IconObj.ImageColor3 = IconColor :: Color3
+		else
+			IconObj = Instance.new("TextLabel")
+			IconObj.FontFace = Font.new("rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json", Enum.FontWeight.Bold)
+			IconObj.Text = IconVal
+			IconObj.TextColor3 = IconColor :: Color3
+			IconObj.TextSize = IconTextSize
+			IconObj.TextXAlignment = Enum.TextXAlignment.Center
+			IconObj.TextYAlignment = Enum.TextYAlignment.Center
+		end
+
+		if IconObj then
+			IconObj.BackgroundTransparency = 1
+			IconObj.Size = UDim2.new(0, IconSize, 0, IconSize)
+			IconObj.LayoutOrder = 1
+			IconObj.Parent = Inner
+
+			local Rad = Config.IconCornerRadius
+			if Rad and Rad ~= 0 then
+				local C = Instance.new("UICorner")
+				C.CornerRadius = (Rad == true or Rad == 0.5 or Rad >= 18) and UDim.new(0.5, 0) or UDim.new(0, Rad)
+				C.Parent = IconObj
+			end
+
+			TextFrame.Size = UDim2.new(1, 0, 0, 0)
+		end
+	end
+
+	local Scaler = Instance.new("UIScale")
+	Scaler.Scale = 1
+	Scaler.Parent = Container
+
+	ScreenGui.Enabled = true
+	task.wait()
+
+	local DynamicY = EndYBase + (Container.AbsoluteSize.Y / 2)
+	TweenService:Create(Container, TweenInfo.new(SlideInTime, Enum.EasingStyle.Quint), {
+		Position = UDim2.new(0.5, 0, 0, DynamicY)
+	}):Play()
+
+	local function HideToast()
+		TweenService:Create(Container, TweenInfo.new(SlideOutTime, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+			Position = UDim2.new(0.5, 0, 0, StartY)
+		}):Play()
+		task.delay(SlideOutTime, function()
+			if CurrentToast == ScreenGui then CurrentToast = nil end
+			ScreenGui:Destroy()
+		end)
+	end
+
+	local ClickConn: RBXScriptConnection
+	ClickConn = Container.MouseButton1Click:Connect(function()
+		HideToast()
+		if Config.Callback then Config.Callback() end
+	end)
+
+	Container.MouseButton1Down:Connect(function()
+		TweenService:Create(Scaler, TweenInfo.new(ScaleTime), {Scale = ScaleDown}):Play()
+	end)
+
+	Container.MouseButton1Up:Connect(function()
+		TweenService:Create(Scaler, TweenInfo.new(ScaleTime), {Scale = 1}):Play()
+	end)
+
+	Container.MouseLeave:Connect(function()
+		TweenService:Create(Scaler, TweenInfo.new(ScaleTime), {Scale = 1}):Play()
+	end)
+
+	task.delay(Config.Duration or DefaultDuration, function()
+		if ScreenGui.Parent then HideToast() end
+	end)
+end
+
+getgenv().NotifyToast = NotifyToast
