@@ -291,8 +291,8 @@ do
 	Rayfield.Main.Elements.Template.Dropdown.Toggle.ImageRectOffset = Vector2.zero
 	Rayfield.Main.Elements.Template.Dropdown.Toggle.ImageRectSize = Vector2.zero
 	Rayfield.Main.Elements.Template.Label.Icon.Image = CustomAssets[tostring(11745872910)]
-	Rayfield.Main.Elements.Template.ColorPicker.CpBackground.MainCp.Image = CustomAssets[tostring(11413591840)]
-	Rayfield.Main.Elements.Template.ColorPicker.CpBackground.MainCp.MainPoint.Image = CustomAssets[tostring(3259050989)]
+	Rayfield.Main.Elements.Template.ColorPicker.CPBackground.MainCP.Image = CustomAssets[tostring(11413591840)]
+	Rayfield.Main.Elements.Template.ColorPicker.CPBackground.MainCP.MainPoint.Image = CustomAssets[tostring(3259050989)]
 	Rayfield.Main.Elements.Template.ColorPicker.ColorSlider.SliderPoint.Image = CustomAssets[tostring(3259050989)]
 	Rayfield.Main.TabList.Template.Image.Image = CustomAssets[tostring(4483362458)]
 	Rayfield.Main.Search.Search.Image = CustomAssets[tostring(18458939117)]
@@ -1244,9 +1244,9 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 		function Tab:CreateColorPicker(ColorPickerSettings: { Name: string, Color: Color3, Flag: string?, Callback: (Color3) -> (), Ext: boolean? })
 			ColorPickerSettings.Type = "ColorPicker"
 			local ColorPicker = Elements.Template.ColorPicker:Clone()
-			local Background = ColorPicker.CpBackground
+			local Background = ColorPicker.CPBackground
 			local Display = Background.Display
-			local Main = Background.MainCp
+			local Main = Background.MainCP
 			local Slider = ColorPicker.ColorSlider
 			ColorPicker.ClipsDescendants = true
 			ColorPicker.Name = ColorPickerSettings.Name
@@ -1259,11 +1259,11 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 			Main.MainPoint.ImageTransparency = 1
 			ColorPicker.Interact.Size = UDim2.new(1, 0, 1, 0)
 			ColorPicker.Interact.Position = UDim2.new(0.5, 0, 0.5, 0)
-			ColorPicker.Rgb.Position = UDim2.new(0, 17, 0, 70)
+			ColorPicker.RGB.Position = UDim2.new(0, 17, 0, 70)
 			ColorPicker.HexInput.Position = UDim2.new(0, 17, 0, 90)
 			Main.ImageTransparency = 1
 			Background.BackgroundTransparency = 1
-			for _, RgbInput in ipairs(ColorPicker.Rgb:GetChildren()) do
+			for _, RgbInput in ipairs(ColorPicker.RGB:GetChildren()) do
 				if RgbInput:IsA("Frame") then
 					RgbInput.BackgroundColor3 = SelectedTheme.InputBackground
 					RgbInput.UIStroke.Color = SelectedTheme.InputStroke
@@ -1291,7 +1291,7 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 					TweenService:Create(Background, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Size = UDim2.new(0, 173, 0, 86) }):Play()
 					TweenService:Create(Display, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 }):Play()
 					TweenService:Create(ColorPicker.Interact, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Position = UDim2.new(0.289, 0, 0.5, 0) }):Play()
-					TweenService:Create(ColorPicker.Rgb, TweenInfo.new(0.8, Enum.EasingStyle.Exponential), { Position = UDim2.new(0, 17, 0, 40) }):Play()
+					TweenService:Create(ColorPicker.RGB, TweenInfo.new(0.8, Enum.EasingStyle.Exponential), { Position = UDim2.new(0, 17, 0, 40) }):Play()
 					TweenService:Create(ColorPicker.HexInput, TweenInfo.new(0.5, Enum.EasingStyle.Exponential), { Position = UDim2.new(0, 17, 0, 73) }):Play()
 					TweenService:Create(ColorPicker.Interact, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Size = UDim2.new(0.574, 0, 1, 0) }):Play()
 					TweenService:Create(Main.MainPoint, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), { ImageTransparency = 0 }):Play()
@@ -1303,7 +1303,7 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 					TweenService:Create(Background, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Size = UDim2.new(0, 39, 0, 22) }):Play()
 					TweenService:Create(ColorPicker.Interact, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Size = UDim2.new(1, 0, 1, 0) }):Play()
 					TweenService:Create(ColorPicker.Interact, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Position = UDim2.new(0.5, 0, 0.5, 0) }):Play()
-					TweenService:Create(ColorPicker.Rgb, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Position = UDim2.new(0, 17, 0, 70) }):Play()
+					TweenService:Create(ColorPicker.RGB, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { Position = UDim2.new(0, 17, 0, 70) }):Play()
 					TweenService:Create(ColorPicker.HexInput, TweenInfo.new(0.5, Enum.EasingStyle.Exponential), { Position = UDim2.new(0, 17, 0, 90) }):Play()
 					TweenService:Create(Display, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0 }):Play()
 					TweenService:Create(Main.MainPoint, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), { ImageTransparency = 1 }):Play()
@@ -1335,9 +1335,9 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 				Slider.SliderPoint.ImageColor3 = Color3.fromHSV(H, 1, 1)
 				local C = Color3.fromHSV(H, S, V)
 				local R, G, B = math.floor((C.R * 255) + 0.5), math.floor((C.G * 255) + 0.5), math.floor((C.B * 255) + 0.5)
-				ColorPicker.Rgb.RInput.InputBox.Text = tostring(R)
-				ColorPicker.Rgb.GInput.InputBox.Text = tostring(G)
-				ColorPicker.Rgb.BInput.InputBox.Text = tostring(B)
+				ColorPicker.RGB.RInput.InputBox.Text = tostring(R)
+				ColorPicker.RGB.GInput.InputBox.Text = tostring(G)
+				ColorPicker.RGB.BInput.InputBox.Text = tostring(B)
 				Hex = string.format("#%02X%02X%02X", C.R * 0xFF, C.G * 0xFF, C.B * 0xFF)
 				ColorPicker.HexInput.InputBox.Text = Hex
 			end
@@ -1374,9 +1374,9 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 				ColorPickerSettings.Color = Color3.fromRGB(R, G, B)
 				if not ColorPickerSettings.Ext then SaveConfiguration(ColorPickerSettings.Flag .. '\n' .. tostring(ColorPickerSettings.Color)) end
 			end
-			ColorPicker.Rgb.RInput.InputBox.FocusLost:Connect(function() RgbBoxes(ColorPicker.Rgb.RInput.InputBox, "R") pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end) end)
-			ColorPicker.Rgb.GInput.InputBox.FocusLost:Connect(function() RgbBoxes(ColorPicker.Rgb.GInput.InputBox, "G") pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end) end)
-			ColorPicker.Rgb.BInput.InputBox.FocusLost:Connect(function() RgbBoxes(ColorPicker.Rgb.BInput.InputBox, "B") pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end) end)
+			ColorPicker.RGB.RInput.InputBox.FocusLost:Connect(function() RgbBoxes(ColorPicker.RGB.RInput.InputBox, "R") pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end) end)
+			ColorPicker.RGB.GInput.InputBox.FocusLost:Connect(function() RgbBoxes(ColorPicker.RGB.GInput.InputBox, "G") pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end) end)
+			ColorPicker.RGB.BInput.InputBox.FocusLost:Connect(function() RgbBoxes(ColorPicker.RGB.BInput.InputBox, "B") pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end) end)
 			local ColorPickerRenderConnection = RunService.RenderStepped:Connect(function()
 				if MainDragging then
 					local LocalX = math.clamp(Mouse.X - Main.AbsolutePosition.X, 0, Main.AbsoluteSize.X)
@@ -1389,9 +1389,9 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 					Background.BackgroundColor3 = Color3.fromHSV(H, 1, 1)
 					local C = Color3.fromHSV(H, S, V)
 					local R, G, B = math.floor((C.R * 255) + 0.5), math.floor((C.G * 255) + 0.5), math.floor((C.B * 255) + 0.5)
-					ColorPicker.Rgb.RInput.InputBox.Text = tostring(R)
-					ColorPicker.Rgb.GInput.InputBox.Text = tostring(G)
-					ColorPicker.Rgb.BInput.InputBox.Text = tostring(B)
+					ColorPicker.RGB.RInput.InputBox.Text = tostring(R)
+					ColorPicker.RGB.GInput.InputBox.Text = tostring(G)
+					ColorPicker.RGB.BInput.InputBox.Text = tostring(B)
 					ColorPicker.HexInput.InputBox.Text = string.format("#%02X%02X%02X", C.R * 0xFF, C.G * 0xFF, C.B * 0xFF)
 					pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end)
 					ColorPickerSettings.Color = Color3.fromRGB(R, G, B)
@@ -1407,9 +1407,9 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 					Main.MainPoint.ImageColor3 = Color3.fromHSV(H, S, V)
 					local C = Color3.fromHSV(H, S, V)
 					local R, G, B = math.floor((C.R * 255) + 0.5), math.floor((C.G * 255) + 0.5), math.floor((C.B * 255) + 0.5)
-					ColorPicker.Rgb.RInput.InputBox.Text = tostring(R)
-					ColorPicker.Rgb.GInput.InputBox.Text = tostring(G)
-					ColorPicker.Rgb.BInput.InputBox.Text = tostring(B)
+					ColorPicker.RGB.RInput.InputBox.Text = tostring(R)
+					ColorPicker.RGB.GInput.InputBox.Text = tostring(G)
+					ColorPicker.RGB.BInput.InputBox.Text = tostring(B)
 					ColorPicker.HexInput.InputBox.Text = string.format("#%02X%02X%02X", C.R * 0xFF, C.G * 0xFF, C.B * 0xFF)
 					pcall(function() ColorPickerSettings.Callback(Color3.fromHSV(H, S, V)) end)
 					ColorPickerSettings.Color = Color3.fromRGB(R, G, B)
@@ -1432,7 +1432,7 @@ function RayfieldLibrary:CreateWindow(Settings: { Name: string, ToggleUIKeybind:
 			ColorPicker.MouseEnter:Connect(function() TweenService:Create(ColorPicker, TweenInfoHover, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover }):Play() end)
 			ColorPicker.MouseLeave:Connect(function() TweenService:Create(ColorPicker, TweenInfoHover, { BackgroundColor3 = SelectedTheme.ElementBackground }):Play() end)
 			Rayfield.Main:GetPropertyChangedSignal('BackgroundColor3'):Connect(function()
-				for _, RgbInput in ipairs(ColorPicker.Rgb:GetChildren()) do
+				for _, RgbInput in ipairs(ColorPicker.RGB:GetChildren()) do
 					if RgbInput:IsA("Frame") then
 						RgbInput.BackgroundColor3 = SelectedTheme.InputBackground
 						RgbInput.UIStroke.Color = SelectedTheme.InputStroke
