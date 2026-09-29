@@ -10,7 +10,7 @@ const VersionPattern = /[[(](v(?:ersion)?\s*\d+)[\])]/i;
 const UnavailRe = /unavail|not avail/i;
 const ButtonLike = '.nav-dropdown-item, .filter-item, .era-row, .note-toggle';
 const ArrowDir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
-const LoadingHtml = '<div class="loading-msg">Loading data…</div>';
+const LoadingHtml = '<div class="loading-msg">Loading songs…</div>';
 const LinksBtnHtml = '<button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false"><span>Links</span><svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg></button>';
 
 const TabMarkers = {
@@ -48,8 +48,6 @@ const NavTabBtn = ById('nav-tab-btn');
 const NavTabMenu = ById('nav-tab-menu');
 const FilterBtn = ById('quality-filter-btn');
 const FilterMenu = ById('quality-filter-menu');
-const SettingsBtn = ById('settings-btn');
-const Modal = ById('settings-modal');
 const Menus = [[NavTabBtn, NavTabMenu], [FilterBtn, FilterMenu]];
 
 const Ms = navigator.mediaSession;
@@ -60,7 +58,6 @@ const State = {
   EraDescriptions: {},
   CurrentTab: 'all',
   ActiveQualities: new Set(QualityMap.map(Q => Q.Key)),
-  ShowPlayableOnly: false,
   IsLoading: false,
 };
 
@@ -127,8 +124,6 @@ function IsQualityVisible(Quality) {
   return Vis;
 }
 
-const IsPlayable = (LinkString, Quality) => LinkString.includes(PillowsHost) && !UnavailRe.test(Quality);
-
 const AudioPlayer = {
   HasError: false,
 
@@ -161,7 +156,7 @@ const AudioPlayer = {
       if (!Audio.getAttribute('src')) return;
       this.HasError = true;
       this.Sync();
-      El.TrackName.textContent = 'Playback error, format not supported or unavailable';
+      El.TrackName.textContent = 'Can\'t play this file. The format may be unsupported or the link is dead.';
     });
     Audio.addEventListener('timeupdate', () => {
       const { currentTime, duration, playbackRate } = Audio;
@@ -406,8 +401,7 @@ function EraHtml(Era, Songs) {
 }
 
 function BuildVisibleEras(Filter) {
-  const Listed = ([, Quality, Link]) =>
-    IsQualityVisible(Quality) && (!State.ShowPlayableOnly || IsPlayable(Link, Quality));
+  const Listed = ([, Quality]) => IsQualityVisible(Quality);
   const Named = ([Name]) => !Filter || Name.toLowerCase().includes(Filter);
   const Entries = Object.entries(State.VaultData);
 
@@ -439,7 +433,7 @@ function RenderEras() {
   NavSongs.textContent = Eras.reduce((Sum, [, Songs]) => Sum + Songs.length, 0).toLocaleString();
 
   if (!Eras.length) {
-    EraList.innerHTML = '<div class="no-results">No results found.</div>';
+    EraList.innerHTML = '<div class="no-results">No songs match your search or filters.</div>';
   } else if (State.CurrentTab === 'recent') {
     EraList.innerHTML = Eras
       .map(([, Songs]) => `<div class="songs-flat" role="list" aria-label="Recent songs">${SongsHtml(Songs)}</div>`)
@@ -451,10 +445,10 @@ function RenderEras() {
 }
 
 const LoadErrorText = ({ reason, message }) => ({
-  timeout: 'Request timed out, check your connection and try again.',
-  http: `Failed to load sheet (${message}), make sure it is publicly shared.`,
-  empty: 'The sheet loaded but no songs were found.',
-}[reason] ?? 'Failed to load data, check your connection or sheet permissions.');
+  timeout: 'Request timed out. Check your connection and try again.',
+  http: `Couldn\'t load the sheet (${message}). Make sure it is publicly shared.`,
+  empty: 'The sheet loaded, but it has no songs.',
+}[reason] ?? 'Couldn\'t load songs. Check your connection or the sheet\'s sharing settings.');
 
 const VaultLoader = {
   CachedJson: null,
@@ -556,19 +550,6 @@ SearchBox.addEventListener('input', () => {
   SearchTimer = setTimeout(RenderEras, 200);
 });
 
-const PlayableToggle = ById('playable-only-toggle');
-PlayableToggle.addEventListener('click', () => {
-  State.ShowPlayableOnly = PlayableToggle.getAttribute('aria-checked') !== 'true';
-  PlayableToggle.setAttribute('aria-checked', String(State.ShowPlayableOnly));
-  RenderEras();
-});
-
-const CloseModalBtn = ById('settings-close-btn');
-const CloseModal = () => { Modal.hidden = true; SettingsBtn.focus(); };
-SettingsBtn.addEventListener('click', () => { Modal.hidden = false; CloseModalBtn.focus(); });
-CloseModalBtn.addEventListener('click', CloseModal);
-Modal.addEventListener('click', ({ target }) => { if (target === Modal) CloseModal(); });
-
 document.addEventListener('click', ({ target }) => {
   for (const [Btn, Menu] of Menus) {
     if (!Btn.contains(target) && !Menu.contains(target)) SetDropdown(Btn, Menu, false);
@@ -582,8 +563,7 @@ document.addEventListener('keydown', Ev => {
     SearchBox.blur();
     for (const [Btn, Menu] of Menus) SetDropdown(Btn, Menu, false);
     CloseLinkMenu();
-    if (!Modal.hidden) CloseModal();
-  } else if (key === '/' && !Ev.ctrlKey && !Ev.metaKey && !Ev.altKey && Modal.hidden && !target.matches('input, textarea, select')) {
+  } else if (key === '/' && !Ev.ctrlKey && !Ev.metaKey && !Ev.altKey && !target.matches('input, textarea, select')) {
     Ev.preventDefault();
     SearchBox.focus();
   } else if ((key === 'Enter' || key === ' ') && target.matches(ButtonLike)) {

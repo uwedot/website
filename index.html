@@ -24,7 +24,7 @@
 <script>document.documentElement.classList.remove('no-js');</script>
 <noscript>
   <div class="no-js-screen">
-    <p class="no-js-title">JavaScript Required</p>
+    <p class="no-js-title">JavaScript required</p>
     <p class="no-js-msg">Enable JavaScript in your browser to use MISTAPE.</p>
   </div>
 </noscript>
@@ -34,7 +34,7 @@
 <nav class="nav" aria-label="Site navigation">
   <div class="nav-logo">
     <span class="nav-logo-name">MISTAPE</span>
-    <span class="nav-logo-sub">Unreleased Songs</span>
+    <span class="nav-logo-sub">Unreleased songs</span>
   </div>
 
   <div class="nav-dropdown-container">
@@ -55,13 +55,6 @@
 
   <div class="nav-stats" aria-label="Stats">
     <div class="nav-stat" aria-live="polite">Songs: <span id="nav-songs">-</span></div>
-    <button type="button" id="settings-btn" class="settings-btn" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-      </svg>
-    </button>
   </div>
 </nav>
 
@@ -91,11 +84,11 @@
         </svg>
       </button>
       <div id="quality-filter-menu" class="filter-dropdown-menu" role="menu">
-        <div class="filter-item active" data-quality="unavail"  role="menuitemcheckbox" aria-checked="true">Not Available</div>
+        <div class="filter-item active" data-quality="unavail"  role="menuitemcheckbox" aria-checked="true">Not available</div>
         <div class="filter-item active" data-quality="rec"      role="menuitemcheckbox" aria-checked="true">Recording</div>
-        <div class="filter-item active" data-quality="low"      role="menuitemcheckbox" aria-checked="true">Low Quality</div>
-        <div class="filter-item active" data-quality="high"     role="menuitemcheckbox" aria-checked="true">High Quality</div>
-        <div class="filter-item active" data-quality="cd"       role="menuitemcheckbox" aria-checked="true">CD Quality</div>
+        <div class="filter-item active" data-quality="low"      role="menuitemcheckbox" aria-checked="true">Low quality</div>
+        <div class="filter-item active" data-quality="high"     role="menuitemcheckbox" aria-checked="true">High quality</div>
+        <div class="filter-item active" data-quality="cd"       role="menuitemcheckbox" aria-checked="true">CD quality</div>
         <div class="filter-item active" data-quality="lossless" role="menuitemcheckbox" aria-checked="true">Lossless</div>
       </div>
     </div>
@@ -103,7 +96,7 @@
 
   <div class="era-list" id="era-list"
        role="list" aria-label="Era list">
-    <div class="loading-msg">Loading data…</div>
+    <div class="loading-msg">Loading songs…</div>
   </div>
 </main>
 
@@ -170,30 +163,6 @@
       <path d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" />
     </svg>
   </button>
-</div>
-
-<div id="settings-modal" class="settings-modal"
-     role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
-  <div class="settings-modal-inner">
-    <div class="settings-modal-header">
-      <span id="settings-title" class="settings-modal-title">Settings</span>
-      <button type="button" id="settings-close-btn"
-              class="settings-close-btn" aria-label="Close settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" aria-hidden="true">
-          <line x1="18" y1="6"  x2="6"  y2="18" />
-          <line x1="6"  y1="6"  x2="18" y2="18" />
-        </svg>
-      </button>
-    </div>
-
-    <div class="settings-toggle-row">
-      <label for="playable-only-toggle" class="settings-toggle-label">Hide Unplayable Songs</label>
-      <button type="button" id="playable-only-toggle"
-              class="settings-toggle" role="switch"
-              aria-checked="false" aria-label="Hide Unplayable Songs"></button>
-    </div>
-  </div>
 </div>
 
 <script src="app.js" defer></script>
