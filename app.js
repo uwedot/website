@@ -1,61 +1,81 @@
 'use strict';
 
 const DefaultSheetId = '1wQ0WC0U9q10fLWpy9CO8YR128eE8msGXqtZI8_cNyTA';
+const CacheKey = 'mistape:vault:v1';
+const RecentLimit = 100;
+const PillowsHost = 'pillows.su/f/';
+const PillowsApi = 'https://api.pillows.su/api/get/';
+const UrlPattern = /^https?:/i;
+const VersionPattern = /[[(](v(?:ersion)?\s*\d+)[\])]/i;
+const UnavailRe = /unavail|not avail/i;
+const ButtonLike = '.nav-dropdown-item, .filter-item, .era-row, .note-toggle';
+const ArrowDir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
+const LoadingHtml = '<div class="loading-msg">Loading data…</div>';
+const LinksBtnHtml = '<button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false"><span>Links</span><svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg></button>';
 
 const TabMarkers = {
   grails: ['⭐', '✨'],
 };
 
 const QualityMap = [
-  { Key: 'lossless', Cls: 'q-lossless', Test: L => L.includes('lossless') },
-  { Key: 'high', Cls: 'q-high', Test: L => L.includes('high') },
-  { Key: 'cd', Cls: 'q-cd', Test: L => L.includes('cd') },
-  { Key: 'rec', Cls: 'q-rec', Test: L => L.includes('record') },
-  { Key: 'low', Cls: 'q-low', Test: L => L.includes('low') },
-  { Key: 'unavail', Cls: null, Test: L => L.includes('not avail') || L.includes('unavail') },
+  { Key: 'lossless', Cls: 'q-lossless', Re: /lossless/i },
+  { Key: 'high', Cls: 'q-high', Re: /high/i },
+  { Key: 'cd', Cls: 'q-cd', Re: /cd/i },
+  { Key: 'rec', Cls: 'q-rec', Re: /record/i },
+  { Key: 'low', Cls: 'q-low', Re: /low/i },
+  { Key: 'unavail', Cls: null, Re: UnavailRe },
 ];
 
-const AvailLenClassMap = [
-  { Test: L => /\bog\b/.test(L), Cls: 'tl-og' },
-  { Test: L => L.includes('lossless'), Cls: 'tl-other' },
-  { Test: L => L.includes('stem'), Cls: 'tl-stem' },
-  { Test: L => L.includes('full'), Cls: 'tl-full' },
-  { Test: L => L.includes('tagged'), Cls: 'tl-tagged' },
-  { Test: L => L.includes('partial'), Cls: 'tl-partial' },
-  { Test: L => L.includes('snippet'), Cls: 'tl-snippet' },
-  { Test: L => L.includes('unavail'), Cls: 'tl-unavail' },
-  { Test: L => L.includes('confirmed'), Cls: 'tl-confirmed' },
-  { Test: L => L.includes('rumored'), Cls: 'tl-rumored' },
-  { Test: L => L.includes('vox'), Cls: 'tl-vox' },
+const AvailLenClasses = [
+  [/\bog\b/i, 'tl-og'],
+  [/lossless/i, 'tl-other'],
+  [/stem/i, 'tl-stem'],
+  [/full/i, 'tl-full'],
+  [/tagged/i, 'tl-tagged'],
+  [/partial/i, 'tl-partial'],
+  [/snippet/i, 'tl-snippet'],
+  [/unavail/i, 'tl-unavail'],
+  [/confirmed/i, 'tl-confirmed'],
+  [/rumored/i, 'tl-rumored'],
+  [/vox/i, 'tl-vox'],
 ];
 
-const VersionPattern = /[[(](v(?:ersion)?\s*\d+)[\])]/i;
-const UrlPattern = /^https?:/i;
-const PillowsHost = 'pillows.su/f/';
-const PillowsApi = 'https://api.pillows.su/api/get/';
-const AllQualityKeys = QualityMap.map(Q => Q.Key);
+const ById = Id => document.getElementById(Id);
+const EraList = ById('era-list');
+const NavSongs = ById('nav-songs');
+const SearchBox = ById('search-box');
+const NavTabBtn = ById('nav-tab-btn');
+const NavTabMenu = ById('nav-tab-menu');
+const FilterBtn = ById('quality-filter-btn');
+const FilterMenu = ById('quality-filter-menu');
+const SettingsBtn = ById('settings-btn');
+const Modal = ById('settings-modal');
+const Menus = [[NavTabBtn, NavTabMenu], [FilterBtn, FilterMenu]];
+
+const Ms = navigator.mediaSession;
+const ReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 const State = {
-  PrimarySheetId: DefaultSheetId,
   VaultData: null,
   EraDescriptions: {},
   CurrentTab: 'all',
-  ActiveQualities: new Set(AllQualityKeys),
+  ActiveQualities: new Set(QualityMap.map(Q => Q.Key)),
   ShowPlayableOnly: false,
   IsLoading: false,
-  HasOpenDropdown: false,
-  SearchDebounceId: null,
 };
 
-const PlayBtnMap = new Map();
-const OpenPanels = new Set();
+let ShownEras = {};
+let OpenEra = null;
+let OpenLinkMenu = null;
 
-const HtmlEscapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
-const HtmlEscapeRe = /[&<>"]/g;
+const HtmlEscapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const EscapeHtml = Str => String(Str).replace(/[&<>"]/g, C => HtmlEscapes[C]);
+const Div = (Cls, Text) => `<div class="${Cls}">${EscapeHtml(Text)}</div>`;
+const Anchor = (Cls, Url, Text) =>
+  `<a class="${Cls}" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">${Text}</a>`;
 
-function EscapeHtml(Str) {
-  return String(Str).replace(HtmlEscapeRe, C => HtmlEscapeMap[C]);
-}
+const Clamp = (V, Lo, Hi) => Math.max(Lo, Math.min(Hi, V));
+const NormaliseKey = S => S.toLowerCase().replace(/\s+/g, ' ').trim();
 
 function FormatTime(Seconds) {
   if (!isFinite(Seconds) || Seconds < 0) return '0:00';
@@ -63,816 +83,518 @@ function FormatTime(Seconds) {
   return `${Math.floor(S / 60)}:${String(S % 60).padStart(2, '0')}`;
 }
 
-function ParseDateToTimestamp(DateStr) {
-  if (!DateStr) return 0;
-  let Result = Date.parse(DateStr);
-  if (isNaN(Result)) {
-    const M = DateStr.match(/\b(19|20)\d{2}\b/);
-    Result = M ? new Date(M[0], 0, 1).getTime() : 0;
+const TimestampCache = new Map();
+function LeakTimestamp(DateStr) {
+  let Ts = TimestampCache.get(DateStr);
+  if (Ts === undefined) {
+    Ts = Date.parse(DateStr);
+    if (isNaN(Ts)) {
+      const Year = DateStr.match(/\b(?:19|20)\d{2}\b/);
+      Ts = Year ? new Date(Year[0], 0, 1).getTime() : 0;
+    }
+    TimestampCache.set(DateStr, Ts);
   }
-  return Result;
+  return Ts;
 }
 
-function ResolveUrl(Url) {
-  try { return new URL(Url).href; } catch { return Url; }
+function FormatLeakDate(Str) {
+  const D = new Date(Str);
+  if (isNaN(D)) return Str;
+  // Date-only ISO strings parse as UTC, everything else as local time.
+  const Utc = /^\d{4}-\d{2}-\d{2}$/.test(Str.trim());
+  const [Day, Month, Year] = Utc
+    ? [D.getUTCDate(), D.getUTCMonth(), D.getUTCFullYear()]
+    : [D.getDate(), D.getMonth(), D.getFullYear()];
+  return `${String(Day).padStart(2, '0')}/${String(Month + 1).padStart(2, '0')}/${Year}`;
 }
 
-function NormaliseKey(S) {
-  return S.toLowerCase().replace(/\s+/g, ' ').trim();
-}
+const GetQualityClass = Quality =>
+  QualityMap.find(({ Cls, Re }) => Cls && Re.test(Quality))?.Cls ?? 'q-other';
 
-const Clamp = (V, Lo, Hi) => Math.max(Lo, Math.min(Hi, V));
+const GetAvailableLengthClass = AvailLen =>
+  AvailLenClasses.find(([Re]) => Re.test(AvailLen))?.[1] ?? 'tl-other';
 
-function GetQualityClass(Quality) {
-  if (!Quality) return 'q-other';
-  const L = Quality.toLowerCase();
-  for (const { Test, Cls } of QualityMap) {
-    if (Cls && Test(L)) return Cls;
-  }
-  return 'q-other';
-}
-
-function GetAvailableLengthClass(AvailLen) {
-  if (!AvailLen) return 'tl-other';
-  const L = AvailLen.toLowerCase();
-  for (const { Test, Cls } of AvailLenClassMap) {
-    if (Test(L)) return Cls;
-  }
-  return 'tl-other';
-}
-
+const QualityVisCache = new Map();
 function IsQualityVisible(Quality) {
-  const L = (Quality || '').toLowerCase();
-  if (!L) return State.ActiveQualities.has('unavail');
-  for (const { Key, Test } of QualityMap) {
-    if (State.ActiveQualities.has(Key) && Test(L)) return true;
+  let Vis = QualityVisCache.get(Quality);
+  if (Vis === undefined) {
+    const Hits = QualityMap.filter(({ Re }) => Re.test(Quality));
+    Vis = Hits.length
+      ? Hits.some(({ Key }) => State.ActiveQualities.has(Key))
+      : State.ActiveQualities.has('unavail');
+    QualityVisCache.set(Quality, Vis);
   }
-  return false;
+  return Vis;
 }
 
-function IsPlayable(LinkString, Quality) {
-  if (!LinkString) return false;
-  const Q = (Quality || '').toLowerCase();
-  if (Q.includes('unavail') || Q.includes('not avail')) return false;
-  return LinkString.split(/[\s,]+/).some(U => U.includes(PillowsHost));
-}
+const IsPlayable = (LinkString, Quality) => LinkString.includes(PillowsHost) && !UnavailRe.test(Quality);
 
 const AudioPlayer = {
-  AudioElement: null,
-  PlayerElement: null,
-  Elements: {},
+  HasError: false,
 
   Init() {
-    this.AudioElement = document.getElementById('main-audio');
-    this.PlayerElement = document.getElementById('global-player');
-    if (!this.AudioElement || !this.PlayerElement) return;
+    const Audio = (this.Audio = ById('main-audio'));
+    this.Player = ById('global-player');
+    const El = (this.El = {
+      PlayIcon: ById('player-play-icon'),
+      PauseIcon: ById('player-pause-icon'),
+      PlayPauseBtn: ById('player-play-btn'),
+      CurrentTime: ById('player-current'),
+      Duration: ById('player-duration'),
+      TrackName: ById('player-track-name'),
+      TrackCurrent: ById('player-track-current'),
+      TrackLength: ById('player-track-length'),
+      ProgressFill: ById('player-fill'),
+      VolFill: ById('player-vol-fill'),
+      Scrubber: ById('player-scrubber'),
+      Volume: ById('player-volume'),
+    });
 
-    this.Elements = {
-      PlayIcon: document.getElementById('player-play-icon'),
-      PauseIcon: document.getElementById('player-pause-icon'),
-      PlayPauseBtn: document.getElementById('player-play-btn'),
-      CloseBtn: document.getElementById('player-close-btn'),
-      CurrentTimeEl: document.getElementById('player-current'),
-      DurationEl: document.getElementById('player-duration'),
-      TrackNameEl: document.getElementById('player-track-name'),
-      TrackCurrentEl: document.getElementById('player-track-current'),
-      TrackLengthEl: document.getElementById('player-track-length'),
-      ProgressFill: document.getElementById('player-fill'),
-      VolFill: document.getElementById('player-vol-fill'),
-      ScrubberEl: document.getElementById('player-scrubber'),
-      VolumeSlider: document.getElementById('player-volume'),
-    };
+    for (const Type of ['play', 'pause']) Audio.addEventListener(Type, () => this.Sync());
+    Audio.addEventListener('ended', () => {
+      this.SetProgress(0);
+      this.SetCurrentTime('0:00');
+      this.Sync();
+    });
+    Audio.addEventListener('loadedmetadata', () => this.SetDuration(FormatTime(Audio.duration)));
+    Audio.addEventListener('error', () => {
+      if (!Audio.getAttribute('src')) return;
+      this.HasError = true;
+      this.Sync();
+      El.TrackName.textContent = 'Playback error, format not supported or unavailable';
+    });
+    Audio.addEventListener('timeupdate', () => {
+      const { currentTime, duration, playbackRate } = Audio;
+      if (!Number.isFinite(duration) || !duration) return;
+      this.SetProgress((currentTime / duration) * 100);
+      this.SetCurrentTime(FormatTime(currentTime));
+      try {
+        Ms?.setPositionState({ duration, playbackRate: playbackRate || 1, position: Math.min(currentTime, duration) });
+      } catch {}
+    });
 
-    this.BindAudioEvents();
-    this.BindControls();
+    El.PlayPauseBtn.addEventListener('click', () => this.Toggle());
+    ById('player-close-btn').addEventListener('click', () => this.Close());
     this.BindSliders();
     this.BindMediaSession();
     this.SetVolume(80);
   },
 
-  RegisterPlayBtn(Btn, ResolvedUrl) {
-    if (!PlayBtnMap.has(ResolvedUrl)) PlayBtnMap.set(ResolvedUrl, new Set());
-    PlayBtnMap.get(ResolvedUrl).add(Btn);
+  Play() {
+    this.Audio.play().catch(() => {});
   },
 
-  SyncPlayButtons() {
-    const Audio = this.AudioElement;
-    const Current = Audio.src ? ResolveUrl(Audio.src) : '';
-    const Playing = !Audio.paused;
-    for (const [Href, Btns] of PlayBtnMap) {
-      const Label = (Href === Current && Playing) ? 'Pause' : 'Play';
-      for (const Btn of Btns) Btn.textContent = Label;
-    }
+  Toggle() {
+    if (this.Audio.paused) this.Play();
+    else this.Audio.pause();
   },
 
-  ClearPlayButtons() {
-    PlayBtnMap.clear();
-  },
-
-  SafePlay() {
-    this.AudioElement.play().catch(() => {});
-  },
-
-  CurrentResolvedSrc() {
-    return this.AudioElement.src ? ResolveUrl(this.AudioElement.src) : '';
-  },
-
-  PlayOrToggle(ResolvedUrl, TrackName) {
-    const Audio = this.AudioElement;
-    if (this.CurrentResolvedSrc() === ResolvedUrl) {
-      if (Audio.paused) this.SafePlay();
-      else Audio.pause();
-      return;
-    }
-    this.Elements.TrackNameEl.textContent = TrackName;
-    this.SetMediaSessionTrack(TrackName);
+  Unload() {
+    const { Audio } = this;
     Audio.pause();
     Audio.removeAttribute('src');
     Audio.load();
-    Audio.src = ResolvedUrl;
-    this.PlayerElement.removeAttribute('hidden');
-    this.SafePlay();
+    this.HasError = false;
+  },
+
+  PlayOrToggle(Url, Name) {
+    if (this.Audio.src === Url && !this.HasError) {
+      this.Toggle();
+      return;
+    }
+    this.Unload();
+    this.El.TrackName.textContent = Name;
+    if (Ms) Ms.metadata = new MediaMetadata({ title: Name, artist: 'Mistape' });
+    this.Audio.src = Url;
+    this.Player.hidden = false;
+    this.Play();
   },
 
   Close() {
-    const { AudioElement: Audio, PlayerElement: PlayerEl } = this;
-    Audio.pause();
-    Audio.src = '';
-    Audio.load();
-    PlayerEl.setAttribute('hidden', '');
-    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
-    this.SetPlayState(false);
+    this.Unload();
+    this.Player.hidden = true;
+    if (Ms) Ms.metadata = null;
     this.SetProgress(0);
     this.SetCurrentTime('0:00');
     this.SetDuration('0:00');
-    this.SyncPlayButtons();
+    this.Sync();
+  },
+
+  // Syncs the player icon and every rendered song Play/Pause button with the audio element.
+  Sync() {
+    const { src, paused } = this.Audio;
+    const Playing = !paused && !this.HasError;
+    const { PlayIcon, PauseIcon, PlayPauseBtn } = this.El;
+    PlayIcon.style.display = Playing ? 'none' : '';
+    PauseIcon.style.display = Playing ? '' : 'none';
+    PlayPauseBtn.setAttribute('aria-label', Playing ? 'Pause' : 'Play');
+    for (const Btn of EraList.querySelectorAll('.song-play-btn')) {
+      Btn.textContent = Playing && Btn.dataset.src === src ? 'Pause' : 'Play';
+    }
   },
 
   SetVolume(Pct) {
     const C = Clamp(Pct, 0, 100);
-    const { VolFill, VolumeSlider } = this.Elements;
-    VolFill.style.width = `${C}%`;
-    this.AudioElement.volume = C / 100;
-    VolumeSlider.setAttribute('aria-valuenow', Math.round(C));
-  },
-
-  SetPlayState(Playing) {
-    const { PlayIcon, PauseIcon, PlayPauseBtn } = this.Elements;
-    PlayIcon.style.display = Playing ? 'none' : '';
-    PauseIcon.style.display = Playing ? '' : 'none';
-    PlayPauseBtn.setAttribute('aria-label', Playing ? 'Pause' : 'Play');
+    this.El.VolFill.style.width = `${C}%`;
+    this.Audio.volume = C / 100;
+    this.El.Volume.setAttribute('aria-valuenow', Math.round(C));
   },
 
   SetProgress(Pct) {
     const C = Clamp(Pct, 0, 100);
-    const { ProgressFill, ScrubberEl } = this.Elements;
-    ProgressFill.style.width = `${C}%`;
-    ScrubberEl.setAttribute('aria-valuenow', Math.round(C));
+    this.El.ProgressFill.style.width = `${C}%`;
+    this.El.Scrubber.setAttribute('aria-valuenow', Math.round(C));
   },
 
   SetCurrentTime(T) {
-    this.Elements.CurrentTimeEl.textContent = this.Elements.TrackCurrentEl.textContent = T;
+    this.El.CurrentTime.textContent = this.El.TrackCurrent.textContent = T;
   },
 
   SetDuration(T) {
-    this.Elements.DurationEl.textContent = this.Elements.TrackLengthEl.textContent = T;
-  },
-
-  BindAudioEvents() {
-    const { AudioElement: Audio, Elements: Els } = this;
-
-    Audio.addEventListener('play', () => { this.SetPlayState(true); this.SyncPlayButtons(); });
-    Audio.addEventListener('pause', () => { this.SetPlayState(false); this.SyncPlayButtons(); });
-    Audio.addEventListener('ended', () => {
-      this.SetPlayState(false);
-      this.SetProgress(0);
-      this.SetCurrentTime('0:00');
-      this.SyncPlayButtons();
-    });
-    Audio.addEventListener('loadedmetadata', () => this.SetDuration(FormatTime(Audio.duration)));
-    Audio.addEventListener('error', () => {
-      this.SetPlayState(false);
-      Els.TrackNameEl.textContent = 'Playback error, format not supported or unavailable';
-    });
-    Audio.addEventListener('timeupdate', () => {
-      if (!Audio.duration) return;
-      this.SetProgress((Audio.currentTime / Audio.duration) * 100);
-      this.SetCurrentTime(FormatTime(Audio.currentTime));
-      if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
-        navigator.mediaSession.setPositionState({
-          duration: Audio.duration,
-          playbackRate: Audio.playbackRate,
-          position: Audio.currentTime,
-        });
-      }
-    });
-  },
-
-  BindControls() {
-    const { AudioElement: Audio, Elements: Els } = this;
-
-    Els.PlayPauseBtn.addEventListener('click', () => {
-      if (Audio.paused) this.SafePlay();
-      else Audio.pause();
-    });
-
-    Els.CloseBtn.addEventListener('click', () => this.Close());
+    this.El.Duration.textContent = this.El.TrackLength.textContent = T;
   },
 
   BindSliders() {
-    const { AudioElement: Audio, Elements: Els } = this;
-    const { ScrubberEl, VolumeSlider } = Els;
-
-    const PctFromPointer = (Ev, El) => {
-      const Rect = El.getBoundingClientRect();
-      return Rect.width ? Clamp((Ev.clientX - Rect.left) / Rect.width, 0, 1) : 0;
+    const { Audio, El } = this;
+    const Dur = () => (Number.isFinite(Audio.duration) ? Audio.duration : 0);
+    const Slider = (Target, Seek, Step) => {
+      const Frac = Ev => {
+        const R = Target.getBoundingClientRect();
+        return R.width ? Clamp((Ev.clientX - R.left) / R.width, 0, 1) : 0;
+      };
+      Target.addEventListener('pointerdown', Ev => {
+        if (Ev.button > 0) return;
+        Target.setPointerCapture(Ev.pointerId);
+        Seek(Frac(Ev));
+      });
+      Target.addEventListener('pointermove', Ev => {
+        if (Target.hasPointerCapture(Ev.pointerId)) Seek(Frac(Ev));
+      });
+      Target.addEventListener('keydown', Ev => {
+        const Dir = ArrowDir[Ev.key];
+        if (!Dir) return;
+        Ev.preventDefault();
+        Step(Dir);
+      });
     };
-    const BindTouchSlider = (El, Handler) => {
-      El.addEventListener('touchstart', Ev => Handler(Ev.touches[0]), { passive: true });
-      El.addEventListener('touchmove', Ev => Handler(Ev.touches[0]), { passive: true });
-    };
 
-    let DraggingProgress = false;
-    let DraggingVolume = false;
-
-    ScrubberEl.addEventListener('mousedown', Ev => {
-      DraggingProgress = true;
-      if (Audio.duration) Audio.currentTime = PctFromPointer(Ev, ScrubberEl) * Audio.duration;
-    });
-    VolumeSlider.addEventListener('mousedown', Ev => {
-      DraggingVolume = true;
-      this.SetVolume(PctFromPointer(Ev, VolumeSlider) * 100);
-    });
-    window.addEventListener('mousemove', Ev => {
-      if (DraggingProgress && Audio.duration) Audio.currentTime = PctFromPointer(Ev, ScrubberEl) * Audio.duration;
-      if (DraggingVolume) this.SetVolume(PctFromPointer(Ev, VolumeSlider) * 100);
-    });
-    window.addEventListener('mouseup', () => { DraggingProgress = false; DraggingVolume = false; });
-
-    BindTouchSlider(ScrubberEl, T => { if (Audio.duration) Audio.currentTime = PctFromPointer(T, ScrubberEl) * Audio.duration; });
-    BindTouchSlider(VolumeSlider, T => this.SetVolume(PctFromPointer(T, VolumeSlider) * 100));
-
-    ScrubberEl.addEventListener('keydown', Ev => {
-      if (!Audio.duration) return;
-      const Step = Audio.duration * 0.02;
-      if (Ev.key === 'ArrowRight') { Ev.preventDefault(); Audio.currentTime = Math.min(Audio.duration, Audio.currentTime + Step); }
-      if (Ev.key === 'ArrowLeft') { Ev.preventDefault(); Audio.currentTime = Math.max(0, Audio.currentTime - Step); }
-    });
-  },
-
-  SetMediaSessionTrack(TrackName) {
-    if (!('mediaSession' in navigator)) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: TrackName,
-      artist: 'Mistape',
-    });
+    Slider(
+      El.Scrubber,
+      F => { if (Dur()) Audio.currentTime = F * Dur(); },
+      D => { if (Dur()) Audio.currentTime = Clamp(Audio.currentTime + D * Dur() * 0.02, 0, Dur()); },
+    );
+    Slider(El.Volume, F => this.SetVolume(F * 100), D => this.SetVolume(Audio.volume * 100 + D * 5));
   },
 
   BindMediaSession() {
-    if (!('mediaSession' in navigator)) return;
-    const { AudioElement: Audio } = this;
-    const Ms = navigator.mediaSession;
-    Ms.setActionHandler('play', () => this.SafePlay());
-    Ms.setActionHandler('pause', () => Audio.pause());
-    Ms.setActionHandler('stop', () => { Audio.pause(); Audio.currentTime = 0; });
-    Ms.setActionHandler('seekto', D => { if (D.seekTime !== undefined && Audio.duration) Audio.currentTime = D.seekTime; });
-    Ms.setActionHandler('seekbackward', D => { Audio.currentTime = Math.max(0, Audio.currentTime - (D.seekOffset || 10)); });
-    Ms.setActionHandler('seekforward', D => { Audio.currentTime = Math.min(Audio.duration || 0, Audio.currentTime + (D.seekOffset || 10)); });
+    if (!Ms) return;
+    const { Audio } = this;
+    const Handlers = {
+      play: () => this.Play(),
+      pause: () => Audio.pause(),
+      stop: () => { Audio.pause(); Audio.currentTime = 0; },
+      seekto: D => { if (D.seekTime !== undefined && Audio.duration) Audio.currentTime = D.seekTime; },
+      seekbackward: D => { Audio.currentTime = Math.max(0, Audio.currentTime - (D.seekOffset || 10)); },
+      seekforward: D => { Audio.currentTime = Math.min(Audio.duration || 0, Audio.currentTime + (D.seekOffset || 10)); },
+    };
+    for (const [Action, Handler] of Object.entries(Handlers)) {
+      try { Ms.setActionHandler(Action, Handler); } catch {}
+    }
   },
 };
 
-function CloseAllLinkDropdowns() {
-  if (!State.HasOpenDropdown) return;
-  document.querySelectorAll('.song-dropdown-menu.open').forEach(Menu => {
-    Menu.classList.remove('open');
-    Menu.style.position = '';
-    Menu.style.top = '';
-    Menu.style.left = '';
-    const Btn = Menu.previousElementSibling;
-    if (Btn) Btn.setAttribute('aria-expanded', 'false');
-  });
-  State.HasOpenDropdown = false;
+function SetDropdown(Btn, Menu, Open) {
+  Menu.classList.toggle('open', Open);
+  Btn.setAttribute('aria-expanded', String(Open));
+}
+
+function CloseLinkMenu() {
+  if (!OpenLinkMenu) return;
+  const Menu = OpenLinkMenu;
+  OpenLinkMenu = null;
+  SetDropdown(Menu.previousElementSibling, Menu, false);
+  Menu.removeAttribute('style');
 }
 
 function PositionDropdown(Menu, Btn) {
-  if (!Menu || !Btn) return;
-
-  const BtnRect = Btn.getBoundingClientRect();
+  const Rect = Btn.getBoundingClientRect();
   const Gap = 4;
-
-  const PrevVis = Menu.style.visibility;
-  Menu.style.visibility = 'hidden';
-  Menu.style.position = 'fixed';
-  Menu.style.top = '0';
-  Menu.style.left = '0';
-  Menu.style.right = 'auto';
-  Menu.style.margin = '0';
-
-  const MenuH = Menu.offsetHeight || 160;
-  Menu.style.visibility = PrevVis;
-
-  let Top = BtnRect.bottom + Gap;
-  let Left = BtnRect.right - Menu.offsetWidth;
-  if (Left < 4) Left = 4;
-  if (Top + MenuH > window.innerHeight - 8) Top = BtnRect.top - MenuH - Gap;
-
-  Menu.style.top = Top + 'px';
-  Menu.style.left = Left + 'px';
+  Object.assign(Menu.style, { position: 'fixed', top: '0', left: '0', right: 'auto', margin: '0', visibility: 'hidden' });
+  const { offsetWidth: W, offsetHeight: H } = Menu;
+  const Top = Rect.bottom + Gap + H > innerHeight - 8 ? Rect.top - H - Gap : Rect.bottom + Gap;
+  Menu.style.top = `${Math.max(4, Top)}px`;
+  Menu.style.left = `${Clamp(Rect.right - W, 4, Math.max(4, innerWidth - W - 4))}px`;
+  Menu.style.visibility = '';
 }
 
-function ToggleDropdown(Btn, Menu) {
-  const IsOpen = Menu.classList.toggle('open');
-  Btn.setAttribute('aria-expanded', String(IsOpen));
-  if (IsOpen) {
-    PositionDropdown(Menu, Btn);
+function ToggleLinkMenu(Btn) {
+  const Menu = Btn.nextElementSibling;
+  const WasOpen = Menu === OpenLinkMenu;
+  CloseLinkMenu();
+  if (WasOpen) return;
+  OpenLinkMenu = Menu;
+  SetDropdown(Btn, Menu, true);
+  PositionDropdown(Menu, Btn);
+}
+
+function ToggleNote(Toggle) {
+  const Expanded = Toggle.closest('.song-item').classList.toggle('expanded');
+  Toggle.setAttribute('aria-label', Expanded ? 'Hide note' : 'Show note');
+}
+
+function SetEra(Row, Open) {
+  Row.classList.toggle('active', Open);
+  Row.setAttribute('aria-expanded', String(Open));
+  Row.nextElementSibling.classList.toggle('open', Open);
+}
+
+function ToggleEra(Row) {
+  const Opening = Row !== OpenEra;
+  if (OpenEra) SetEra(OpenEra, false);
+  OpenEra = Opening ? Row : null;
+  if (!Opening) return;
+
+  SetEra(Row, true);
+  const Inner = Row.nextElementSibling.querySelector('.songs-inner');
+  if (!Inner.firstElementChild) {
+    Inner.innerHTML = SongsHtml(ShownEras[Row.dataset.era]);
+    AudioPlayer.Sync();
   }
+  Row.scrollIntoView({ behavior: ReducedMotion.matches ? 'auto' : 'smooth', block: 'nearest' });
 }
 
-function CloseDropdown(Btn, Menu) {
-  Menu.classList.remove('open');
-  Btn.setAttribute('aria-expanded', 'false');
-}
-
-function CollapsePanel(Panel) {
-  if (!OpenPanels.has(Panel)) return;
-  Panel.classList.remove('open');
-  OpenPanels.delete(Panel);
-  const EraRow = Panel.previousElementSibling;
-  if (EraRow) {
-    EraRow.classList.remove('active');
-    EraRow.setAttribute('aria-expanded', 'false');
-  }
-}
-
-function CollapseAllEraPanels() {
-  for (const Panel of OpenPanels) CollapsePanel(Panel);
-}
-
-function OpenPanel(Panel, EraRow) {
-  Panel.classList.add('open');
-  OpenPanels.add(Panel);
-  EraRow.classList.add('active');
-  EraRow.setAttribute('aria-expanded', 'true');
-}
-
-function BuildSongElement({ SongName, Quality, LinkString, Notes, TrackNumber, AvailLen, RecentEra, LeakDate }) {
-  const SafeNotes = (Notes || '').trim();
-  const HasNotes = SafeNotes !== '';
-
-  const Links = LinkString
-    ? LinkString.split(/[\s,]+/).map(U => U.trim()).filter(U => UrlPattern.test(U))
-    : [];
-
-  const AvailLower = (AvailLen || '').toLowerCase();
-  const IsRumoredOrConf = AvailLower.includes('rumored') || AvailLower.includes('confirmed');
-  const DisplayQuality = (Links.length > 0 || IsRumoredOrConf) ? Quality : 'Unavailable';
-  const DisplayQualLow = (DisplayQuality || '').toLowerCase();
-  const IsUnavailable = !DisplayQuality ||
-    DisplayQualLow.includes('unavail') ||
-    DisplayQualLow.includes('not avail');
-
-  let PlayBtnHtml = '';
-  let ResolvedDownload = '';
-  let LinksHtml = '';
+function SongHtml([Name, Quality, LinkString, Notes, LeakDate, AvailLen, RecentEra], Num) {
+  const Links = LinkString.split(/[\s,]+/).filter(U => UrlPattern.test(U));
+  const DisplayQuality = (Links.length || /rumored|confirmed/i.test(AvailLen)) ? Quality : 'Unavailable';
 
   const PillowsLink = Links.find(U => U.includes(PillowsHost));
-  if (PillowsLink && !IsUnavailable) {
-    const PathStart = PillowsLink.indexOf(PillowsHost) + PillowsHost.length;
-    const FilePath = PillowsLink.slice(PathStart);
-    ResolvedDownload = PillowsApi + FilePath;
-    PlayBtnHtml = `<button type="button" class="song-play-btn" data-name="${EscapeHtml(SongName)}">Play</button>`;
-  }
-
-  if (Links.length > 1) {
-    const Items = Links.map((Url, I) =>
-      `<a class="song-dropdown-item" href="${EscapeHtml(Url)}" target="_blank" rel="noopener noreferrer">Link ${I + 1}</a>`
-    ).join('');
-    LinksHtml = `
-      <div class="song-dropdown">
-        <button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false">
-          <span>Links</span>
-          <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
-        </button>
-        <div class="song-dropdown-menu" role="menu">${Items}</div>
-      </div>`;
-  } else if (Links.length === 1) {
-    LinksHtml = `<a class="song-link-btn" href="${EscapeHtml(Links[0])}" target="_blank" rel="noopener noreferrer">View</a>`;
-  }
-
-  const NoteToggleHtml = HasNotes
-    ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note"></div>`
+  const PlayUrl = PillowsLink && Quality && !UnavailRe.test(Quality)
+    ? new URL(PillowsApi + PillowsLink.slice(PillowsLink.indexOf(PillowsHost) + PillowsHost.length)).href
+    : '';
+  const PlayBtn = PlayUrl
+    ? `<button type="button" class="song-play-btn" data-name="${EscapeHtml(Name)}" data-src="${EscapeHtml(PlayUrl)}">Play</button>`
     : '';
 
-  const VersionMatch = VersionPattern.exec(SongName);
-  const VersionPillHtml = VersionMatch
-    ? `<div class="song-version-pill">${EscapeHtml(VersionMatch[1])}</div>`
+  let LinksHtml = '';
+  if (Links.length === 1) {
+    LinksHtml = Anchor('song-link-btn', Links[0], 'View');
+  } else if (Links.length > 1) {
+    const Items = Links.map((Url, I) => Anchor('song-dropdown-item', Url, `Link ${I + 1}`)).join('');
+    LinksHtml = `<div class="song-dropdown">${LinksBtnHtml}<div class="song-dropdown-menu" role="menu">${Items}</div></div>`;
+  }
+
+  const Version = VersionPattern.exec(Name);
+  const DisplayName = Version ? Name.replace(Version[0], '').replace(/\s{2,}/g, ' ').trim() : Name;
+
+  const TopRow = RecentEra
+    ? `<div class="song-top-row">${Div('song-era-pill', RecentEra)}${LeakDate ? Div('song-date-pill', FormatLeakDate(LeakDate)) : ''}</div>`
     : '';
-  const DisplayName = VersionMatch
-    ? SongName.replace(VersionMatch[0], '').replace(/\s{2,}/g, ' ').trim()
-    : SongName;
+  const Pills =
+    (Version ? Div('song-version-pill', Version[1]) : '') +
+    (DisplayQuality ? Div(`song-quality ${GetQualityClass(DisplayQuality)}`, DisplayQuality) : '') +
+    (AvailLen ? Div(`song-type ${GetAvailableLengthClass(AvailLen)}`, AvailLen) : '');
+  const NoteToggle = Notes ? '<div class="note-toggle" role="button" tabindex="0" aria-label="Show note"></div>' : '';
 
-  let DatePillHtml = '';
-  if (LeakDate) {
-    const Parsed = new Date(LeakDate);
-    if (isNaN(Parsed)) {
-      DatePillHtml = `<div class="song-date-pill">${EscapeHtml(LeakDate)}</div>`;
-    } else {
-      const Dd = String(Parsed.getUTCDate()).padStart(2, '0');
-      const Mm = String(Parsed.getUTCMonth() + 1).padStart(2, '0');
-      const Yyyy = Parsed.getUTCFullYear();
-      DatePillHtml = `<div class="song-date-pill">${Dd}/${Mm}/${Yyyy}</div>`;
-    }
-  }
-
-  let TopRowHtml = '';
-  if (RecentEra) {
-    TopRowHtml = `<div class="song-top-row"><div class="song-era-pill">${EscapeHtml(RecentEra)}</div>${DatePillHtml}</div>`;
-  }
-
-  const PillsHtml =
-    VersionPillHtml +
-    (DisplayQuality ? `<div class="song-quality ${GetQualityClass(DisplayQuality)}">${EscapeHtml(DisplayQuality)}</div>` : '') +
-    (AvailLen ? `<div class="song-type ${GetAvailableLengthClass(AvailLen)}">${EscapeHtml(AvailLen)}</div>` : '');
-
-  const SongEl = document.createElement('div');
-  SongEl.className = 'song-item';
-  SongEl.setAttribute('role', 'listitem');
-  SongEl.innerHTML = `
-    <div class="song-num">${TrackNumber}</div>
-    <div class="song-body">
-      ${TopRowHtml}
-      <div class="song-name" title="${EscapeHtml(SongName)}">${EscapeHtml(DisplayName)}</div>
-      <div class="song-pills">${PillsHtml}</div>
-    </div>
-    <div class="song-btns">${PlayBtnHtml}${LinksHtml}${NoteToggleHtml}</div>
-  `;
-
-  if (Links.length > 1) {
-    const DropBtn = SongEl.querySelector('.song-dropdown-btn');
-    const DropMenu = SongEl.querySelector('.song-dropdown-menu');
-    DropBtn.addEventListener('click', Ev => {
-      Ev.stopPropagation();
-      const WasOpen = DropMenu.classList.contains('open');
-      CloseAllLinkDropdowns();
-      if (!WasOpen) {
-        DropMenu.classList.add('open');
-        DropBtn.setAttribute('aria-expanded', 'true');
-        State.HasOpenDropdown = true;
-        PositionDropdown(DropMenu, DropBtn);
-      }
-    });
-  }
-
-  const PlayBtn = SongEl.querySelector('.song-play-btn');
-  if (PlayBtn && ResolvedDownload) {
-    AudioPlayer.RegisterPlayBtn(PlayBtn, ResolvedDownload);
-    PlayBtn.addEventListener('click', Ev => {
-      Ev.stopPropagation();
-      CloseAllLinkDropdowns();
-      AudioPlayer.PlayOrToggle(ResolvedDownload, PlayBtn.dataset.name);
-    });
-  }
-
-  if (HasNotes) {
-    const NoteEl = document.createElement('div');
-    NoteEl.className = 'song-note';
-    NoteEl.textContent = SafeNotes;
-    const NoteToggle = SongEl.querySelector('.note-toggle');
-    const ToggleNote = () => {
-      const Expanded = SongEl.classList.toggle('expanded');
-      NoteToggle.setAttribute('aria-label', Expanded ? 'Hide note' : 'Show note');
-    };
-    NoteToggle.addEventListener('click', Ev => { Ev.stopPropagation(); ToggleNote(); });
-    NoteToggle.addEventListener('keydown', Ev => {
-      if (Ev.key === 'Enter' || Ev.key === ' ') { Ev.preventDefault(); ToggleNote(); }
-    });
-    return [SongEl, NoteEl];
-  }
-
-  return [SongEl];
+  return `<div class="song-item" role="listitem">${Div('song-num', Num)}<div class="song-body">${TopRow}<div class="song-name" title="${EscapeHtml(Name)}">${EscapeHtml(DisplayName)}</div><div class="song-pills">${Pills}</div></div><div class="song-btns">${PlayBtn}${LinksHtml}${NoteToggle}</div></div>${Notes ? Div('song-note', Notes) : ''}`;
 }
 
-function RenderSongs(Songs, Container) {
-  const Frag = document.createDocumentFragment();
-  Songs.forEach(([Name, Quality, Link, Notes, LeakDate, AvailLen, RecentEra], Idx) => {
-    BuildSongElement({
-      SongName: Name,
-      Quality,
-      LinkString: Link,
-      Notes,
-      TrackNumber: Idx + 1,
-      AvailLen: AvailLen || '',
-      RecentEra: RecentEra || '',
-      LeakDate: LeakDate || '',
-    }).forEach(Node => Frag.appendChild(Node));
-  });
-  Container.appendChild(Frag);
-  AudioPlayer.SyncPlayButtons();
+const SongsHtml = Songs => Songs.map((Song, I) => SongHtml(Song, I + 1)).join('');
+
+function EraHtml(Era, Songs) {
+  const Desc = State.EraDescriptions[NormaliseKey(Era)];
+  return `<div class="era-wrap" role="listitem"><div class="era-row" role="button" tabindex="0" aria-expanded="false" data-era="${EscapeHtml(Era)}">${Div('era-row-name', Era)}<div class="era-row-right">${Div('era-pill', Songs.length)}<svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg></div></div><div class="songs-panel">${Desc ? Div('era-desc-block', Desc) : ''}<div class="songs-inner" role="list" aria-label="${EscapeHtml(Era)} songs"></div></div></div>`;
 }
 
-function BuildEraElement(Era, Songs) {
-  const EraWrap = document.createElement('div');
-  EraWrap.className = 'era-wrap';
-  EraWrap.setAttribute('role', 'listitem');
+function BuildVisibleEras(Filter) {
+  const Listed = ([, Quality, Link]) =>
+    IsQualityVisible(Quality) && (!State.ShowPlayableOnly || IsPlayable(Link, Quality));
+  const Named = ([Name]) => !Filter || Name.toLowerCase().includes(Filter);
+  const Entries = Object.entries(State.VaultData);
 
-  const EraRow = document.createElement('div');
-  EraRow.className = 'era-row';
-  EraRow.setAttribute('role', 'button');
-  EraRow.setAttribute('tabindex', '0');
-  EraRow.setAttribute('aria-expanded', 'false');
-  EraRow.innerHTML = `
-    <div class="era-row-name">${EscapeHtml(Era)}</div>
-    <div class="era-row-right">
-      <div class="era-pill">${Songs.length}</div>
-      <svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <polyline points="6,9 12,15 18,9"/>
-      </svg>
-    </div>
-  `;
-
-  const SongsPanel = document.createElement('div');
-  SongsPanel.className = 'songs-panel';
-
-  const EraDesc = State.EraDescriptions[NormaliseKey(Era)] || '';
-  if (EraDesc) {
-    const DescBlock = document.createElement('div');
-    DescBlock.className = 'era-desc-block';
-    DescBlock.textContent = EraDesc;
-    SongsPanel.appendChild(DescBlock);
+  if (State.CurrentTab === 'recent') {
+    // The newest RecentLimit songs are picked first; the search then narrows that list.
+    const Recent = Entries
+      .flatMap(([Era, Songs]) => Songs.filter(Listed).map(Song => ({ Era, Song, Ts: LeakTimestamp(Song[4]) })))
+      .sort((A, B) => B.Ts - A.Ts)
+      .slice(0, RecentLimit)
+      .map(({ Era, Song }) => [...Song.slice(0, 6), Era])
+      .filter(Named);
+    return Recent.length ? { 'Recent Leaks': Recent } : {};
   }
 
-  const SongsInner = document.createElement('div');
-  SongsInner.className = 'songs-inner';
-  SongsInner.setAttribute('role', 'list');
-  SongsInner.setAttribute('aria-label', `${Era} songs`);
-  SongsPanel.appendChild(SongsInner);
-
-  const Toggle = () => {
-    CloseAllLinkDropdowns();
-    if (OpenPanels.has(SongsPanel)) {
-      CollapsePanel(SongsPanel);
-    } else {
-      CollapseAllEraPanels();
-      OpenPanel(SongsPanel, EraRow);
-      EraRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      if (!SongsInner.dataset.loaded) {
-        SongsInner.dataset.loaded = '1';
-        RenderSongs(Songs, SongsInner);
-      }
-    }
-  };
-
-  EraRow.addEventListener('click', Toggle);
-  EraRow.addEventListener('keydown', Ev => {
-    if (Ev.key === 'Enter' || Ev.key === ' ') { Ev.preventDefault(); Toggle(); }
-  });
-
-  EraWrap.appendChild(EraRow);
-  EraWrap.appendChild(SongsPanel);
-  return EraWrap;
-}
-
-function BuildRecentEras(FilterLower) {
-  const Flat = [];
-  for (const [Era, Songs] of Object.entries(State.VaultData)) {
-    const EraLow = Era.toLowerCase();
-    for (const S of Songs) {
-      const [, Q] = S;
-      if (!IsQualityVisible(Q)) continue;
-      if (State.ShowPlayableOnly && !IsPlayable(S[2], Q)) continue;
-      Flat.push({ Era, EraLow, NameLow: S[0].toLowerCase(), Name: S[0], Quality: Q, Link: S[2], Notes: S[3], LeakDate: S[4] || '', AvailLen: S[5] || '' });
-    }
-  }
-  Flat.sort((A, B) => ParseDateToTimestamp(B.LeakDate) - ParseDateToTimestamp(A.LeakDate));
-
-  const Limit = 100;
-  const Pool = Flat.slice(0, Limit);
-  const Filtered = FilterLower
-    ? Pool.filter(S => S.NameLow.includes(FilterLower))
-    : Pool;
-
-  if (!Filtered.length) return {};
-  return {
-    'Recent Leaks': Filtered.map(S => [S.Name, S.Quality, S.Link, S.Notes, S.LeakDate, S.AvailLen, S.Era]),
-  };
-}
-
-function BuildVisibleEras(FilterLower) {
-  if (State.CurrentTab === 'recent') return BuildRecentEras(FilterLower);
-
-  const Markers = TabMarkers[State.CurrentTab] || null;
+  const Markers = TabMarkers[State.CurrentTab];
   const Result = {};
-  for (const [Era, Songs] of Object.entries(State.VaultData)) {
-    const EraLow = FilterLower ? Era.toLowerCase() : '';
-    let Matched = Songs.filter(([, Q]) => IsQualityVisible(Q));
-    if (State.ShowPlayableOnly) Matched = Matched.filter(([, Q, Link]) => IsPlayable(Link, Q));
-    if (Markers) Matched = Matched.filter(([N]) => Markers.some(M => N.includes(M)));
-    if (FilterLower) Matched = Matched.filter(([N]) => N.toLowerCase().includes(FilterLower));
+  for (const [Era, Songs] of Entries) {
+    const Matched = Songs.filter(S => Listed(S) && Named(S) && (!Markers || Markers.some(M => S[0].includes(M))));
     if (Matched.length) Result[Era] = Matched;
   }
   return Result;
 }
 
-function UpdateNavStats(Total) {
-  document.getElementById('nav-songs').textContent = Total.toLocaleString();
-}
+function RenderEras() {
+  if (!State.VaultData) return;
+  ShownEras = BuildVisibleEras(SearchBox.value.trim().toLowerCase());
+  const Eras = Object.entries(ShownEras);
+  OpenEra = OpenLinkMenu = null;
+  NavSongs.textContent = Eras.reduce((Sum, [, Songs]) => Sum + Songs.length, 0).toLocaleString();
 
-function RenderEras(SearchFilter) {
-  const EraListEl = document.getElementById('era-list');
-  if (!EraListEl || !State.VaultData) return;
-
-  const FilterLower = (SearchFilter || '').trim().toLowerCase();
-  const Visible = BuildVisibleEras(FilterLower);
-  const Keys = Object.keys(Visible);
-  const Total = Keys.reduce((Sum, K) => Sum + Visible[K].length, 0);
-
-  CollapseAllEraPanels();
-  CloseAllLinkDropdowns();
-  AudioPlayer.ClearPlayButtons();
-  UpdateNavStats(Total);
-
-  const Frag = document.createDocumentFragment();
-  if (!Keys.length) {
-    const Empty = document.createElement('div');
-    Empty.className = 'no-results';
-    Empty.textContent = 'No results found.';
-    Frag.appendChild(Empty);
+  if (!Eras.length) {
+    EraList.innerHTML = '<div class="no-results">No results found.</div>';
   } else if (State.CurrentTab === 'recent') {
-    for (const Era of Keys) {
-      const Wrap = document.createElement('div');
-      Wrap.className = 'songs-flat';
-      Wrap.setAttribute('role', 'list');
-      Wrap.setAttribute('aria-label', 'Recent songs');
-      RenderSongs(Visible[Era], Wrap);
-      Frag.appendChild(Wrap);
-    }
+    EraList.innerHTML = Eras
+      .map(([, Songs]) => `<div class="songs-flat" role="list" aria-label="Recent songs">${SongsHtml(Songs)}</div>`)
+      .join('');
+    AudioPlayer.Sync();
   } else {
-    for (const Era of Keys) {
-      Frag.appendChild(BuildEraElement(Era, Visible[Era]));
-    }
+    EraList.innerHTML = Eras.map(([Era, Songs]) => EraHtml(Era, Songs)).join('');
   }
-  EraListEl.replaceChildren(Frag);
-  OpenPanels.clear();
 }
+
+const LoadErrorText = ({ reason, message }) => ({
+  timeout: 'Request timed out, check your connection and try again.',
+  http: `Failed to load sheet (${message}), make sure it is publicly shared.`,
+  empty: 'The sheet loaded but no songs were found.',
+}[reason] ?? 'Failed to load data, check your connection or sheet permissions.');
 
 const VaultLoader = {
-  Worker: new Worker('vault_worker.js'),
-  LoadId: 0,
+  CachedJson: null,
 
-  Load(StatusEl = null) {
-    const LoadId = ++this.LoadId;
-    State.IsLoading = true;
-
-    const ShowError = Text => {
-      let Target = StatusEl;
-      if (!Target) {
-        Target = document.createElement('div');
-        document.getElementById('era-list').replaceChildren(Target);
-      }
-      Target.className = 'error-msg';
-      Target.textContent = Text;
-    };
-
-    this.Worker.postMessage({ type: 'ABORT' });
-    this.Worker.postMessage({ type: 'LOAD', sheetId: State.PrimarySheetId });
-
-    this.Worker.onmessage = ({ data }) => {
-      if (LoadId !== this.LoadId) return;
-
-      if (data.type === 'SUCCESS') {
-        State.IsLoading = false;
-        State.VaultData = data.EraMap;
-        State.EraDescriptions = data.EraDescs;
-        RenderEras('');
-        return;
-      }
-
-      if (data.type === 'ERROR') {
-        State.IsLoading = false;
-        const ErrText =
-          data.reason === 'timeout' ? 'Request timed out, check your connection and try reloading.'
-          : data.reason === 'http' ? `Failed to load sheet (${data.message}), make sure it is publicly shared.`
-          : 'Failed to load data, check your connection or sheet permissions.';
-        ShowError(ErrText);
-      }
-    };
-
-    this.Worker.onerror = () => {
-      if (LoadId !== this.LoadId) return;
-      State.IsLoading = false;
-      ShowError('An unexpected error occurred while loading data.');
-    };
+  Apply({ EraMap, EraDescs = {} }) {
+    State.VaultData = EraMap;
+    State.EraDescriptions = EraDescs;
+    RenderEras();
   },
 
-  Abort() {
-    this.Worker.postMessage({ type: 'ABORT' });
+  ReadCache() {
+    try {
+      const Json = localStorage.getItem(CacheKey);
+      const Data = Json && JSON.parse(Json);
+      if (!Data?.EraMap) return;
+      this.Apply(Data);
+      this.CachedJson = Json;
+    } catch {}
+  },
+
+  Fail(Text) {
+    State.IsLoading = false;
+    if (State.VaultData) return;
+    EraList.innerHTML = `<div class="error-msg"><span>${EscapeHtml(Text)} </span><button type="button" class="retry-btn">Retry</button></div>`;
+  },
+
+  Load() {
+    if (State.IsLoading) return;
+    State.IsLoading = true;
+    if (!State.VaultData) EraList.innerHTML = LoadingHtml;
+
+    let W;
+    try { W = new Worker('vault_worker.js'); } catch { this.Fail('Could not start the data loader in this browser.'); return; }
+
+    W.onmessage = ({ data }) => {
+      W.terminate();
+      if (data.type !== 'SUCCESS') { this.Fail(LoadErrorText(data)); return; }
+      State.IsLoading = false;
+      if (data.json === this.CachedJson) return;
+      this.Apply(JSON.parse(data.json));
+      this.CachedJson = data.json;
+      try { localStorage.setItem(CacheKey, data.json); } catch {}
+    };
+    W.onerror = Ev => {
+      Ev.preventDefault();
+      W.terminate();
+      this.Fail('An unexpected error occurred while loading data.');
+    };
+    W.postMessage(DefaultSheetId);
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  const SearchBox = document.getElementById('search-box');
-  const FilterBtn = document.getElementById('quality-filter-btn');
-  const FilterMenu = document.getElementById('quality-filter-menu');
-  const NavTabBtn = document.getElementById('nav-tab-btn');
-  const NavTabMenu = document.getElementById('nav-tab-menu');
-  const NavBtnLabel = document.getElementById('nav-btn-text');
+AudioPlayer.Init();
 
-  AudioPlayer.Init();
+for (const El of document.querySelectorAll('.nav-dropdown-item, .filter-item')) El.tabIndex = 0;
 
-  NavTabBtn.addEventListener('click', Ev => {
-    Ev.stopPropagation();
-    ToggleDropdown(NavTabBtn, NavTabMenu);
-  });
-  document.querySelectorAll('.nav-dropdown-item').forEach(Item => {
-    Item.addEventListener('click', () => {
-      CloseDropdown(NavTabBtn, NavTabMenu);
-      if (Item.dataset.tab === State.CurrentTab) return;
-      State.CurrentTab = Item.dataset.tab;
-      NavBtnLabel.textContent = Item.textContent.trim();
-      document.querySelectorAll('.nav-dropdown-item').forEach(N => N.classList.toggle('active', N === Item));
-      if (State.VaultData) RenderEras(SearchBox.value);
-    });
-  });
-
-  FilterBtn.addEventListener('click', Ev => {
-    Ev.stopPropagation();
-    ToggleDropdown(FilterBtn, FilterMenu);
-  });
-  FilterMenu.addEventListener('click', Ev => {
-    const Item = Ev.target.closest('.filter-item');
-    if (!Item) return;
-    const Key = Item.dataset.quality;
-    if (State.ActiveQualities.has(Key)) {
-      if (State.ActiveQualities.size === 1) return;
-      State.ActiveQualities.delete(Key);
-      Item.classList.remove('active');
-      Item.setAttribute('aria-checked', 'false');
-    } else {
-      State.ActiveQualities.add(Key);
-      Item.classList.add('active');
-      Item.setAttribute('aria-checked', 'true');
-    }
-    if (State.VaultData) RenderEras(SearchBox.value);
-  });
-
-  SearchBox.addEventListener('input', Ev => {
-    clearTimeout(State.SearchDebounceId);
-    State.SearchDebounceId = setTimeout(() => {
-      if (State.VaultData) RenderEras(Ev.target.value);
-    }, 200);
-  });
-
-  document.addEventListener('keydown', Ev => {
-    if (Ev.key === '/' && document.activeElement !== SearchBox) {
-      Ev.preventDefault();
-      SearchBox.focus();
-    }
-    if (Ev.key === 'Escape') {
-      SearchBox.blur();
-      CloseDropdown(FilterBtn, FilterMenu);
-      CloseDropdown(NavTabBtn, NavTabMenu);
-      CloseAllLinkDropdowns();
-    }
-  });
-
-  document.addEventListener('click', Ev => {
-    if (!FilterMenu.contains(Ev.target) && Ev.target !== FilterBtn) CloseDropdown(FilterBtn, FilterMenu);
-    if (!NavTabMenu.contains(Ev.target) && !NavTabBtn.contains(Ev.target)) CloseDropdown(NavTabBtn, NavTabMenu);
-    if (!Ev.target.closest('.song-dropdown')) CloseAllLinkDropdowns();
-  });
-
-  window.addEventListener('scroll', CloseAllLinkDropdowns, { passive: true });
-  window.addEventListener('resize', CloseAllLinkDropdowns);
-
-  const SettingsBtn = document.getElementById('settings-btn');
-  const Modal = document.getElementById('settings-modal');
-  const CloseBtn = document.getElementById('settings-close-btn');
-  const PlayableToggle = document.getElementById('playable-only-toggle');
-
-  const SyncToggleUi = () => {
-    PlayableToggle?.setAttribute('aria-checked', String(State.ShowPlayableOnly));
-  };
-
-  PlayableToggle?.addEventListener('click', () => {
-    State.ShowPlayableOnly = PlayableToggle.getAttribute('aria-checked') !== 'true';
-    SyncToggleUi();
-    if (State.VaultData) {
-      RenderEras(SearchBox.value);
-    }
-  });
-
-  const OpenModal = () => {
-    SyncToggleUi();
-    Modal.removeAttribute('hidden');
-  };
-  const CloseModal = () => { Modal.setAttribute('hidden', ''); };
-
-  SettingsBtn.addEventListener('click', Ev => { Ev.stopPropagation(); OpenModal(); });
-  CloseBtn.addEventListener('click', CloseModal);
-  Modal.addEventListener('click', Ev => { if (Ev.target === Modal) CloseModal(); });
-  document.addEventListener('keydown', Ev => {
-    if (Ev.key === 'Escape' && !Modal.hasAttribute('hidden')) CloseModal();
-  });
-
-  VaultLoader.Load();
+EraList.addEventListener('click', ({ target }) => {
+  const El = target.closest('.era-row, .song-play-btn, .song-dropdown-btn, .note-toggle, .retry-btn');
+  if (!El) return;
+  if (El.classList.contains('era-row')) ToggleEra(El);
+  else if (El.classList.contains('song-play-btn')) AudioPlayer.PlayOrToggle(El.dataset.src, El.dataset.name);
+  else if (El.classList.contains('song-dropdown-btn')) ToggleLinkMenu(El);
+  else if (El.classList.contains('note-toggle')) ToggleNote(El);
+  else VaultLoader.Load();
 });
+
+for (const [Btn, Menu] of Menus) {
+  Btn.addEventListener('click', () => SetDropdown(Btn, Menu, !Menu.classList.contains('open')));
+}
+
+NavTabMenu.addEventListener('click', ({ target }) => {
+  const Item = target.closest('.nav-dropdown-item');
+  if (!Item) return;
+  SetDropdown(NavTabBtn, NavTabMenu, false);
+  if (Item.dataset.tab === State.CurrentTab) return;
+  State.CurrentTab = Item.dataset.tab;
+  ById('nav-btn-text').textContent = Item.textContent.trim();
+  for (const Other of NavTabMenu.querySelectorAll('.nav-dropdown-item')) Other.classList.toggle('active', Other === Item);
+  RenderEras();
+});
+
+FilterMenu.addEventListener('click', ({ target }) => {
+  const Item = target.closest('.filter-item');
+  if (!Item) return;
+  const Key = Item.dataset.quality;
+  const Enable = !State.ActiveQualities.has(Key);
+  if (!Enable && State.ActiveQualities.size === 1) return;
+  if (Enable) State.ActiveQualities.add(Key);
+  else State.ActiveQualities.delete(Key);
+  Item.classList.toggle('active', Enable);
+  Item.setAttribute('aria-checked', String(Enable));
+  QualityVisCache.clear();
+  RenderEras();
+});
+
+let SearchTimer;
+SearchBox.addEventListener('input', () => {
+  clearTimeout(SearchTimer);
+  SearchTimer = setTimeout(RenderEras, 200);
+});
+
+const PlayableToggle = ById('playable-only-toggle');
+PlayableToggle.addEventListener('click', () => {
+  State.ShowPlayableOnly = PlayableToggle.getAttribute('aria-checked') !== 'true';
+  PlayableToggle.setAttribute('aria-checked', String(State.ShowPlayableOnly));
+  RenderEras();
+});
+
+const CloseModalBtn = ById('settings-close-btn');
+const CloseModal = () => { Modal.hidden = true; SettingsBtn.focus(); };
+SettingsBtn.addEventListener('click', () => { Modal.hidden = false; CloseModalBtn.focus(); });
+CloseModalBtn.addEventListener('click', CloseModal);
+Modal.addEventListener('click', ({ target }) => { if (target === Modal) CloseModal(); });
+
+document.addEventListener('click', ({ target }) => {
+  for (const [Btn, Menu] of Menus) {
+    if (!Btn.contains(target) && !Menu.contains(target)) SetDropdown(Btn, Menu, false);
+  }
+  if (!target.closest('.song-dropdown')) CloseLinkMenu();
+});
+
+document.addEventListener('keydown', Ev => {
+  const { key, target } = Ev;
+  if (key === 'Escape') {
+    SearchBox.blur();
+    for (const [Btn, Menu] of Menus) SetDropdown(Btn, Menu, false);
+    CloseLinkMenu();
+    if (!Modal.hidden) CloseModal();
+  } else if (key === '/' && !Ev.ctrlKey && !Ev.metaKey && !Ev.altKey && Modal.hidden && !target.matches('input, textarea, select')) {
+    Ev.preventDefault();
+    SearchBox.focus();
+  } else if ((key === 'Enter' || key === ' ') && target.matches(ButtonLike)) {
+    Ev.preventDefault();
+    target.click();
+  }
+});
+
+addEventListener('scroll', CloseLinkMenu, { passive: true });
+addEventListener('resize', CloseLinkMenu);
+addEventListener('online', () => { if (!State.VaultData) VaultLoader.Load(); });
+
+VaultLoader.ReadCache();
+VaultLoader.Load();

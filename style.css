@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,400&display=swap');
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial');
+  size-adjust: 107.4%;
+  ascent-override: 90.2%;
+  descent-override: 22.5%;
+  line-gap-override: 0%;
+}
 
 :root {
   --bg:        #121212;
@@ -9,8 +16,8 @@
   --border-h:  rgba(255,255,255,.11);
 
   --text-1: #D6D3CE;
-  --text-2: #989898;
-  --text-3: #707070;
+  --text-2: #A8A8A8;
+  --text-3: #8A8A8A;
 
   --accent:             #4F8FE8;
   --accent-dim:         rgba(79,143,232,.10);
@@ -57,13 +64,29 @@
   --s4: 1rem;
   --s5: 1.5rem;
 
+  /* Type scale (phone). Larger on desktop, see the media query below. */
   --t-xs:   0.5625rem;
   --t-sm:   0.625rem;
   --t-base: 0.6875rem;
   --t-md:   0.75rem;
   --t-lg:   0.8125rem;
+  --t-xl:   0.875rem;
 
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --w-regular: 400;
+  --w-medium:  500;
+  --w-semi:    600;
+
+  --lh-prose: 1.7;
+
+  /* Letter-spacing: one value per job */
+  --track-title: -0.01em;
+  --track-ui:     0.01em;
+  --track-caps:   0.06em;
+  --track-wide:   0.12em;
+
+  --font: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif,
+          'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 
   --ctrl-h: 2.125rem;
   --r:      9px;
@@ -84,6 +107,17 @@
   --z-modal:  9000;
 }
 
+@media (min-width: 48rem) {
+  :root {
+    --t-xs:   0.625rem;
+    --t-sm:   0.6875rem;
+    --t-base: 0.75rem;
+    --t-md:   0.8125rem;
+    --t-lg:   0.9375rem;
+    --t-xl:   1.0625rem;
+  }
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0; padding: 0;
@@ -96,7 +130,11 @@ body {
   font-family: var(--font);
   font-size: var(--t-md);
   line-height: 1.6;
-  font-feature-settings: 'kern' 1, 'liga' 1;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+  font-optical-sizing: auto;
+  font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -122,6 +160,7 @@ button, input, select, [role="button"], a,
 [role="menuitem"], [role="menuitemcheckbox"] {
   outline: none !important;
   font-family: inherit;
+  font-feature-settings: inherit;
 }
 button:focus-visible, input:focus-visible, select:focus-visible,
 [role="button"]:focus-visible, a:focus-visible,
@@ -145,22 +184,22 @@ button:focus-visible, input:focus-visible, select:focus-visible,
 
 .nav-logo       { display: flex; flex-direction: column; gap: 2px; justify-self: start; }
 .nav-logo-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  letter-spacing: -.01em;
+  font-size: var(--t-xl);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-title);
   color: var(--text-1); line-height: 1;
 }
 .nav-logo-sub {
-  font-size: 0.5rem;
-  font-weight: 400;
-  letter-spacing: .16em; text-transform: uppercase;
+  font-size: var(--t-xs);
+  font-weight: var(--w-regular);
+  letter-spacing: var(--track-wide); text-transform: uppercase;
   color: var(--text-3); line-height: 1;
 }
 
 .nav-stats { display: flex; gap: var(--s3); align-items: center; justify-self: end; }
 .nav-stat  {
   font-size: var(--t-xs); color: var(--text-3);
-  letter-spacing: .04em; font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-ui); font-variant-numeric: tabular-nums;
 }
 .nav-stat span { color: var(--text-2); }
 
@@ -174,8 +213,8 @@ button:focus-visible, input:focus-visible, select:focus-visible,
   border: 1px solid var(--border);
   border-radius: var(--r);
   color: var(--text-2);
-  font-size: var(--t-base); font-weight: 500;
-  letter-spacing: .02em; cursor: pointer; white-space: nowrap;
+  font-size: var(--t-base); font-weight: var(--w-medium);
+  letter-spacing: var(--track-ui); cursor: pointer; white-space: nowrap;
   transition: border-color var(--ease), color var(--ease), background var(--ease);
 }
 .nav-dropdown-btn:hover,
@@ -206,7 +245,7 @@ button:focus-visible, input:focus-visible, select:focus-visible,
 .filter-item {
   padding: 0.375rem var(--s3);
   border-radius: var(--r-sm);
-  color: var(--text-2); font-size: var(--t-base); font-weight: 500;
+  color: var(--text-2); font-size: var(--t-base); font-weight: var(--w-medium);
   cursor: pointer; user-select: none;
   transition: background var(--ease), color var(--ease);
 }
@@ -296,10 +335,10 @@ main {
 .era-row.active { background: var(--surface-h); }
 
 .era-row-name {
-  font-size: var(--t-lg); font-weight: 600;
+  font-size: var(--t-lg); font-weight: var(--w-semi);
   color: var(--text-1); flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  letter-spacing: -.005em;
+  letter-spacing: var(--track-title);
 }
 
 .era-row-right {
@@ -307,7 +346,7 @@ main {
 }
 .era-pill {
   font-size: var(--t-xs); color: var(--text-3);
-  font-variant-numeric: tabular-nums; letter-spacing: .04em;
+  font-variant-numeric: tabular-nums; letter-spacing: var(--track-ui);
   min-width: 1.125rem; text-align: right;
 }
 .era-chevron {
@@ -317,10 +356,10 @@ main {
 .era-row.active .era-chevron { transform: rotate(180deg); }
 
 .era-desc-block {
-  font-size: var(--t-sm); color: var(--text-3);
-  line-height: 1.75; font-style: italic;
-  padding: var(--s3) var(--s4);
-  max-width: var(--prose-max);
+  font-size: var(--t-base); color: var(--text-2);
+  line-height: var(--lh-prose);
+  text-align: center; text-wrap: balance;
+  padding: var(--s3) max(var(--s4), calc((100% - var(--prose-max)) / 2));
   border-bottom: 1px solid var(--border);
 }
 
@@ -328,8 +367,8 @@ main {
 .songs-panel.open { display: block; }
 
 .stems-category-divider {
-  font-size: var(--t-xs); font-weight: 600; color: var(--text-3);
-  text-transform: uppercase; letter-spacing: .06em;
+  font-size: var(--t-xs); font-weight: var(--w-semi); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: var(--track-caps);
   padding: var(--s2) var(--s4);
   background: var(--surface-h);
   border-top: 1px solid var(--border);
@@ -359,16 +398,17 @@ main {
   align-self: center;
   font-size: var(--t-xs); color: var(--text-3);
   text-align: right; font-variant-numeric: tabular-nums;
-  letter-spacing: .02em; line-height: 1;
+  letter-spacing: var(--track-ui); line-height: 1;
 }
 .song-item:hover .song-num { color: var(--text-2); }
 
 .song-body { display: flex; flex-direction: column; gap: 0.3125rem; min-width: 0; }
 .song-name {
-  font-size: var(--t-md); font-weight: 400;
+  font-size: var(--t-md); font-weight: var(--w-regular);
   color: var(--text-2); white-space: normal;
   line-height: 1.5; word-break: break-word;
-  transition: color var(--ease); letter-spacing: .005em;
+  transition: color var(--ease); letter-spacing: var(--track-ui);
+  text-wrap: pretty;
 }
 .song-item:hover .song-name { color: var(--text-1); }
 
@@ -383,15 +423,15 @@ main {
 .song-era-pill,
 .song-version-pill,
 .song-date-pill {
-  font-size: 0.5625rem;
-  font-weight: 500;
-  letter-spacing: .06em;
+  font-size: var(--t-xs);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-ui);
   padding: 2px 6px;
   border-radius: 99px;
   white-space: nowrap; line-height: 1.6;
   font-variant-numeric: tabular-nums;
 }
-.song-quality, .song-type { text-transform: uppercase; }
+.song-quality, .song-type, .song-version-pill { text-transform: uppercase; letter-spacing: var(--track-caps); }
 
 .q-high     { color: var(--c-green);  background: var(--c-green-strong); }
 .q-cd       { color: var(--c-cyan);   background: var(--c-cyan-strong); }
@@ -417,7 +457,7 @@ main {
   color: var(--text-3); background: var(--hairline-soft);
   max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis;
 }
-.song-version-pill { color: var(--text-1); background: var(--hairline-strong); text-transform: uppercase; }
+.song-version-pill { color: var(--text-1); background: var(--hairline-strong); }
 .song-date-pill    { color: var(--text-3); background: none; }
 
 .song-link-btn,
@@ -430,10 +470,10 @@ main {
   background: transparent;
   border: 1px solid var(--border-h);
   color: var(--text-2);
-  font-size: var(--t-sm); font-weight: 500;
+  font-size: var(--t-sm); font-weight: var(--w-medium);
   text-decoration: none; cursor: pointer; white-space: nowrap;
   transition: border-color var(--ease), color var(--ease), background var(--ease);
-  letter-spacing: .02em;
+  letter-spacing: var(--track-ui);
 }
 .song-link-btn:hover,
 .song-download-btn:hover,
@@ -497,9 +537,8 @@ main {
 
 .song-note {
   font-size: var(--t-sm); color: var(--text-3);
-  line-height: 1.75; font-style: italic;
-  padding: var(--s2) var(--s4) var(--s3) 2.5rem;
-  max-width: var(--prose-max);
+  line-height: var(--lh-prose); text-wrap: pretty;
+  padding: var(--s2) max(var(--s4), calc(100% - 2.5rem - var(--prose-max))) var(--s3) 2.5rem;
   display: none; border-top: 1px solid var(--border);
 }
 .song-item.expanded + .song-note { display: block; }
@@ -508,7 +547,7 @@ main {
 .song-dropdown-menu { min-width: 6.875rem; z-index: var(--z-song-d); }
 .song-dropdown-item {
   padding: 0.375rem var(--s3); border-radius: var(--r-sm);
-  color: var(--text-2); font-size: var(--t-sm); font-weight: 500;
+  color: var(--text-2); font-size: var(--t-sm); font-weight: var(--w-medium);
   text-decoration: none; cursor: pointer; user-select: none;
   transition: background var(--ease), color var(--ease);
 }
@@ -533,8 +572,8 @@ main {
   display: flex; flex-direction: column; gap: 2px;
 }
 .player-track-name {
-  font-size: var(--t-base); font-weight: 500;
-  letter-spacing: .01em;
+  font-size: var(--t-base); font-weight: var(--w-medium);
+  letter-spacing: var(--track-ui);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: block; color: var(--text-1);
 }
@@ -577,7 +616,7 @@ main {
 .player-time {
   font-size: var(--t-xs); color: var(--text-3);
   font-variant-numeric: tabular-nums;
-  flex-shrink: 0; width: 1.75rem;
+  flex-shrink: 0; width: 2rem;
 }
 #player-current  { text-align: right; }
 #player-duration { text-align: left; }
@@ -609,7 +648,7 @@ main {
 .loading-msg {
   padding: 5rem var(--s3); text-align: center;
   font-size: var(--t-sm); color: var(--text-3);
-  letter-spacing: .1em; text-transform: uppercase;
+  letter-spacing: var(--track-wide); text-transform: uppercase;
 }
 .no-results, .error-msg {
   text-align: center; padding: 5rem var(--s3); font-size: var(--t-md);
@@ -623,7 +662,7 @@ main {
 }
 .footer-text {
   font-size: var(--t-xs); color: var(--text-3);
-  letter-spacing: .04em; line-height: 1.8;
+  letter-spacing: var(--track-ui); line-height: var(--lh-prose);
 }
 
 .settings-btn {
@@ -659,8 +698,8 @@ main {
   margin-bottom: var(--s1);
 }
 .settings-modal-title {
-  font-size: var(--t-lg); font-weight: 600;
-  color: var(--text-1); letter-spacing: .02em;
+  font-size: var(--t-lg); font-weight: var(--w-semi);
+  color: var(--text-1); letter-spacing: var(--track-title);
 }
 .settings-close-btn {
   background: none; border: none; color: var(--text-3);
@@ -683,8 +722,8 @@ main {
 .settings-artist-select option { background: var(--surface); color: var(--text-1); }
 
 .settings-label {
-  font-size: var(--t-sm); font-weight: 500;
-  color: var(--text-2); letter-spacing: .04em; text-transform: uppercase;
+  font-size: var(--t-sm); font-weight: var(--w-medium);
+  color: var(--text-2); letter-spacing: var(--track-caps); text-transform: uppercase;
 }
 .settings-rate-msg { font-size: var(--t-sm); color: var(--c-red); line-height: 1.5; }
 
@@ -694,20 +733,20 @@ main {
 .settings-reset-btn,
 .settings-apply-btn {
   border-radius: var(--r); border: none; cursor: pointer;
-  font-size: var(--t-base); font-weight: 500;
-  padding: 0.5625rem var(--s4); transition: opacity var(--ease); letter-spacing: .02em;
+  font-size: var(--t-base); font-weight: var(--w-medium);
+  padding: 0.5625rem var(--s4); transition: opacity var(--ease); letter-spacing: var(--track-ui);
 }
 .settings-reset-btn:hover,
 .settings-apply-btn:hover    { opacity: .78; }
 .settings-apply-btn:disabled { opacity: .3; cursor: not-allowed; }
 .settings-reset-btn { background: var(--surface-h); color: var(--text-2); border: 1px solid var(--border); }
-.settings-apply-btn { background: var(--accent); color: var(--accent-on); font-weight: 600; }
+.settings-apply-btn { background: var(--accent); color: var(--accent-on); font-weight: var(--w-semi); }
 
 .settings-toggle-row {
   display: flex; align-items: center; justify-content: space-between; padding: 2px 0;
 }
 .settings-toggle-label {
-  font-size: var(--t-sm); font-weight: 500;
+  font-size: var(--t-base); font-weight: var(--w-medium);
   color: var(--text-2); cursor: pointer; user-select: none;
 }
 .settings-toggle {
@@ -753,6 +792,7 @@ main {
   .era-list       { gap: 0.25rem; }
   .era-row        { padding: 0.75rem var(--s3); }
   .era-row-name   { font-size: var(--t-md); }
+  .era-desc-block { text-align: left; text-wrap: pretty; }
 
   .song-item {
     grid-template-columns: 1.375rem 1fr auto;
@@ -791,5 +831,12 @@ main {
   align-items: center; justify-content: center;
   min-height: 100dvh; gap: var(--s2); padding: var(--s4); text-align: center;
 }
-.no-js-title { font-size: 0.875rem; font-weight: 600; color: var(--text-1); }
+.no-js-title { font-size: 0.875rem; font-weight: var(--w-semi); color: var(--text-1); }
 .no-js-msg   { font-size: var(--t-base); color: var(--text-3); }
+.retry-btn {
+  margin-left: var(--s3); padding: var(--s2) var(--s4);
+  background: var(--accent-dim); color: var(--accent);
+  border: 1px solid var(--accent-edge); border-radius: 6px;
+  cursor: pointer; font: inherit;
+}
+.retry-btn:hover { background: var(--accent-mid); }

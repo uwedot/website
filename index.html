@@ -16,6 +16,7 @@
   <link rel="manifest" href="icos/site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..600&display=swap" />
   <title>MISTAPE</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -53,7 +54,7 @@
   </div>
 
   <div class="nav-stats" aria-label="Stats">
-    <div class="nav-stat">Songs: <span id="nav-songs">-</span></div>
+    <div class="nav-stat" aria-live="polite">Songs: <span id="nav-songs">-</span></div>
     <button type="button" id="settings-btn" class="settings-btn" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2" aria-hidden="true">
@@ -101,7 +102,7 @@
   </div>
 
   <div class="era-list" id="era-list"
-       role="list" aria-live="polite" aria-label="Era list">
+       role="list" aria-label="Era list">
     <div class="loading-msg">Loading data…</div>
   </div>
 </main>
