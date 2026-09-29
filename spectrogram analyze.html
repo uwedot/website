@@ -81,7 +81,7 @@ const PAL={
 spek:[[0,0,0,0],[.1,0,0,110],[.3,122,10,156],[.5,208,28,60],[.7,245,116,26],[.88,252,230,30],[1,255,255,255]],
 magma:[[0,0,0,4],[.25,81,18,124],[.5,183,55,121],[.75,252,137,97],[1,252,253,191]],
 gray:[[0,0,0,0],[1,255,255,255]]};
-let audio=null,sr=0,name='',note='',chans=[],mats=[],rows=0,cols=0,job=0,geo=null,bw=0,logScale=false,fmt=['Unknown',null],cutoffHz=0,vj=0,declBits=0,tag=null;
+let audio=null,sr=0,name='',note='',chans=[],mats=[],rows=0,cols=0,job=0,geo=null,bw=0,logScale=false,fmt=['Unknown',null],cutoffHz=0,vj=0;
 
 function lut(n){const s=PAL[n],o=new Uint8Array(3072);for(let i=0;i<1024;i++){const t=i/1023;let k=1;while(k<s.length-1&&s[k][0]<t)k++;const a=s[k-1],b=s[k],f=(t-a[0])/(b[0]-a[0]);for(let j=0;j<3;j++)o[i*3+j]=a[j+1]+(b[j+1]-a[j+1])*f}return o}
 function fmtT(t){if(t>=60){const m=Math.floor(t/60),s=Math.floor(t%60);return m+':'+String(s).padStart(2,'0')}return +t.toFixed(2)+'s'}
@@ -92,10 +92,10 @@ const uAt=f=>logScale?Math.log(f/20)/Math.log(sr/40):f/(sr/2);
 function detectRate(buf){
 const b=new Uint8Array(buf),dv=new DataView(buf),L=b.length;
 const tag=(i,s)=>{if(i<0||i+s.length>L)return false;for(let k=0;k<s.length;k++)if(b[i+k]!==s.charCodeAt(k))return false;return true};
-fmt=['Unknown',null];declBits=0;
-if(tag(0,'RIFF')||tag(0,'RF64')){let p=12;while(p+8<=L){const sz=dv.getUint32(p+4,true);if(tag(p,'fmt ')){const t=dv.getUint16(p+8,true);declBits=dv.getUint16(p+22,true);fmt=t===1||t===3||t===65534?['WAV (PCM)',false]:t===85?['MP3 in WAV',true]:['WAV (codec '+t+')',true];return dv.getUint32(p+12,true)}p+=8+sz+(sz&1)}}
-if(tag(0,'FORM')&&tag(8,'AIF')){fmt=['AIFF',false];let p=12;while(p+8<=L){const sz=dv.getUint32(p+4,false);if(tag(p,'COMM')){declBits=dv.getUint16(p+14,false);const e=dv.getUint16(p+16,false),m=dv.getUint32(p+18,false);return Math.round(m*Math.pow(2,e-16414))}p+=8+sz+(sz&1)}}
-if(tag(0,'fLaC')){fmt=['FLAC',false];declBits=(((b[20]&1)<<4)|(b[21]>>4))+1;return(b[18]<<12)|(b[19]<<4)|(b[20]>>4)}
+fmt=['Unknown',null];
+if(tag(0,'RIFF')||tag(0,'RF64')){let p=12;while(p+8<=L){const sz=dv.getUint32(p+4,true);if(tag(p,'fmt ')){const t=dv.getUint16(p+8,true);fmt=t===1||t===3||t===65534?['WAV (PCM)',false]:t===85?['MP3 in WAV',true]:['WAV (codec '+t+')',true];return dv.getUint32(p+12,true)}p+=8+sz+(sz&1)}}
+if(tag(0,'FORM')&&tag(8,'AIF')){fmt=['AIFF',false];let p=12;while(p+8<=L){const sz=dv.getUint32(p+4,false);if(tag(p,'COMM')){const e=dv.getUint16(p+16,false),m=dv.getUint32(p+18,false);return Math.round(m*Math.pow(2,e-16414))}p+=8+sz+(sz&1)}}
+if(tag(0,'fLaC')){fmt=['FLAC',false];return(b[18]<<12)|(b[19]<<4)|(b[20]>>4)}
 if(tag(0,'OggS')){const e=Math.min(L-20,8192);for(let i=0;i<e;i++){if(b[i]===1&&tag(i+1,'vorbis')){fmt=['Ogg Vorbis',true];return dv.getUint32(i+12,true)}if(tag(i,'OpusHead')){fmt=['Opus',true];return 48000}if(tag(i,'\x7fFLAC')){fmt=['Ogg FLAC',false];return(b[i+27]<<12)|(b[i+28]<<4)|(b[i+29]>>4)}}}
 if(tag(0,'wvpk')){fmt=['WavPack',false];return 0}if(tag(0,'MAC ')){fmt=["Monkey's Audio",false];return 0}if(tag(0,'\x1a\x45\xdf\xa3')){fmt=['Matroska/WebM',null];return 0}
 if(tag(4,'ftyp')){for(let i=0;i<L-32;i++){if(tag(i,'mp4a')){fmt=['AAC (M4A)',true];return dv.getUint16(i+28,false)}if(tag(i,'alac')){fmt=['ALAC',false];return dv.getUint16(i+28,false)}}}
@@ -105,27 +105,11 @@ for(let i=p;i<e;i++){if(b[i]===255&&(b[i+1]&246)===240){const ix=(b[i+2]>>2)&15;
 if(b[i]===255&&(b[i+1]&224)===224){const v=(b[i+1]>>3)&3,ly=(b[i+1]>>1)&3,ix=(b[i+2]>>2)&3;if(v===1||ly===0||ix===3)continue;const t={3:[44100,48000,32000],2:[22050,24000,16000],0:[11025,12000,8000]};fmt=['MP3',true];return t[v][ix]}}
 return 0}
 
-function encTag(buf){
-const b=new Uint8Array(buf,0,Math.min(buf.byteLength,65536)),L=b.length;
-const txt=(p,n)=>{let s='';for(let k=0;k<n&&p+k<L&&b[p+k]>=32&&b[p+k]<127;k++)s+=String.fromCharCode(b[p+k]);return s};
-const at=s=>{for(let i=0;i<=L-s.length;i++){let k=0;while(k<s.length&&b[i+k]===s.charCodeAt(k))k++;if(k===s.length)return i}return-1};
-let p=at('LAME');
-if(p>=0){const n=txt(p,9);if(/^LAME\d/.test(n))return{name:n,lp:b[p+10]*100}}
-for(const s of['ENCODER=','libFLAC','Lavf','Lavc']){p=at(s);if(p>=0)return{name:txt(p,40),lp:0}}
-return null}
-
-function gridBits(d,len,stride){
-const u=new Set();
-for(let i=0;i<len&&u.size<20000;i+=stride){const x=Math.abs(d[i]);if(x>0)u.add(x)}
-const v=Array.from(u).sort((a,b)=>a-b);
-if(v.length<200)return 0;
-let step=Infinity;
-for(let i=1;i<v.length;i++)step=Math.min(step,v[i]-v[i-1]);
-if(!(step>5e-8))return 0;
-let fit=0,q=step;
-for(const x of v){const r=x/q,n=Math.round(r);if(n>=1&&Math.abs(r-n)<.25){fit++;q=x/n}}
-return fit>=.98*v.length?Math.log2(1/q)+1:0}
-
+let declBits=0;
+function readBits(buf){const b=new Uint8Array(buf),dv=new DataView(buf),L=b.length,tg=(i,t)=>{if(i+t.length>L)return false;for(let k=0;k<t.length;k++)if(b[i+k]!==t.charCodeAt(k))return false;return true};declBits=0;
+if(tg(0,'RIFF')||tg(0,'RF64')){let p=12;while(p+8<=L){const sz=dv.getUint32(p+4,true);if(tg(p,'fmt ')){declBits=dv.getUint16(p+22,true);return}p+=8+sz+(sz&1)}}
+else if(tg(0,'FORM')){let p=12;while(p+8<=L){const sz=dv.getUint32(p+4,false);if(tg(p,'COMM')){declBits=dv.getUint16(p+14,false);return}p+=8+sz+(sz&1)}}
+else if(tg(0,'fLaC'))declBits=(((b[20]&1)<<4)|(b[21]>>4))+1}
 const tick=(()=>{const ch=new MessageChannel(),q=[];ch.port1.onmessage=()=>{q.splice(0).forEach(f=>f())};return()=>new Promise(r=>{q.push(r);ch.port2.postMessage(0)})})();
 const LE=new Uint8Array(new Uint32Array([1]).buffer)[0]===1;let img=null,u32=null,dq=0;
 let busy=0,testing=false;
@@ -223,44 +207,36 @@ for(let ch=0;ch<g.n;ch++){const y=Math.round(g.top+ch*(g.chH+g.gap)+g.chH*(1-uAt
 async function runVerdict(){
 const id=++vj,box=$('verdict'),nch=audio.numberOfChannels,N=sr>=88200?16384:8192,half=N/2,df=sr/N,nyq=sr/2,len=audio.length;
 cutoffHz=0;box.hidden=true;
-const chips=[],notes=[],fx={N,df};let bitTag='';
+const chips=[],notes=[],fx={N,df};
 const kh=f=>(f/1000).toFixed(2)+' kHz',dbf=v=>v.toFixed(1)+' dBFS';
 const tech=()=>{const kv=(k,v,h)=>v==null||v===''?'':'<div class="kv"><span class="k">'+k+(h?'<small>'+h+'</small>':'')+'</span><span class="v">'+v+'</span></div>',grp=(t,a)=>{const s=a.join('');return s?'<div><h4>'+t+'</h4>'+s+'</div>':''};
 const c=fx.cut,lo=fmt[1]===true?'lossy':fmt[1]===false?'lossless':'unknown',has=fx.pk!=null,pkd=has?20*Math.log10(Math.max(fx.pk,1e-9)):0,rmd=has?20*Math.log10(Math.max(fx.rms,1e-9)):0;
 return '<div class="tg">'+
-grp('Format',[kv('Container',fmt[0]+' ('+lo+')','File type'),kv('Sample rate',sr+' Hz','Highest possible frequency: '+kh(sr/2)),kv('Channels',audio.numberOfChannels),kv('Duration',fmtT(audio.duration)),kv('Bit depth',bitTag||null,'Label vs what the samples really use'+(declBits?' (header says '+declBits+')':'')),tag?kv('Encoder tag',esc(tag.name)+(tag.lp?' | lowpass '+kh(tag.lp):''),'Software that wrote the file'):''])+
+grp('Format',[kv('Container',fmt[0]+' ('+lo+')','File type'),kv('Sample rate',sr+' Hz','Highest possible frequency: '+kh(sr/2)),kv('Channels',audio.numberOfChannels),kv('Duration',fmtT(audio.duration))])+
 grp('Bandwidth',[fx.done?kv('Cutoff',c?kh(c.fc):'none found','Where the sound stops'):'',c?kv('Drop at cutoff',c.bd.toFixed(0)+' dB over ~'+Math.round(c.width)+' Hz','Sharp drop = encoder filter'):'',c?kv('Steepness',Math.round(c.bd/Math.max(c.width,fx.bhz)*1000)+' dB/kHz'):'',c?kv('Level below / above',c.Lb.toFixed(0)+' / '+c.La.toFixed(0)+' dBFS'):'',fx.p?kv('Cutoff over time',kh(fx.p[0])+' to '+kh(fx.p[1]),'Range across loud moments'):'',fx.lr?kv('Left / right cutoff',(fx.lr[0]?kh(fx.lr[0]):'none')+' / '+(fx.lr[1]?kh(fx.lr[1]):'none')):'',fx.shelf?kv('Shelf above cutoff',fx.shelf.lv.toFixed(0)+' dBFS up to '+kh(fx.shelf.top),'Faint leftover band'):'',bw?kv('Content above -90 dB',kh(bw),'Measured on the spectrogram'):''])+
 grp('Signal',[has?kv('Peak level',dbf(pkd),'Loudest sample'):'',has?kv('Average level (RMS)',dbf(rmd),'Overall loudness'):'',has?kv('Crest factor',(pkd-rmd).toFixed(1)+' dB','Low = heavily compressed'):'',has?kv('Clipped samples',fx.clip?fx.clip+' ('+(fx.clip/fx.n*100).toFixed(3)+'%)':'none','Samples at full scale'):'',has?kv('DC offset',(fx.dc*100).toFixed(3)+'%','Constant bias, should be ~0'):'',fx.side!=null?kv('Side level vs total',isFinite(fx.side)?(Math.round(fx.side)||0)+' dB':'identical channels','Below about -50 dB = effectively mono'):''])+
-grp('Analysis',[fx.frames?kv('Frames analyzed',fx.frames,'Loudest moments of the file'):'',kv('FFT size',fx.N+' points','Resolution '+fx.df.toFixed(2)+' Hz per bin'),fx.holes!=null?kv('Spectral holes',(fx.holes*100).toFixed(1)+'%','High-frequency gaps, typical of low-bitrate codecs'):''])+'</div>'};
+grp('Analysis',[fx.prob!=null?kv('Lossy likelihood',Math.round(fx.prob*100)+'%','All evidence combined'):'',fx.grid!=null?kv('Effective bit depth',fx.grid?fx.grid+'-bit grid':'above 20-bit or float','Sample values snap to this grid'):'',fx.frames?kv('Frames analyzed',fx.frames,'Loudest moments of the file'):'',kv('FFT size',fx.N+' points','Resolution '+fx.df.toFixed(2)+' Hz per bin'),fx.holes!=null?kv('Spectral holes',(fx.holes*100).toFixed(1)+'%','High-frequency gaps, typical of low-bitrate codecs'):''])+'</div>'};
 const show=(cls,label,conf,lines)=>{const p=l=>'<p>'+l+'</p>',main=lines.filter(l=>!/^Container: /.test(l)),more=main.slice(2).concat(notes);
-box.innerHTML='<span class="badge '+cls+'">'+label+'</span>'+chips.map(c=>'<span class="badge '+c[0]+'">'+c[1]+'</span>').join('')+'<b>'+conf+'</b>'+p('<b>TL;DR:</b> '+label+(/^Confidence: /.test(conf)?' ('+conf.slice(12).toLowerCase()+' confidence)':'')+'. Bit depth: '+(bitTag||'not checked')+'.')+main.slice(0,2).map(p).join('')+'<details><summary>Technical details</summary>'+tech()+(more.length?'<h4>Notes</h4>'+more.map(p).join(''):'')+'</details>';box.hidden=false};
+box.innerHTML='<span class="badge '+cls+'">'+label+'</span>'+chips.map(c=>'<span class="badge '+c[0]+'">'+c[1]+'</span>').join('')+'<b>'+conf+'</b>'+p('<b>TL;DR:</b> '+label+(/^Confidence: /.test(conf)?' ('+conf.slice(12).toLowerCase()+' confidence)':'')+'.')+main.slice(0,2).map(p).join('')+'<details><summary>Technical details</summary>'+tech()+(more.length?'<h4>Notes</h4>'+more.map(p).join(''):'')+'</details>';box.hidden=false};
 if(len<N*8){show('warn','Too short','',['Not enough audio to judge reliably.']);return}
 const c0=audio.getChannelData(0),c1=nch>1?audio.getChannelData(1):null,M=Math.max(2,Math.min(1200,Math.floor(len/(N/2))-1)),st=[],rm=[];
 for(let i=0;i<M;i++){const s=Math.round(i*(len-N)/(M-1));let e=0;for(let k=0;k<N;k+=4){const v=c0[s+k],u=c1?c1[s+k]:0;e+=v*v+u*u}st.push(s);rm.push(Math.sqrt(e/(N/4)))}
-const ord=Array.from({length:M},(_,i)=>i).sort((a,b)=>rm[b]-rm[a]).filter(i=>rm[i]>1e-4).slice(0,Math.min(400,Math.ceil(M/2)));
+const o0=Array.from({length:M},(_,i)=>i).sort((a,b)=>rm[b]-rm[a]).filter(i=>rm[i]>1e-4),nk=Math.min(320,o0.length),nt=Math.ceil(nk*.6),ord=o0.slice(0,nt),rest=o0.slice(nt).sort((a,b)=>a-b);
+for(let i=0,q=nk-nt;i<q&&rest.length;i++)ord.push(rest[Math.floor(i*rest.length/q)]);
 if(ord.length<8){show('warn','Too quiet','',['Not enough non-silent audio to judge reliably.']);return}
 {let pk=0,ss=0,clip=0,d0=0,d1=0;for(let i=0;i<len;i++){const a=c0[i],x=a<0?-a:a;if(x>pk)pk=x;if(x>=.999)clip++;ss+=a*a;d0+=a}
 if(c1)for(let i=0;i<len;i++){const b=c1[i],x=b<0?-b:b;if(x>pk)pk=x;if(x>=.999)clip++;ss+=b*b;d1+=b}
 const n=len*(c1?2:1);Object.assign(fx,{pk,rms:Math.sqrt(ss/n),clip,n,dc:Math.max(Math.abs(d0),Math.abs(d1))/len,frames:ord.length})}
-if(tag){notes.push('Encoder tag: '+esc(tag.name)+(tag.lp?', header lowpass '+(tag.lp/1000).toFixed(1)+' kHz':'')+'.');if(fmt[1]!==true&&/^LAME/.test(tag.name)){chips.push(['warn','LAME tag']);notes.push('A lossless file carrying a LAME tag was probably made from an MP3.')}}
+{const gb=[128,32768,524288],gn=[8,16,20],sp=Math.max(1,Math.floor(len/200000)),on=[0,0,0];let t=0;
+for(let i=0;i<len;i+=sp){const a=c0[i];if(!a)continue;t++;for(let g=0;g<3;g++){const y=a*gb[g];if(Math.abs(y-Math.round(y))<.02)on[g]++}}
+let gr=0;for(let g=0;g<3;g++)if(t>=2000&&on[g]>=t*.995){gr=gn[g];break}
+fx.grid=t>=2000?gr:null;
+if(fx.grid&&declBits>fx.grid+2&&fmt[1]!==true){chips.push(['warn','Fake '+declBits+'-bit']);notes.push('Declared '+declBits+'-bit, but every sample sits on a '+fx.grid+'-bit grid, so the extra bits carry nothing.')}}
 if(nch>2)notes.push('Only channels 1-2 of '+nch+' were analyzed.');if(fmt[1]===null)notes.push('Container not recognized as lossy or lossless; this verdict rests on the spectrum alone.');if(c1){const sp=Math.max(1,Math.floor(len/400000));let sd=0,se=0,mx=0;
 for(let i=0;i<len;i+=sp){const a=c0[i],b=c1[i],d=a-b;sd+=d*d;se+=a*a+b*b;if(Math.abs(d)>mx)mx=Math.abs(d)}
 if(se>0){const db=sd>0?10*Math.log10(sd/se):-Infinity;fx.side=db;
 if(mx===0){chips.push(['warn','Dual mono']);notes.push('Stereo: left and right are identical, so this is mono in a stereo file.')}
 else if(db<-50){chips.push(['warn','Near-mono']);notes.push('Stereo: the side signal is '+db.toFixed(0)+' dB below the total, so this is effectively mono.')}}}
-if(fmt[1]!==true&&note===''){
-const stride=Math.max(1,Math.floor(len/300000)),cnt=new Float64Array(32);
-let tot=0,bad=0;
-for(let i=0;i<len;i+=stride){const x=c0[i];if(x===0)continue;const m=x*8388608,r=Math.round(m);if(Math.abs(m-r)>.05){bad++;continue}const a=Math.abs(r);if(a===0)continue;cnt[31-Math.clz32(a&-a)]++;tot++}
-if(tot>500&&bad<=.01*(tot+bad)){
-let acc=0,t=0;while(t<16&&acc+cnt[t]<=.001*tot){acc+=cnt[t];t++}
-const eff=24-t;
-if(declBits&&declBits<=24&&eff<=declBits-4){chips.push(['bad','Fake '+declBits+'-bit']);bitTag='fake '+declBits+'-bit';notes.push('Bit depth: labeled '+declBits+'-bit, but every sample fits in '+eff+' bits, so the extra bits are zero padding.')}
-else notes.push((bitTag=(declBits&&eff>=Math.min(declBits,24)?'genuine ':'effective ')+eff+'-bit','Bit depth: ')+(declBits?'labeled '+declBits+'-bit, ':'')+'effective '+eff+'-bit'+(declBits&&eff>=Math.min(declBits,24)?' (genuine).':'.'))}
-else if(tot+bad>500){const gb=gridBits(c0,len,stride);
-if(gb&&gb>20){bitTag='effective ~'+Math.round(gb)+'-bit';notes.push('Bit depth: effective ~'+Math.round(gb)+'-bit (the browser decoded on a non-standard scale).')}else if(gb){if(declBits&&declBits<=24&&gb<=declBits-4){chips.push(['bad','Fake '+declBits+'-bit']);bitTag='fake '+declBits+'-bit';notes.push('Bit depth: labeled '+declBits+'-bit, but sample values sit on a fixed grid equal to ~'+gb.toFixed(1)+'-bit audio that was volume-scaled.')}
-else notes.push((bitTag='volume-scaled ~'+gb.toFixed(1)+'-bit','Bit depth: ')+'sample values sit on a fixed grid equal to ~'+gb.toFixed(1)+'-bit audio that was volume-scaled.')}}}
-if(fmt[1]!==true&&!bitTag){bitTag='unknown'+(declBits?' (header says '+declBits+'-bit)':'');notes.push('Bit depth not confirmed'+(declBits?' (header says '+declBits+'-bit)':'')+'. '+(note!==''?'The browser resampled the file, so sample values were altered.':'No sign of fake padding was found.'))}
 const F=makeFFT(N),rev=F.rev,w=new Float64Array(N),re=new Float64Array(N),im=new Float64Array(N),P=new Float64Array(half+1),PL=new Float64Array(half+1),PR=new Float64Array(half+1);
 let ws=0;
 for(let i=0;i<N;i++){w[i]=.5-.5*Math.cos(2*Math.PI*i/N);ws+=w[i]}
@@ -282,11 +258,11 @@ for(let f=0;f<F1;f++){const o=f*(half+1)+j*bh;let s=0;for(let k=0;k<bh;k++)s+=FP
 col.sort();G[j]=10*Math.log10(Math.max((F1&1?col[mi]:(col[mi-1]+col[mi])/2)*norm*norm,1e-24))}
 const mean=(a,b)=>{let sum=0;for(let k=a;k<=b;k++)sum+=G[k];return sum/(b-a+1)};
 const curve=(pw,c,off)=>{const g=new Float64Array(nb);for(let j=0;j<nb;j++){let sum=0;for(let k=0;k<bh;k++)sum+=10*Math.log10(Math.max(pw[off+j*bh+k]/c*norm*norm,1e-24));g[j]=sum/bh}return g};
-const edge=g=>{const m=(a,b)=>{let sum=0;for(let k=a;k<=b;k++)sum+=g[k];return sum/(b-a+1)};let j0=-1,d0=0;for(let j=Math.max(8,Math.ceil(6000/bhz));j<nb-5&&j*bhz<nyq*.97;j++){const d=m(j-8,j-1)-m(j+2,Math.min(nb-1,j+9));if(d>d0){d0=d;j0=j}}return d0>=20?(j0+.5)*bhz:0};
+const edge=g=>{const m=(a,b)=>{let sum=0;for(let k=a;k<=b;k++)sum+=g[k];return sum/(b-a+1)};let j0=-1,d0=0;for(let j=Math.max(8,Math.ceil(6000/bhz));j<nb-5&&j*bhz<nyq*.97;j++){const d=m(j-8,j-1)-m(j+2,Math.min(nb-1,j+9));if(d>d0){d0=d;j0=j}}return d0>=14?(j0+.5)*bhz:0};
 let bj=-1,bd=0;
 for(let j=Math.max(8,Math.ceil(6000/bhz));j<nb-5&&j*bhz<nyq*.97;j++){const d=mean(j-8,j-1)-mean(j+2,Math.min(nb-1,j+9));if(d>bd){bd=d;bj=j}}
 const ta=Math.min(nb-1,Math.floor((nyq-1500)/bhz)),tb=Math.min(nb-1,Math.floor((nyq-300)/bhz));let topL=0;for(let k=ta;k<=tb;k++)topL+=Gp[k];topL/=tb-ta+1;
-const found=bd>=20,kHz=f=>(f/1000).toFixed(2)+' kHz';
+const found=bd>=14,kHz=f=>(f/1000).toFixed(2)+' kHz';
 if(found){
 const fr=[],nfr=Math.ceil(ord.length/2);for(let f=0;f<nfr;f++){const e=edge(curve(FP,c1?2:1,f*(half+1)));if(e)fr.push(e)}
 if(fr.length>=nfr*.5){fr.sort((a,b)=>a-b);const p10=fr[Math.floor(fr.length*.1)],p90=fr[Math.floor(fr.length*.9)];fx.p=[p10,p90];
@@ -308,12 +284,21 @@ const sure=fmt[1]===false&&!!holes&&holes.rate<.01,cf=sure?'Confidence: High':'C
 const K=f=>f<=15500?'<=96 kbps':f<=16600?'~128 kbps':f<=17600?'~128-160 kbps':f<=19000?'~192 kbps or V2':f<=20000?'~224-256 kbps or V0':'~256-320 kbps';
 const info='Container: '+fmt[0]+' | '+sr+' Hz | '+ord.length+' loudest frames, '+N+'-pt FFT';
 status('');
+const ev=[],ad=(w,t)=>ev.push([w,t]),pOf=x=>1/(1+Math.exp(-x)),lg=()=>ev.reduce((a,e)=>a+e[0],-.3);
+if(holes){const r=holes.rate,pc=(r*100).toFixed(1)+'% of high-frequency cells';if(r>=.12)ad(3,'heavy spectral holes, '+pc);else if(r>=.06)ad(2,'spectral holes, '+pc);else if(r>=.02)ad(.8,'some spectral holes, '+pc);else if(r<.005)ad(-1.2,'no spectral holes')}
+const fin=(cls,label,conf,lines)=>{fx.prob=pOf(lg());notes.push('Evidence (+ lossy, - genuine): '+ev.map(e=>(e[0]>0?'+':'')+e[0].toFixed(1)+' '+e[1]).join('; ')+'. Combined lossy likelihood '+Math.round(fx.prob*100)+'%.');show(cls,label,conf,lines)};
+const dec=lines=>{const p=pOf(lg()),clean=!!holes&&holes.rate<.01;
+if(p>=.9)fin('bad','Lossy source (transcode)','Confidence: High',lines.concat(['Lossless container, but the audio was almost certainly decoded from a lossy file.']));
+else if(p>=.65)fin('warn','Probably a lossy transcode','Confidence: Medium',lines.concat(['Several signs of a lossy origin, not conclusive. Some genuine masters have a filter here.']));
+else if(p>=.3)fin('warn','Inconclusive','Confidence: Low',lines.concat(['The evidence points both ways; a real ADC or mastering filter can look like this.']));
+else if(p<.1&&clean&&fmt[1]===false)fin('ok','Lossless','Confidence: High',lines.concat(['No encoder lowpass and no transform-codec holes found.']));
+else if(p<.2)fin('ok','Lossless','Confidence: Medium',lines.concat(['No lossy signs found.'+why]));
+else fin('ok','Probably lossless','Confidence: Low',lines.concat(['Only weak signs either way.'+why]))};
 if(!found){
+ad(-2,'no encoder-style lowpass cliff');
 const lines=['No sharp lowpass found: content reaches the top of the spectrum (band near Nyquist averages '+topL.toFixed(0)+' dBFS).',info];
 if(fmt[1]===true)show('bad','Lossy','Certain '+I.box+' the container is '+fmt[0],lines.concat(['This is a full-bandwidth lossy encode.']));
-else if(holes&&holes.rate>=.06)show('warn','Suspicious '+I.help+' possible transcode','Confidence: Low',lines.concat(['No cutoff, but the spectral-hole pattern is typical of a lossy encode.']))
-else if(topL<-100)show('warn','Probably lossless','Confidence: Medium',lines.concat(['Very little energy near Nyquist, but no encoder-style cliff.']));
-else show('ok','Lossless',cf,lines.concat(['No lowpass cliff and no transform-codec holes found.'+why]));
+else dec(lines);
 return}
 const Lb=mean(bj-8,bj-1),La=mean(bj+2,Math.min(nb-1,bj+9)),mid=(Lb+La)/2;
 let fc=(bj+.5)*bhz;
@@ -326,15 +311,17 @@ cutoffHz=fc;fx.cut={fc,bd,width,Lb,La};
 if(j2>=0&&d2>=8&&(j2+.5)*bhz>fc+1500)fx.shelf={lv:mean(k90+2,j2-2),top:(j2+.5)*bhz},notes.push('Faint shelf above the cutoff: about '+mean(k90+2,j2-2).toFixed(0)+' dBFS, up to '+kHz((j2+.5)*bhz)+'. Usually dither or later processing.')}
 const l1='Cutoff: <b>'+kHz(fc)+'</b> '+I.down+' level falls '+bd.toFixed(0)+' dB within ~'+Math.round(width)+' Hz, to ~'+La.toFixed(0)+' dBFS above it.';
 if(fmt[1]===true){show('bad','Lossy','Certain '+I.box+' the container is '+fmt[0],[l1,'Typical encoder class for this lowpass: '+K(fc)+'.',info]);return}
-if(fc>=nyq*.965){show('ok','Lossless',cf,[l1,'This cutoff is within 3.5% of Nyquist, the transition band of a normal anti-alias or resampling filter. Most lossy encoders low-pass lower.'+why,info]);return}
+if(fc>=nyq*.965){ad(-2.5,'cutoff within 3.5% of Nyquist, a normal anti-alias filter');dec([l1,'This cutoff is within 3.5% of Nyquist, the transition band of a normal anti-alias or resampling filter. Most lossy encoders low-pass lower.',info]);return}
 const rc=[22050,24000,44100,48000].find(c=>fc>=c*.93&&fc<=c*1.005&&nyq>c*1.02),rs=rc?rc*2:0;
 if(rs){const hi=sr>48000;show(hi?'warn':'ok',hi?'Upsampled '+I.warn+' not true hi-res':'Resampled from '+rs/1000+' kHz','Confidence: Medium',[l1,'Real content ends at the Nyquist of a '+rs/1000+' kHz source'+(hi?', so the '+sr/1000+' kHz sample rate adds no extra bandwidth.':'; this looks like a resampled file, not an encoder lowpass.'),info]);return}
-let lv=fc<=19500?3:fc<=20800?2:1;
-const amb=fc>=14800&&fc<=16100;if(amb)lv=Math.min(lv,2);if(bd<30)lv--;if(width>1500)lv--;if(width>3000)lv--;
-if(lv>=3)show('bad','Lossy source (transcode)','Confidence: High',[l1,'Lossless container, but the audio was almost certainly decoded from a lossy file. Typical class: '+K(fc)+'.',info]);
-else if(lv===2)show('warn','Probably a lossy transcode','Confidence: Medium',[l1,'Typical class: '+K(fc)+'. Some genuine masters have a filter here, so compare with the source if you can.'+(amb?' A file made from a 32 kHz source would look the same.':''),info]);
-else if(lv===1)show('warn','Inconclusive','Confidence: Low',[l1,'A cutoff this high or gradual can come from a real ADC or mastering filter.',info]);
-else show('ok','Probably lossless','Confidence: Low',[l1,'The roll-off is gradual, which fits a band-limited source rather than an encoder.',info])}
+const amb=fc>=14800&&fc<=16100;
+ad(fc<=16500?4.5:fc<=19000?3.5:fc<=20000?2.5:fc<=20800?1.6:.6,'cutoff at '+kHz(fc)+' where encoders low-pass');
+if(bd>=45&&width<800)ad(1.2,'brick-wall edge, '+bd.toFixed(0)+' dB in ~'+Math.round(width)+' Hz');else if(bd<25||width>2500)ad(-1.5,'soft, gradual roll-off');else if(width>1500)ad(-.7,'fairly gradual roll-off');
+if(amb)ad(-.8,'cutoff zone shared with 32 kHz sources');
+if(fx.p&&fx.p[1]-fx.p[0]<300&&width<1000)ad(1,'cutoff steady within '+Math.round(fx.p[1]-fx.p[0])+' Hz across frames');
+if(fx.lr&&fx.lr[0]&&fx.lr[1]&&Math.abs(fx.lr[0]-fx.lr[1])<150)ad(.4,'same cutoff on both channels');
+if(fx.shelf)ad(-.3,'dither-like shelf above cutoff');
+dec([l1,'Typical encoder class for this lowpass: '+K(fc)+'.'+(amb?' A 32 kHz source would look the same.':''),info])}
 
 async function selfTestRun(){
 const out=$('selftest'),rate=44100,n=rate*8;
@@ -343,18 +330,16 @@ const lp=fc=>{const T=255,h=new Float64Array(T),r=new Float32Array(n+T),o=new Fl
 for(let i=0;i<T;i++){const x=i-127,w=.42-.5*Math.cos(2*Math.PI*i/(T-1))+.08*Math.cos(4*Math.PI*i/(T-1));h[i]=(x===0?2*fc/rate:Math.sin(2*Math.PI*fc/rate*x)/(Math.PI*x))*w}
 for(let i=0;i<r.length;i++)r[i]=Math.random()*2-1;
 for(let i=0;i<n;i++){let a=0;for(let k=0;k<T;k++)a+=h[k]*r[i+k];o[i]=a*.3}return o};
-const q=()=>{const o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=Math.fround(Math.round((Math.random()*2-1)*20000)/32768*.7);return o};
-const q24=()=>{const o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=Math.fround(Math.round((Math.random()*2-1)*2e6)/8388607);return o};
 const cases=[
-['Full-band noise reads as lossless',()=>[noise(),noise()],['FLAC',false],16,/Lossless.*Confidence: High/],
-['16 kHz lowpass reads as a lossy transcode',()=>[lp(16000),lp(16000)],['FLAC',false],16,/Lossy source|lossy transcode/],
-['Identical channels give Dual mono',()=>{const a=noise();return[a,a]},['FLAC',false],16,/Dual mono/],
-['Non-standard decoder scale still reads as 24-bit',()=>[q24(),q24()],['WAV (PCM)',false],24,/effective ~24-bit/],
-['Gain-scaled 16-bit labeled 24-bit is fake',()=>[q(),q()],['WAV (PCM)',false],24,/Fake 24-bit/]];
+['Full-band noise reads as lossless',()=>[noise(),noise()],['FLAC',false],/Lossless.*Confidence: High/],
+['16 kHz lowpass reads as a lossy transcode',()=>[lp(16000),lp(16000)],['FLAC',false],/Lossy source|lossy transcode/],
+['20.5 kHz lowpass reads as a lossy transcode',()=>[lp(20500),lp(20500)],['FLAC',false],/Lossy source|lossy transcode/],
+['16-bit data in a 24-bit file is flagged',()=>{const q=v=>v.map(x=>Math.round(x*32768)/32768);return[q(noise()),q(noise())]},['WAV (PCM)',false],/Fake 24-bit/,24],
+['Identical channels give Dual mono',()=>{const a=noise();return[a,a]},['FLAC',false],/Dual mono/]];
 const res=[];
 for(const c of cases){status('Self-test: '+c[0]+'...');await tick();
-const ch=c[1]();audio={numberOfChannels:2,length:n,sampleRate:rate,duration:n/rate,getChannelData:i=>ch[i]};sr=rate;fmt=c[2];declBits=c[3];note='';tag=null;
-await runVerdict();res.push((c[4].test($('verdict').textContent)?I.ok+' ':I.no+' ')+c[0])}
+const ch=c[1]();audio={numberOfChannels:2,length:n,sampleRate:rate,duration:n/rate,getChannelData:i=>ch[i]};sr=rate;fmt=c[2];note='';declBits=c[4]||0;
+await runVerdict();res.push((c[3].test($('verdict').textContent)?I.ok+' ':I.no+' ')+c[0])}
 {const m=rate*300,x=new Float32Array(m);for(let i=m>>1;i<m;i++)x[i]=.5*Math.sin(Math.PI/4*i);
 audio={numberOfChannels:1,length:m,sampleRate:rate,duration:m/rate,getChannelData:()=>x};sr=rate;
 $('win').value='4096';$('fsc').value='lin';$('chm').value='all';
@@ -365,11 +350,11 @@ const ok=res.filter(l=>l.startsWith(I.ok)).length;
 out.innerHTML='<div><b>TL;DR: '+ok+'/'+res.length+' checks passed'+(ok<res.length?' ('+(res.length-ok)+' failed, do not trust the verdicts)':'')+'.</b></div>'+res.map(l=>'<div>'+l+'</div>').join('')}
 async function selfTest(){
 if(busy||testing)return;testing=true;
-const keep={audio,sr,fmt,note,declBits,tag,cutoffHz},ids=['win','fsc','chm'],ui=ids.map(i=>$(i).value),ctl=[$('test'),$('file')];
+const keep={audio,sr,fmt,note,cutoffHz},ids=['win','fsc','chm'],ui=ids.map(i=>$(i).value),ctl=[$('test'),$('file')];
 ctl.forEach(e=>e.disabled=true);
 try{await selfTestRun()}catch(e){$('selftest').textContent='Self-test failed: '+e.message}
 ids.forEach((i,k)=>$(i).value=ui[k]);
-({audio,sr,fmt,note,declBits,tag,cutoffHz}=keep);status('');
+({audio,sr,fmt,note,cutoffHz}=keep);status('');
 try{if(audio){await runVerdict();await analyze()}else{$('verdict').hidden=true;canvas.hidden=true;mats=[];$('dl').disabled=true;$('info').textContent=''}}catch(e){status('Analysis failed: '+e.message)}
 testing=false;ctl.forEach(e=>e.disabled=false)}
 $('test').addEventListener('click',selfTest);
@@ -385,7 +370,7 @@ loadedKey='';pendingKey=key;const lid=++loadJ;++job;++vj;
 try{
 status('Decoding...');
 const buf=await file.arrayBuffer();if(lid!==loadJ)return;
-let rate=0;try{rate=detectRate(buf)}catch(e){}try{tag=encTag(buf)}catch(e){tag=null}
+let rate=0;try{rate=detectRate(buf)}catch(e){}try{readBits(buf)}catch(e){}
 let a=null;
 try{a=await new OfflineAudioContext(1,1,rate||44100).decodeAudioData(buf)}
 catch(e){a=await new OfflineAudioContext(1,1,44100).decodeAudioData(await file.arrayBuffer())}
