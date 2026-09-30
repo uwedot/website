@@ -38,6 +38,7 @@ select{appearance:none;padding-right:2.25rem;cursor:pointer;background-image:url
 .tile b{font-size:.925rem;line-height:1.25}
 .tile small{color:var(--muted);font-size:.8rem}
 .tile:hover{border-color:var(--muted)}
+.tile:disabled:not([aria-pressed=true]){opacity:.5;cursor:not-allowed}
 .tile[aria-pressed=true]{border-color:var(--amber);background:rgba(224,164,88,.1)}
 .tile[aria-pressed=true] b{color:var(--amber)}
 #custom{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:1rem}
@@ -118,10 +119,10 @@ audio{width:100%;height:var(--h);margin-top:.75rem;color-scheme:dark}
 <section class="card">
   <h2>Upload Audio Track</h2>
   <label id="drop">
-    <input id="file" type="file" accept=".wav,.flac,.aiff,.aif">
+    <input id="file" type="file" accept=".wav,.flac">
     <svg class="i"><use href="#i-up"/></svg>
     <b id="dt">Drop a file or tap to choose</b>
-    <small id="ds">WAV, FLAC, AIFF or AIF, up to 15 minutes</small>
+    <small id="ds">WAV or FLAC, up to 15 minutes</small>
   </label>
   <p id="msg" role="status"></p>
 </section>
@@ -342,7 +343,7 @@ function run(o) {
   if (g) { let m = 1; for (let i = 0; i < N; i++) if (g[i] < m) m = g[i]; reduction = -db(m); }
   postMessage({ type: 'status', text: 'Encoding WAV...' });
   const buf = wav(out, fs, o.bits || 24);
-  return { type: 'done', buf, lufs: res.lufs, lra: res.lra, tp, reduction, curve: ds(res.curve) };
+  return { type: 'done', job: o.job, buf, lufs: res.lufs, lra: res.lra, tp, reduction, curve: ds(res.curve) };
 }
 
 onmessage = ({ data: d }) => {
@@ -350,15 +351,15 @@ onmessage = ({ data: d }) => {
     if (d.type === 'analyze') {
       const r = loudness(d.chs, d.fs), pk = peaks(d.chs), pm = maxOf(pk);
       S = { chs: d.chs, pk, pm, fs: d.fs, lufs: r.lufs, e: r.e, hop: r.hop };
-      postMessage({ type: 'analyzed', lufs: r.lufs, lra: r.lra, tp: db(pm), curve: ds(r.curve) });
+      postMessage({ type: 'analyzed', job: d.job, lufs: r.lufs, lra: r.lra, tp: db(pm), curve: ds(r.curve) });
     } else { const r = run(d); postMessage(r, [r.buf]); }
-  } catch (e) { postMessage({ type: 'error', text: String(e.message || e) }); }
+  } catch (e) { postMessage({ type: 'error', job: d.job, text: String(e.message || e) }); }
 };
 </script>
 <script>
 const $ = s => document.querySelector(s);
-const n1 = v => isFinite(v) ? v.toFixed(1) : '-inf';
-const EXT = /\.(wav|flac|aiff|aif)$/i;
+const n1 = v => isFinite(v) ? (Math.abs(v) < 0.05 ? '0.0' : v.toFixed(1)) : '-inf';
+const EXT = /\.(wav|flac)$/i;
 
 const PRESETS = [
   { g: 'Streaming', id: 'stream', name: 'Spotify / Tidal', lufs: -14, tp: -1, note: 'The usual streaming volume. Spotify and Tidal leave tracks at this level alone.' },
@@ -376,50 +377,41 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
 };
 let sel = PRESETS.find(p => p.id === store.get('ln_preset')) || PRESETS[0];
-let src = null, res = null, dlUrl = null, busy = false;
+let src = null, res = null, dlUrl = null, busy = false, loading = false, gen = 0;
 
 const worker = new Worker(URL.createObjectURL(new Blob([$('#dsp').textContent], { type: 'text/javascript' })));
 const target = () => sel.id === 'custom' ? { lufs: +$('#tl').value, tp: +$('#tc').value } : sel;
 const msg = (t, err) => { const m = $('#msg'); m.textContent = t; m.className = err ? 'err' : ''; };
 
-// Sample rate from the file header, so decoding does not resample to the device rate
-function sniffRate(u) {
-  if (u.length < 32) return 0;
+// Sample rate and length from the header (0 when unknown). RIFF chunks are walked, since
+// JUNK, bext or LIST chunks can precede 'fmt ' and move the fields.
+function sniff(u) {
+  const none = { rate: 0, dur: 0 };
+  if (u.length < 32) return none;
   const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
   const tag = o => String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]);
-  let rate = 0;
-  if (tag(0) === 'RIFF') rate = dv.getUint32(24, true);
-  else if (tag(0) === 'fLaC') rate = u[18] << 12 | u[19] << 4 | u[20] >> 4;
-  else if (tag(0) === 'FORM') {
-    for (let o = 12; o + 26 <= u.length;) {
-      const size = dv.getUint32(o + 4);
-      if (tag(o) === 'COMM') { rate = Math.round(dv.getUint32(o + 18) * 2 ** ((dv.getUint16(o + 16) & 0x7fff) - 16383 - 31)); break; }
+  let rate = 0, dur = 0;
+  if (tag(0) === 'fLaC') {
+    rate = u[18] << 12 | u[19] << 4 | u[20] >> 4;
+    dur = rate ? ((u[21] & 15) * 2 ** 32 + dv.getUint32(22)) / rate : 0;
+  } else if (tag(0) === 'RIFF' || tag(0) === 'RF64') {
+    let br = 0;
+    for (let o = 12; o + 8 <= u.length;) {
+      const id = tag(o), size = dv.getUint32(o + 4, true);
+      if (id === 'fmt ' && o + 20 <= u.length) { rate = dv.getUint32(o + 12, true); br = dv.getUint32(o + 16, true); }
+      if (id === 'data') { dur = br ? Math.min(size, u.length - o - 8) / br : 0; break; }
       o += 8 + size + (size & 1);
     }
   }
-  return rate >= 8000 && rate <= 384000 ? rate : 0;
+  return rate >= 8000 && rate <= 384000 ? { rate, dur } : none;
 }
 
 // Limits scale with the device: phones and low-memory machines get less headroom than desktops
 const LOW = matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4;
 const MAX_SEC = (LOW ? 10 : 15) * 60, MAX_BYTES = (LOW ? 350 : 500) * 2 ** 20;
-const clock = t => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+const clock = t => { const n = Math.round(t); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
+const HINT = `WAV or FLAC, up to ${MAX_SEC / 60} minutes`;
 
-// Duration from the header (0 if unknown), so an over-long file is rejected before it is decoded
-function sniffDur(u, rate) {
-  if (!rate || u.length < 32) return 0;
-  const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
-  const tag = o => String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]);
-  if (tag(0) === 'fLaC') return ((u[21] & 15) * 2 ** 32 + dv.getUint32(22)) / rate;
-  const be = tag(0) === 'FORM';
-  for (let o = 12; o + 12 <= u.length;) {
-    const size = dv.getUint32(o + 4, !be);
-    if (be && tag(o) === 'COMM') return dv.getUint32(o + 10) / rate;
-    if (!be && tag(o) === 'data') { const br = dv.getUint32(28, true); return br ? Math.min(size, u.length - o - 8) / br : 0; }
-    o += 8 + size + (size & 1);
-  }
-  return 0;
-}
 const tooLong = t => msg(`That track is ${clock(t)} long. The limit is ${MAX_SEC / 60} minutes${LOW ? ' on this device' : ''}.`, true);
 
 function cells(tr, list) {
@@ -461,7 +453,8 @@ function freeResult() {
 }
 
 function render() {
-  document.querySelectorAll('.tile').forEach(b => b.setAttribute('aria-pressed', b.p === sel));
+  document.querySelectorAll('.tile').forEach(b => { b.setAttribute('aria-pressed', b.p === sel); b.disabled = busy; });
+  $('#tl').disabled = $('#tc').disabled = busy;
   $('#note').textContent = sel.note;
   $('#custom').hidden = sel.id !== 'custom';
   $('#tlv').textContent = $('#tl').value;
@@ -480,7 +473,7 @@ function render() {
   $('#bits').disabled = busy;
   const ch = src.ch;
   $('#name').textContent = src.name;
-  $('#fmt').textContent = `${src.fs / 1000} kHz${src.fs > 48000 ? ' → 48 kHz' : ''}, ${ch === 1 ? 'mono' : ch === 2 ? 'stereo' : ch + ' channels'}, ${Math.floor(src.dur / 60)}:${String(Math.round(src.dur % 60)).padStart(2, '0')}`;
+  $('#fmt').textContent = `${src.fs / 1000} kHz${src.fs > 48000 ? ' → 48 kHz' : ''}, ${ch === 1 ? 'mono' : ch === 2 ? 'stereo' : ch + ' channels'}, ${clock(src.dur)}`;
   $('#gv').textContent = (gain > 0 ? '+' : '') + n1(gain) + ' dB';
   $('#lim').textContent = src.tp + gain > t.tp ? 'gain needed. Limiter engages to hold the ceiling.' : 'gain needed. No limiting required.';
   const tips = [];
@@ -509,41 +502,54 @@ async function decode(data, rate) {
 }
 
 async function load(file) {
-  if (!EXT.test(file.name)) return msg('Unsupported file. Use WAV, FLAC, AIFF or AIF.', true);
+  if (busy || loading) return msg('Wait for the current job to finish.', true);
+  if (!EXT.test(file.name)) return msg('Unsupported file. Use WAV or FLAC.', true);
   if (file.size > MAX_BYTES) return msg(`That file is ${Math.round(file.size / 2 ** 20)} MB. The limit is ${MAX_BYTES / 2 ** 20} MB${LOW ? ' on this device' : ''}.`, true);
   const id = `${file.name}|${file.size}|${file.lastModified}`;
   if (src && src.id === id) return msg('That file is already loaded.', true);
-  $('#out').hidden = true; src = res = null; freeResult();
-  msg('Reading file...');
+  loading = true; msg('Reading file...');
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer()), rate = sniffRate(bytes);
-    const hdr = sniffDur(bytes, rate);
-    if (hdr > MAX_SEC) return tooLong(hdr);
-    const copy = bytes.buffer.slice(0);
+    const bytes = new Uint8Array(await file.arrayBuffer()), { rate, dur } = sniff(bytes);
+    const magic = String.fromCharCode(...bytes.subarray(0, 4));
+    if (!['RIFF', 'RF64', 'fLaC'].includes(magic)) return msg('That is not a WAV or FLAC file. AIFF is not supported.', true);
+    if (dur > MAX_SEC) return tooLong(dur);
     // Files above 48 kHz decode straight to 48 kHz (one decode, one analysis); anything lower stays native
     let buf = await decode(bytes.buffer, rate > 48000 ? 48000 : rate);
     if (buf.duration > MAX_SEC) return tooLong(buf.duration); // backstop when the header has no length
     if (buf.duration * buf.numberOfChannels > MAX_SEC * 2) return msg(`A ${buf.numberOfChannels}-channel track of ${clock(buf.duration)} is too much audio${LOW ? ' for this device' : ''}. The limit is ${MAX_SEC / 60} minutes of stereo.`, true);
     const fs = rate || buf.sampleRate;
-    if (buf.sampleRate > 48000) buf = await decode(copy, 48000);
+    if (buf.sampleRate > 48000) buf = await decode(await file.arrayBuffer(), 48000); // re-read rather than keep a spare copy
     const chs = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i).slice());
+    // Only now replace the previous track, so a rejected file leaves the old result in place
+    $('#out').hidden = true; res = null; freeResult();
+    $('#dt').textContent = 'Drop a file or tap to choose'; $('#ds').textContent = HINT;
     src = { name: file.name, id, fs, ch: chs.length, dur: buf.duration };
     msg('Analyzing...');
-    worker.postMessage({ type: 'analyze', chs, fs: buf.sampleRate }, chs.map(c => c.buffer));
-  } catch { msg('Could not decode that file. Check that it is a valid WAV, FLAC or AIFF.', true); }
+    worker.postMessage({ type: 'analyze', job: ++gen, chs, fs: buf.sampleRate }, chs.map(c => c.buffer));
+  } catch { msg('Could not decode that file. Check that it is a valid WAV or FLAC.', true); }
+  finally { loading = false; }
 }
 
 function normalize() {
   const t = target();
+  if (loading) return msg('Still reading the new file.', true);
   if (busy || res || !isFinite(t.lufs) || !isFinite(t.tp)) return msg('Enter a target LUFS and ceiling.', true);
   busy = true; res = null; $('#go').disabled = true; render();
   msg('Normalizing...');
-  worker.postMessage({ lufs: t.lufs, tp: t.tp, noBoost: $('#noboost').checked, bits: +$('#bits').value });
+  worker.postMessage({ job: gen, lufs: t.lufs, tp: t.tp, noBoost: $('#noboost').checked, bits: +$('#bits').value });
 }
 
+worker.onerror = e => {
+  busy = false; if (src && src.lufs === undefined) src = null;
+  render(); msg('Processing failed: ' + (e.message || 'the audio worker stopped'), true);
+};
 worker.onmessage = ({ data: d }) => {
   if (d.type === 'status') return msg(d.text);
-  if (d.type === 'error') { busy = false; render(); return msg('Processing failed: ' + d.text, true); }
+  if (d.type !== 'status' && d.job !== gen) return; // reply to a file that has since been replaced
+  if (d.type === 'error') {
+    busy = false; if (src && src.lufs === undefined) src = null; // failed analysis must not block re-choosing the same file
+    render(); return msg('Processing failed: ' + d.text, true);
+  }
   if (d.type === 'analyzed') {
     if (!isFinite(d.lufs)) { src = null; return msg('This track is silent.', true); }
     Object.assign(src, d);
@@ -594,6 +600,6 @@ const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
-$('#ds').textContent = `WAV, FLAC, AIFF or AIF, up to ${MAX_SEC / 60} minutes`;
+$('#ds').textContent = HINT;
 render();
 </script>
