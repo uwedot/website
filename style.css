@@ -268,7 +268,7 @@ button { border: 0; }
   position: sticky; top: 0; z-index: var(--z-nav);
   display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
   height: calc(var(--nav-h) + var(--inset-t));
-  padding: var(--inset-t) max(var(--edge), calc(var(--inset-r) + var(--gutter))) 0 max(var(--edge), calc(var(--inset-l) + var(--gutter)));
+  padding: var(--inset-t) calc(var(--gutter) + var(--inset-r)) 0 calc(var(--gutter) + var(--inset-l));
   background: var(--veil);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
