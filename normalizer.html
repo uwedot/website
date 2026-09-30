@@ -98,6 +98,12 @@ input:disabled,select:disabled{opacity:.5;cursor:not-allowed}
 .btn.alt{background:transparent;color:var(--amber);margin-top:.5rem}
 .btn.alt:hover{background:rgba(224,164,88,.1);filter:none}
 
+#plot{width:100%;height:9rem;display:block;margin-bottom:.6rem;border-radius:var(--r);background:var(--bg);border:1px solid var(--line)}
+.key{display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.8rem;margin-bottom:1rem}
+.key i{display:inline-block;width:.8rem;height:.2rem;margin-right:.4rem;vertical-align:middle;border-radius:1px}
+#tip{color:var(--amber);font-size:.875rem;margin-bottom:1rem}
+#tip:empty{display:none}
+audio{width:100%;height:var(--h);margin-top:.75rem;color-scheme:dark}
 [hidden]{display:none!important}
 </style>
 <svg hidden>
@@ -134,16 +140,21 @@ input:disabled,select:disabled{opacity:.5;cursor:not-allowed}
   <section class="card">
     <div class="file"><b id="name"></b><span id="fmt"></span></div>
     <div class="gain"><span id="gv"></span><span id="lim"></span></div>
+    <p id="tip"></p>
+    <canvas id="plot" role="img" aria-label="Short-term loudness over time, original and after normalizing"></canvas>
+    <div class="key"><span><i style="background:var(--muted)"></i>Original</span><span><i style="background:var(--amber)"></i>After</span><span><i style="background:var(--teal)"></i>Target</span></div>
     <table>
       <thead><tr><th></th><th>Original</th><th>Target</th><th>Result</th></tr></thead>
       <tbody id="cmp"></tbody>
     </table>
     <div class="opts">
-      <label>Don't make quiet tracks louder<input id="noboost" type="checkbox"></label>
+      <label id="nbl">Don't make quiet tracks louder<input id="noboost" type="checkbox"></label>
+      <label>Bit depth<select id="bits"><option value="24">24-bit</option><option value="16">16-bit, dithered</option></select></label>
     </div>
     <hr>
     <button id="go" class="btn" type="button"><svg class="i"><use href="#i-mix"/></svg><span>Normalize</span></button>
     <a id="dl" class="btn alt" hidden><svg class="i"><use href="#i-down"/></svg><span>Download WAV</span></a>
+    <audio id="pv" controls hidden aria-label="Preview of the normalized track"></audio>
   </section>
 </div>
 </main>
@@ -165,28 +176,38 @@ function highpass(fs) {
   return [1, -2, 1, 2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0];
 }
 
-// Integrated loudness (gated) and loudness range, from 100 ms energy hops
-function loudness(chs, fs) {
+// K-weighted energy per 100 ms hop, summed over channels with BS.1770 weights
+// (LFE dropped, surrounds +1.5 dB in 5.1 and up). Filtering is the costly step, so it is done once per signal.
+function energies(chs, fs) {
   const hop = Math.round(0.1 * fs), hops = Math.floor(chs[0].length / hop), e = new Float64Array(hops);
   const [a0, a1, a2, a3, a4] = shelf(fs), [c0, c1, c2, c3, c4] = highpass(fs);
-  for (const c of chs) {
+  chs.forEach((c, ci) => {
+    const w = chs.length < 5 ? 1 : ci === 3 ? 0 : ci < 6 && ci > 3 ? 1.41 : 1;
+    if (!w) return;
     let p1 = 0, p2 = 0, q1 = 0, q2 = 0, r1 = 0, r2 = 0, t1 = 0, t2 = 0;
     for (let k = 0; k < hops; k++) {
       let acc = 0;
       for (let i = k * hop, end = i + hop; i < end; i++) {
         const v = c[i], o = a0 * v + a1 * p1 + a2 * p2 - a3 * q1 - a4 * q2;
         p2 = p1; p1 = v; q2 = q1; q1 = o;
-        const w = c0 * o + c1 * r1 + c2 * r2 - c3 * t1 - c4 * t2;
-        r2 = r1; r1 = o; t2 = t1; t1 = w;
-        acc += w * w;
+        const y = c0 * o + c1 * r1 + c2 * r2 - c3 * t1 - c4 * t2;
+        r2 = r1; r1 = o; t2 = t1; t1 = y;
+        acc += y * y;
       }
-      e[k] += acc;
+      e[k] += w * acc;
     }
-  }
+  });
+  return { e, hop };
+}
+
+// Integrated loudness (gated), loudness range and short-term curve from hop energies. Cheap: no filtering.
+function measure(e, hop) {
+  const hops = e.length, cs = new Float64Array(hops + 1);
+  for (let k = 0; k < hops; k++) cs[k + 1] = cs[k] + e[k];
   const L = v => -0.691 + 10 * Math.log10(v), mean = a => a.reduce((p, c) => p + c, 0) / a.length;
   const blocks = n => {
     const nb = Math.min(n, hops), z = [];
-    for (let k = 0; k + nb <= hops; k++) { let s = 0; for (let j = 0; j < nb; j++) s += e[k + j]; z.push(s / (nb * hop)); }
+    for (let k = 0; k + nb <= hops; k++) z.push((cs[k + nb] - cs[k]) / (nb * hop));
     return z;
   };
   const gate = (z, rel) => {
@@ -195,20 +216,48 @@ function loudness(chs, fs) {
     const r = L(mean(g)) + rel;
     return g.filter(v => L(v) > r);
   };
-  const m = gate(blocks(4), -10), st = gate(blocks(30), -20).map(L).sort((a, b) => a - b);
-  const q = p => st[Math.floor(p * (st.length - 1))];
-  return { lufs: m.length ? L(mean(m)) : -Infinity, lra: st.length ? q(0.95) - q(0.1) : 0 };
+  const b30 = blocks(30), m = gate(blocks(4), -10), st = gate(b30, -20).map(L).sort((a, b) => a - b);
+  // EBU Tech 3342: 10th to 95th percentile of the gated short-term values, linearly interpolated.
+  // Needs at least one full 3 s window; shorter files have no defined range.
+  const q = p => { const x = p * (st.length - 1), i = Math.floor(x); return st[i] + (st[Math.min(i + 1, st.length - 1)] - st[i]) * (x - i); };
+  return { lufs: m.length ? L(mean(m)) : -Infinity, lra: st.length && hops >= 30 ? q(0.95) - q(0.1) : 0, curve: b30.map(L) };
 }
 
-// Per-sample true-peak estimate (4x Catmull-Rom), max across channels
+function loudness(chs, fs) {
+  const { e, hop } = energies(chs, fs);
+  return { ...measure(e, hop), e, hop };
+}
+
+// Downsample a loudness curve to <=240 points for drawing (silence clamps to -70)
+function ds(a) {
+  const n = Math.min(a.length, 240), o = [];
+  for (let i = 0; i < n; i++) {
+    const s = Math.floor(i * a.length / n), e = Math.max(s + 1, Math.floor((i + 1) * a.length / n));
+    let t = 0; for (let j = s; j < e; j++) t += Math.max(-70, a[j]);
+    o.push(t / (e - s));
+  }
+  return o;
+}
+
+// True peak by 4x oversampling: the 48-tap polyphase FIR from ITU-R BS.1770-4 Annex 2 (4 phases x 12 taps).
+// Phases 1 and 2 are the 1/4 and 1/2 sample points, phase 3 is 3/4, phase 0 the sample itself.
+// pk[i] is the largest magnitude among those four points, max across channels. Zero outside the file.
+const TP = new Float64Array([
+  0.0017089843750, 0.0109863281250, -0.0196533203125, 0.0332031250000, -0.0594482421875, 0.1373291015625, 0.9721679687500, -0.1022949218750, 0.0476074218750, -0.0266113281250, 0.0148925781250, -0.0083007812500,
+  -0.0291748046875, 0.0292968750000, -0.0517578125000, 0.0891113281250, -0.1665039062500, 0.4650878906250, 0.7797851562500, -0.2003173828125, 0.1015625000000, -0.0582275390625, 0.0330810546875, -0.0189208984375,
+  -0.0189208984375, 0.0330810546875, -0.0582275390625, 0.1015625000000, -0.2003173828125, 0.7797851562500, 0.4650878906250, -0.1665039062500, 0.0891113281250, -0.0517578125000, 0.0292968750000, -0.0291748046875,
+  -0.0083007812500, 0.0148925781250, -0.0266113281250, 0.0476074218750, -0.1022949218750, 0.9721679687500, 0.1373291015625, -0.0594482421875, 0.0332031250000, -0.0196533203125, 0.0109863281250, 0.0017089843750]);
 function peaks(chs) {
   const N = chs[0].length, pk = new Float32Array(N);
   for (const c of chs) for (let i = 0; i < N; i++) {
-    const p0 = c[i > 0 ? i - 1 : 0], p1 = c[i], p2 = c[i < N - 1 ? i + 1 : i], p3 = c[i < N - 2 ? i + 2 : N - 1];
-    let m = Math.abs(p1);
-    for (let t = 0.25; t < 1; t += 0.25) {
-      const v = Math.abs(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t));
-      if (v > m) m = v;
+    const fast = i >= 5 && i + 6 < N;
+    let m = 0;
+    for (let b = 0; b < 48; b += 12) {
+      let a = 0;
+      if (fast) for (let j = 0; j < 12; j++) a += TP[b + j] * c[i + 6 - j];
+      else for (let j = 0; j < 12; j++) a += TP[b + j] * (c[i + 6 - j] || 0);
+      if (a < 0) a = -a;
+      if (a > m) m = a;
     }
     if (m > pk[i]) pk[i] = m;
   }
@@ -243,54 +292,65 @@ function limiterGain(pk, G, ceil, fs) {
   return g;
 }
 
-function wav(chs, fs) {
-  const n = chs[0].length, c = chs.length, len = n * c * 3;
+function wav(chs, fs, bits) {
+  const n = chs[0].length, c = chs.length, B = bits / 8, len = n * c * B;
   const buf = new ArrayBuffer(44 + len), v = new DataView(buf);
   const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
   str(0, 'RIFF'); v.setUint32(4, 36 + len, true); str(8, 'WAVEfmt ');
   v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, c, true);
-  v.setUint32(24, fs, true); v.setUint32(28, fs * c * 3, true); v.setUint16(32, c * 3, true);
-  v.setUint16(34, 24, true); str(36, 'data'); v.setUint32(40, len, true);
-  const m = 2 ** 23 - 1;
+  v.setUint32(24, fs, true); v.setUint32(28, fs * c * B, true); v.setUint16(32, c * B, true);
+  v.setUint16(34, bits, true); str(36, 'data'); v.setUint32(40, len, true);
+  const m = 2 ** (bits - 1) - 1;
   let o = 44;
   for (let i = 0; i < n; i++) for (let k = 0; k < c; k++) {
-    let x = Math.round(chs[k][i] * m);
+    let x = Math.round(chs[k][i] * m + (bits === 16 ? Math.random() - Math.random() : 0)); // TPDF dither at 16-bit
     x = x > m ? m : x < -m - 1 ? -m - 1 : x;
-    v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255);
-    o += 3;
+    if (bits === 16) { v.setInt16(o, x, true); o += 2; }
+    else { v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255); o += 3; }
   }
   return buf;
 }
 
-// Gain, limit, re-measure; correct for limiter loss and true-peak overshoot (up to 4 passes)
+// Gain, limit, re-measure; corrects for limiter loss and true-peak overshoot.
+// With no limiting the result is exact from cached hop energies and peaks (gain is linear), so nothing is re-filtered.
 function run(o) {
-  const { chs, pk, fs } = S, N = chs[0].length, out = chs.map(() => new Float32Array(N));
+  const { chs, pk, fs, e, hop, pm } = S, N = chs[0].length, out = chs.map(() => new Float32Array(N));
+  const apply = (G, g) => {
+    for (let k = 0; k < out.length; k++) { const c = chs[k], r = out[k]; for (let i = 0; i < N; i++) r[i] = c[i] * G * (g ? g[i] : 1); }
+  };
   let G = 10 ** ((o.lufs - S.lufs) / 20);
   if (o.noBoost) G = Math.min(G, 1);
   const cap = Math.min(G * 4, o.noBoost ? 1 : Infinity);
   let ceil = 10 ** (o.tp / 20), res, tp, g;
-  for (let pass = 1; pass <= 4; pass++) {
-    postMessage({ type: 'status', text: `Normalizing, pass ${pass}...` });
+  for (let pass = 1; pass <= 5; pass++) {
     g = limiterGain(pk, G, ceil, fs);
-    for (let k = 0; k < out.length; k++) { const c = chs[k], r = out[k]; for (let i = 0; i < N; i++) r[i] = c[i] * G * (g ? g[i] : 1); }
-    res = loudness(out, fs);
-    tp = db(maxOf(peaks(out)));
+    if (g) {
+      postMessage({ type: 'status', text: `Limiting, pass ${pass} of up to 5...` });
+      apply(G, g);
+      res = loudness(out, fs);
+      tp = db(maxOf(peaks(out)));
+    } else {
+      res = measure(e.map(v => v * G * G), hop);
+      tp = db(pm * G);
+    }
     if (tp - o.tp > 0.02) ceil *= 10 ** (-(tp - o.tp) / 20);
     else if (g && Math.abs(o.lufs - res.lufs) > 0.05 && G < cap) G = Math.min(G * 10 ** ((o.lufs - res.lufs) / 20), cap);
     else break;
   }
+  if (!g) apply(G, null);
   let reduction = 0;
   if (g) { let m = 1; for (let i = 0; i < N; i++) if (g[i] < m) m = g[i]; reduction = -db(m); }
-  const buf = wav(out, fs);
-  return { type: 'done', buf, lufs: res.lufs, lra: res.lra, tp, reduction };
+  postMessage({ type: 'status', text: 'Encoding WAV...' });
+  const buf = wav(out, fs, o.bits || 24);
+  return { type: 'done', buf, lufs: res.lufs, lra: res.lra, tp, reduction, curve: ds(res.curve) };
 }
 
 onmessage = ({ data: d }) => {
   try {
     if (d.type === 'analyze') {
-      const pk = peaks(d.chs), r = loudness(d.chs, d.fs), c = d.chs48;
-      S = c ? { chs: c, pk: peaks(c), fs: 48000, lufs: loudness(c, 48000).lufs } : { chs: d.chs, pk, fs: d.fs, lufs: r.lufs };
-      postMessage({ type: 'analyzed', lufs: r.lufs, lra: r.lra, tp: db(maxOf(pk)) });
+      const r = loudness(d.chs, d.fs), pk = peaks(d.chs), pm = maxOf(pk);
+      S = { chs: d.chs, pk, pm, fs: d.fs, lufs: r.lufs, e: r.e, hop: r.hop };
+      postMessage({ type: 'analyzed', lufs: r.lufs, lra: r.lra, tp: db(pm), curve: ds(r.curve) });
     } else { const r = run(d); postMessage(r, [r.buf]); }
   } catch (e) { postMessage({ type: 'error', text: String(e.message || e) }); }
 };
@@ -348,6 +408,36 @@ function cells(tr, list) {
   }));
 }
 
+function draw(gain) {
+  const cv = $('#plot'), w = cv.clientWidth, h = cv.clientHeight;
+  if (!src || !src.curve || !w) return;
+  const dpr = devicePixelRatio || 1, g = cv.getContext('2d');
+  cv.width = w * dpr; cv.height = h * dpr; g.scale(dpr, dpr);
+  const css = getComputedStyle(document.documentElement), col = n => css.getPropertyValue(n).trim();
+  const lo = -50, hi = -5, pad = 6, t = target();
+  const X = (i, n) => pad + (w - 2 * pad) * i / Math.max(1, n - 1);
+  const Y = v => h - pad - (h - 2 * pad) * (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo);
+  const hline = (v, c, dash) => { g.beginPath(); g.setLineDash(dash); g.strokeStyle = c; g.lineWidth = 1; g.moveTo(0, Y(v)); g.lineTo(w, Y(v)); g.stroke(); g.setLineDash([]); };
+  g.font = '11px Inter,system-ui,sans-serif'; g.fillStyle = col('--muted');
+  for (const v of [-40, -30, -20, -10]) { hline(v, col('--line'), []); g.fillText(v, 4, Y(v) - 3); }
+  hline(t.lufs, col('--teal'), [4, 4]);
+  const trace = (a, c, lw, alpha) => {
+    g.beginPath(); g.globalAlpha = alpha; g.strokeStyle = c; g.lineWidth = lw; g.lineJoin = 'round';
+    a.forEach((v, i) => i ? g.lineTo(X(i, a.length), Y(v)) : g.moveTo(X(i, a.length), Y(v)));
+    g.stroke(); g.globalAlpha = 1;
+  };
+  trace(src.curve, col('--muted'), 1.5, 1);
+  if (res) trace(res.curve, col('--amber'), 2, 1);
+  else trace(src.curve.map(v => v + gain), col('--amber'), 2, .4); // preview of the gain before processing
+}
+
+// Release the WAV blob and detach it from the player and download link
+function freeResult() {
+  if (dlUrl) { URL.revokeObjectURL(dlUrl); dlUrl = null; }
+  const pv = $('#pv'); pv.pause(); pv.removeAttribute('src'); pv.load();
+  $('#dl').removeAttribute('href');
+}
+
 function render() {
   document.querySelectorAll('.tile').forEach(b => b.setAttribute('aria-pressed', b.p === sel));
   $('#note').textContent = sel.note;
@@ -355,6 +445,8 @@ function render() {
   $('#tlv').textContent = $('#tl').value;
   $('#tcv').textContent = $('#tc').value;
   $('#dl').hidden = !res;
+  $('#pv').hidden = !res;
+  if (!res && dlUrl) freeResult(); // preset, ceiling or bit depth changed: drop the old WAV now
   const locked = !!res;
   $('#go').disabled = busy || locked;
   $('#go span').textContent = locked ? 'Choose another preset to normalize again' : 'Normalize';
@@ -362,12 +454,19 @@ function render() {
   if (!src) return;
   const t = target(), boost = !$('#noboost').checked;
   const gain = boost ? t.lufs - src.lufs : Math.min(0, t.lufs - src.lufs);
-  $('.opts').hidden = t.lufs <= src.lufs;
+  $('#nbl').hidden = t.lufs <= src.lufs;
+  $('#bits').disabled = busy;
   const ch = src.ch;
   $('#name').textContent = src.name;
-  $('#fmt').textContent = `${src.fs / 1000} kHz, ${ch === 1 ? 'mono' : ch === 2 ? 'stereo' : ch + ' channels'}, ${Math.floor(src.dur / 60)}:${String(Math.round(src.dur % 60)).padStart(2, '0')}`;
+  $('#fmt').textContent = `${src.fs / 1000} kHz${src.fs > 48000 ? ' → 48 kHz' : ''}, ${ch === 1 ? 'mono' : ch === 2 ? 'stereo' : ch + ' channels'}, ${Math.floor(src.dur / 60)}:${String(Math.round(src.dur % 60)).padStart(2, '0')}`;
   $('#gv').textContent = (gain > 0 ? '+' : '') + n1(gain) + ' dB';
   $('#lim').textContent = src.tp + gain > t.tp ? 'gain needed. Limiter engages to hold the ceiling.' : 'gain needed. No limiting required.';
+  const tips = [];
+  if (src.tp > 0) tips.push('The original already peaks above 0 dBTP.');
+  if (gain >= 9) tips.push('Big boost: expect heavy limiting.');
+  if (src.lra > 10 && t.lufs > -12) tips.push('This track is very dynamic. A loud target will squash it.');
+  $('#tip').textContent = tips.join(' ');
+  draw(gain);
   const na = ['-', 'na'];
   const table = [
     ['Loudness (LUFS)', [n1(src.lufs)], [String(t.lufs)], res ? [n1(res.lufs), 'r'] : na],
@@ -381,28 +480,28 @@ function render() {
   }));
 }
 
+async function decode(data, rate) {
+  let ctx;
+  try { ctx = new AudioContext(rate ? { sampleRate: rate } : undefined); } catch { ctx = new AudioContext(); }
+  try { return await ctx.decodeAudioData(data); } finally { ctx.close(); }
+}
+
 async function load(file) {
   if (!EXT.test(file.name)) return msg('Unsupported file. Use WAV, FLAC, AIFF or AIF.', true);
   const id = `${file.name}|${file.size}|${file.lastModified}`;
   if (src && src.id === id) return msg('That file is already loaded.', true);
-  $('#out').hidden = true; src = res = null;
+  $('#out').hidden = true; src = res = null; freeResult();
   msg('Reading file...');
   try {
     const bytes = new Uint8Array(await file.arrayBuffer()), rate = sniffRate(bytes), copy = bytes.buffer.slice(0);
-    let ctx;
-    try { ctx = new AudioContext(rate ? { sampleRate: rate } : undefined); } catch { ctx = new AudioContext(); }
-    const buf = await ctx.decodeAudioData(bytes.buffer);
-    ctx.close();
+    // Files above 48 kHz decode straight to 48 kHz (one decode, one analysis); anything lower stays native
+    let buf = await decode(bytes.buffer, rate > 48000 ? 48000 : rate);
+    const fs = rate || buf.sampleRate;
+    if (buf.sampleRate > 48000) buf = await decode(copy, 48000);
     const chs = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i).slice());
-    let chs48;
-    if (buf.sampleRate !== 48000) {
-      const c48 = new AudioContext({ sampleRate: 48000 }), b48 = await c48.decodeAudioData(copy);
-      c48.close();
-      chs48 = Array.from({ length: b48.numberOfChannels }, (_, i) => b48.getChannelData(i).slice());
-    }
-    src = { name: file.name, id, fs: buf.sampleRate, ch: chs.length, dur: buf.duration };
+    src = { name: file.name, id, fs, ch: chs.length, dur: buf.duration };
     msg('Analyzing...');
-    worker.postMessage({ type: 'analyze', chs, chs48, fs: buf.sampleRate }, (chs48 ? chs.concat(chs48) : chs).map(c => c.buffer));
+    worker.postMessage({ type: 'analyze', chs, fs: buf.sampleRate }, chs.map(c => c.buffer));
   } catch { msg('Could not decode that file. Check that it is a valid WAV, FLAC or AIFF.', true); }
 }
 
@@ -410,7 +509,8 @@ function normalize() {
   const t = target();
   if (busy || res || !isFinite(t.lufs) || !isFinite(t.tp)) return msg('Enter a target LUFS and ceiling.', true);
   busy = true; res = null; $('#go').disabled = true; render();
-  worker.postMessage({ lufs: t.lufs, tp: t.tp, noBoost: $('#noboost').checked });
+  msg('Normalizing...');
+  worker.postMessage({ lufs: t.lufs, tp: t.tp, noBoost: $('#noboost').checked, bits: +$('#bits').value });
 }
 
 worker.onmessage = ({ data: d }) => {
@@ -426,12 +526,12 @@ worker.onmessage = ({ data: d }) => {
     return;
   }
   busy = false; $('#go').disabled = false;
-  if (dlUrl) URL.revokeObjectURL(dlUrl);
+  freeResult();
   dlUrl = URL.createObjectURL(new Blob([d.buf], { type: 'audio/wav' }));
   const t = target(), a = $('#dl');
-  a.href = dlUrl;
+  a.href = dlUrl; $('#pv').src = dlUrl;
   a.download = `${src.name.replace(/\.[^.]+$/, '')}_${t.lufs}LUFS.wav`;
-  res = d;
+  const { buf, ...rest } = d; res = rest; // the WAV lives in the blob only; don't keep a second copy
   render();
   msg(Math.abs(d.lufs - t.lufs) > 0.3 ? `Reached ${n1(d.lufs)} LUFS. Holding the ceiling at this target needs more limiting than is safe.` : d.reduction ? `Limiter reduced peaks by up to ${n1(d.reduction)} dB.` : '');
 };
@@ -457,6 +557,9 @@ PRESETS.forEach(p => {
   $(s).addEventListener('input', () => { store.set(k, $(s).value); res = null; render(); });
 });
 $('#noboost').onchange = render;
+const bs = store.get('ln_bits'); if (bs) $('#bits').value = bs;
+$('#bits').onchange = () => { store.set('ln_bits', $('#bits').value); res = null; render(); };
+addEventListener('resize', () => render());
 $('#go').onclick = normalize;
 $('#file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) load(f); };
 const drop = $('#drop');
