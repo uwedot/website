@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loudness normalizer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎧</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#0e1211;--panel:#161b19;--line:#283029;--text:#ece6da;--muted:#8d968f;--amber:#e0a458;--teal:#52d1b2;--r:.7rem;--rl:1rem;--h:2.75rem;--ring:0 0 0 3px rgba(224,164,88,.3);color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*:focus{outline:none}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 "Inter",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:34rem;margin:0 auto;padding:2rem 1rem 4rem}
+h1,h2,#gv{font-weight:600;letter-spacing:-.02em}
+h1{font-size:1.9rem;line-height:1.15;margin:0 0 .5rem}
+h2{font-size:1.1rem;margin:0 0 1rem}
+p{margin:0}
+.sub{color:var(--muted);margin-bottom:1.5rem}
+button,input,select{font:inherit;color:inherit}
+.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem}
+
+/* controls share one height, radius, border and focus treatment */
+input[type=number],select,.tile,#drop,.btn{border-radius:var(--r);border:1px solid var(--line);transition:border-color .15s,box-shadow .15s,background .15s}
+input[type=number],select{height:var(--h);background:var(--bg);padding:0 .75rem}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+select{appearance:none;padding-right:2.25rem;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d968f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .65rem center;background-size:1.1rem}
+:is(input,select,button,a):focus-visible,#drop:focus-within{border-color:var(--amber);box-shadow:var(--ring)}
+
+.glabel{color:var(--muted);font-size:.85rem;margin:1.25rem 0 .5rem}
+.glabel:first-child{margin-top:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.tile{display:flex;flex-direction:column;gap:.1rem;text-align:left;background:var(--bg);padding:.65rem .75rem;cursor:pointer}
+.tile b{font-size:.925rem;line-height:1.25}
+.tile small{color:var(--muted);font-size:.8rem}
+.tile:hover{border-color:var(--muted)}
+.tile[aria-pressed=true]{border-color:var(--amber);background:rgba(224,164,88,.1)}
+.tile[aria-pressed=true] b{color:var(--amber)}
+#custom{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:1rem}
+#custom label{color:var(--muted);font-size:.85rem}
+#custom input{display:block;width:100%;margin-top:.25rem}
+#custom output{float:right;color:var(--text);font-variant-numeric:tabular-nums}
+input[type=range]{appearance:none;height:1.5rem;padding:0;background:none;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:.35rem;border-radius:1rem;background:var(--line)}
+input[type=range]::-moz-range-track{height:.35rem;border-radius:1rem;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:1rem;height:1rem;margin-top:-.325rem;border:0;border-radius:50%;background:var(--amber)}
+input[type=range]::-moz-range-thumb{width:1rem;height:1rem;border:0;border-radius:50%;background:var(--amber)}
+input[type=range]:focus-visible{box-shadow:none}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:var(--ring)}
+input[type=range]:focus-visible::-moz-range-thumb{box-shadow:var(--ring)}
+#note{color:var(--muted);font-size:.875rem;margin-top:1rem;min-height:2.7rem}
+
+#drop{display:flex;flex-direction:column;align-items:center;gap:.25rem;border-style:dashed;border-width:2px;padding:1.5rem 1rem;text-align:center;cursor:pointer}
+#drop .i{width:28px;height:28px;color:var(--amber);margin-bottom:.5rem}
+#drop b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#drop small{color:var(--muted);font-size:.875rem}
+#drop:hover{border-color:var(--muted)}
+#drop.over{border-color:var(--amber);background:rgba(224,164,88,.08)}
+#drop input{position:absolute;opacity:0;width:1px;height:1px}
+#msg{color:var(--muted);font-size:.875rem;margin-top:.75rem}
+#msg:empty{display:none}
+#msg.err{color:#e58a6f}
+
+.file{margin-bottom:1rem}
+.file b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file span{color:var(--muted);font-size:.875rem}
+.gain{display:flex;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem}
+#gv{font-size:2.5rem;line-height:1;color:var(--amber)}
+#lim{color:var(--muted);font-size:.875rem}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{color:var(--muted);font-weight:400;font-size:.85rem;text-align:right;padding-bottom:.5rem}
+td{text-align:right;padding:.6rem 0;border-top:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left;color:var(--muted)}
+td.r{color:var(--teal);font-weight:600}
+td.na{color:var(--muted)}
+th:not(:first-child),td:not(:first-child){padding-left:.75rem;padding-right:.75rem}
+th:last-child,td:last-child{padding-right:0}
+th:nth-child(n+3),td:nth-child(n+3){border-left:1px solid var(--line)}
+
+.opts{margin:0}
+hr{margin:0 0 1.25rem;border:0;border-top:1px solid var(--line)}
+.opts[hidden]+hr{margin-top:1.25rem}
+.opts label{display:flex;justify-content:space-between;align-items:center;gap:1rem;min-height:3.25rem;border-top:1px solid var(--line)}
+.opts select{min-width:10.5rem}
+input[type=checkbox]{appearance:none;flex:none;position:relative;width:2.6rem;height:1.5rem;margin:0;border-radius:1rem;background:var(--line);border:1px solid var(--line);cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s}
+input[type=checkbox]::after{content:"";position:absolute;top:2px;left:2px;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--text);transition:transform .15s,background .15s}
+input[type=checkbox]:checked{background:var(--amber);border-color:var(--amber)}
+input[type=checkbox]:checked::after{transform:translateX(1.1rem);background:#1a1409}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%;height:var(--h);padding:0 1rem;font-weight:600;cursor:pointer;text-decoration:none;background:var(--amber);border-color:var(--amber);color:#1a1409}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input:disabled,select:disabled{opacity:.5;cursor:not-allowed}
+.btn.alt{background:transparent;color:var(--amber);margin-top:.5rem}
+.btn.alt:hover{background:rgba(224,164,88,.1);filter:none}
+
+[hidden]{display:none!important}
+</style>
+<svg hidden>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+  <symbol id="i-mix" viewBox="0 0 24 24"><path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2"/><path d="M4 17h2"/><path d="M10 17h10"/><circle cx="8" cy="17" r="2"/></symbol>
+</svg>
+<main>
+<h1>Loudness normalizer</h1>
+<p class="sub">Choose a target, add a track, download a WAV at that loudness. Everything runs in your browser.</p>
+
+<section class="card">
+  <h2>Upload Audio Track</h2>
+  <label id="drop">
+    <input id="file" type="file" accept=".wav,.flac,.aiff,.aif">
+    <svg class="i"><use href="#i-up"/></svg>
+    <b id="dt">Drop a file or tap to choose</b>
+    <small id="ds">WAV, FLAC, AIFF or AIF</small>
+  </label>
+  <p id="msg" role="status"></p>
+</section>
+
+<section class="card">
+  <h2>Target</h2>
+  <div id="presets" role="group" aria-label="Target preset"></div>
+  <div id="custom" hidden>
+    <label>Loudness (LUFS)<output id="tlv"></output><input id="tl" type="range" min="-30" max="-5" step="0.1" value="-14"></label>
+    <label>Ceiling (dBTP)<output id="tcv"></output><input id="tc" type="range" min="-6" max="0" step="0.1" value="-1"></label>
+  </div>
+  <p id="note"></p>
+</section>
+
+<div id="out" hidden>
+  <section class="card">
+    <div class="file"><b id="name"></b><span id="fmt"></span></div>
+    <div class="gain"><span id="gv"></span><span id="lim"></span></div>
+    <table>
+      <thead><tr><th></th><th>Original</th><th>Target</th><th>Result</th></tr></thead>
+      <tbody id="cmp"></tbody>
+    </table>
+    <div class="opts">
+      <label>Don't make quiet tracks louder<input id="noboost" type="checkbox"></label>
+    </div>
+    <hr>
+    <button id="go" class="btn" type="button"><svg class="i"><use href="#i-mix"/></svg><span>Normalize</span></button>
+    <a id="dl" class="btn alt" hidden><svg class="i"><use href="#i-down"/></svg><span>Download WAV</span></a>
+  </section>
+</div>
+</main>
+
+<script id="dsp" type="text/plain">
+let S;
+const db = x => 20 * Math.log10(x);
+const maxOf = a => { let m = 0; for (let i = 0; i < a.length; i++) if (a[i] > m) m = a[i]; return m; };
+
+// ITU-R BS.1770 K-weighting coefficients [b0,b1,b2,a1,a2]
+function shelf(fs) {
+  const Q = 0.7071752369554196, K = Math.tan(Math.PI * 1681.974450955533 / fs);
+  const Vh = 10 ** (3.999843853973347 / 20), Vb = Vh ** 0.4996667741545416, a0 = 1 + K / Q + K * K;
+  return [(Vh + Vb * K / Q + K * K) / a0, 2 * (K * K - Vh) / a0, (Vh - Vb * K / Q + K * K) / a0,
+    2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0];
+}
+function highpass(fs) {
+  const Q = 0.5003270373238773, K = Math.tan(Math.PI * 38.13547087602444 / fs), a0 = 1 + K / Q + K * K;
+  return [1, -2, 1, 2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0];
+}
+
+// Integrated loudness (gated) and loudness range, from 100 ms energy hops
+function loudness(chs, fs) {
+  const hop = Math.round(0.1 * fs), hops = Math.floor(chs[0].length / hop), e = new Float64Array(hops);
+  const [a0, a1, a2, a3, a4] = shelf(fs), [c0, c1, c2, c3, c4] = highpass(fs);
+  for (const c of chs) {
+    let p1 = 0, p2 = 0, q1 = 0, q2 = 0, r1 = 0, r2 = 0, t1 = 0, t2 = 0;
+    for (let k = 0; k < hops; k++) {
+      let acc = 0;
+      for (let i = k * hop, end = i + hop; i < end; i++) {
+        const v = c[i], o = a0 * v + a1 * p1 + a2 * p2 - a3 * q1 - a4 * q2;
+        p2 = p1; p1 = v; q2 = q1; q1 = o;
+        const w = c0 * o + c1 * r1 + c2 * r2 - c3 * t1 - c4 * t2;
+        r2 = r1; r1 = o; t2 = t1; t1 = w;
+        acc += w * w;
+      }
+      e[k] += acc;
+    }
+  }
+  const L = v => -0.691 + 10 * Math.log10(v), mean = a => a.reduce((p, c) => p + c, 0) / a.length;
+  const blocks = n => {
+    const nb = Math.min(n, hops), z = [];
+    for (let k = 0; k + nb <= hops; k++) { let s = 0; for (let j = 0; j < nb; j++) s += e[k + j]; z.push(s / (nb * hop)); }
+    return z;
+  };
+  const gate = (z, rel) => {
+    const g = z.filter(v => L(v) > -70);
+    if (!g.length) return [];
+    const r = L(mean(g)) + rel;
+    return g.filter(v => L(v) > r);
+  };
+  const m = gate(blocks(4), -10), st = gate(blocks(30), -20).map(L).sort((a, b) => a - b);
+  const q = p => st[Math.floor(p * (st.length - 1))];
+  return { lufs: m.length ? L(mean(m)) : -Infinity, lra: st.length ? q(0.95) - q(0.1) : 0 };
+}
+
+// Per-sample true-peak estimate (4x Catmull-Rom), max across channels
+function peaks(chs) {
+  const N = chs[0].length, pk = new Float32Array(N);
+  for (const c of chs) for (let i = 0; i < N; i++) {
+    const p0 = c[i > 0 ? i - 1 : 0], p1 = c[i], p2 = c[i < N - 1 ? i + 1 : i], p3 = c[i < N - 2 ? i + 2 : N - 1];
+    let m = Math.abs(p1);
+    for (let t = 0.25; t < 1; t += 0.25) {
+      const v = Math.abs(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t));
+      if (v > m) m = v;
+    }
+    if (m > pk[i]) pk[i] = m;
+  }
+  return pk;
+}
+
+// 5 ms look-ahead attack, 50 ms release. Null when the ceiling is never exceeded.
+function limiterGain(pk, G, ceil, fs) {
+  const N = pk.length, L = Math.max(1, Math.round(0.005 * fs)), g = new Float32Array(N);
+  let over = false;
+  for (let i = 0; i < N; i++) {
+    const m = pk[i] * G;
+    if (m > ceil) { g[i] = ceil / m; over = true; } else g[i] = 1;
+  }
+  if (!over) return null;
+  const gm = new Float32Array(N), dq = new Int32Array(N);
+  let h = 0, t = 0;
+  for (let i = N - 1; i >= 0; i--) {
+    while (t > h && g[dq[t - 1]] >= g[i]) t--;
+    dq[t++] = i;
+    while (dq[h] > i + L) h++;
+    gm[i] = g[dq[h]];
+  }
+  let s = 0, r = 1;
+  const k = 1 - Math.exp(-1 / (0.05 * fs));
+  for (let i = 0; i < N; i++) {
+    s += gm[i];
+    if (i > L) s -= gm[i - L - 1];
+    r = Math.min(s / Math.min(i + 1, L + 1), r + (1 - r) * k);
+    g[i] = r;
+  }
+  return g;
+}
+
+function wav(chs, fs) {
+  const n = chs[0].length, c = chs.length, len = n * c * 3;
+  const buf = new ArrayBuffer(44 + len), v = new DataView(buf);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + len, true); str(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, c, true);
+  v.setUint32(24, fs, true); v.setUint32(28, fs * c * 3, true); v.setUint16(32, c * 3, true);
+  v.setUint16(34, 24, true); str(36, 'data'); v.setUint32(40, len, true);
+  const m = 2 ** 23 - 1;
+  let o = 44;
+  for (let i = 0; i < n; i++) for (let k = 0; k < c; k++) {
+    let x = Math.round(chs[k][i] * m);
+    x = x > m ? m : x < -m - 1 ? -m - 1 : x;
+    v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255);
+    o += 3;
+  }
+  return buf;
+}
+
+// Gain, limit, re-measure; correct for limiter loss and true-peak overshoot (up to 4 passes)
+function run(o) {
+  const { chs, pk, fs } = S, N = chs[0].length, out = chs.map(() => new Float32Array(N));
+  let G = 10 ** ((o.lufs - S.lufs) / 20);
+  if (o.noBoost) G = Math.min(G, 1);
+  const cap = Math.min(G * 4, o.noBoost ? 1 : Infinity);
+  let ceil = 10 ** (o.tp / 20), res, tp, g;
+  for (let pass = 1; pass <= 4; pass++) {
+    postMessage({ type: 'status', text: `Normalizing, pass ${pass}...` });
+    g = limiterGain(pk, G, ceil, fs);
+    for (let k = 0; k < out.length; k++) { const c = chs[k], r = out[k]; for (let i = 0; i < N; i++) r[i] = c[i] * G * (g ? g[i] : 1); }
+    res = loudness(out, fs);
+    tp = db(maxOf(peaks(out)));
+    if (tp - o.tp > 0.02) ceil *= 10 ** (-(tp - o.tp) / 20);
+    else if (g && Math.abs(o.lufs - res.lufs) > 0.05 && G < cap) G = Math.min(G * 10 ** ((o.lufs - res.lufs) / 20), cap);
+    else break;
+  }
+  let reduction = 0;
+  if (g) { let m = 1; for (let i = 0; i < N; i++) if (g[i] < m) m = g[i]; reduction = -db(m); }
+  const buf = wav(out, fs);
+  return { type: 'done', buf, lufs: res.lufs, lra: res.lra, tp, reduction };
+}
+
+onmessage = ({ data: d }) => {
+  try {
+    if (d.type === 'analyze') {
+      const pk = peaks(d.chs), r = loudness(d.chs, d.fs), c = d.chs48;
+      S = c ? { chs: c, pk: peaks(c), fs: 48000, lufs: loudness(c, 48000).lufs } : { chs: d.chs, pk, fs: d.fs, lufs: r.lufs };
+      postMessage({ type: 'analyzed', lufs: r.lufs, lra: r.lra, tp: db(maxOf(pk)) });
+    } else { const r = run(d); postMessage(r, [r.buf]); }
+  } catch (e) { postMessage({ type: 'error', text: String(e.message || e) }); }
+};
+</script>
+<script>
+const $ = s => document.querySelector(s);
+const n1 = v => isFinite(v) ? v.toFixed(1) : '-inf';
+const EXT = /\.(wav|flac|aiff|aif)$/i;
+
+const PRESETS = [
+  { g: 'Streaming', id: 'stream', name: 'Spotify / Tidal', lufs: -14, tp: -1, note: 'The usual streaming volume. Spotify and Tidal leave tracks at this level alone.' },
+  { g: 'Streaming', id: 'apple', name: 'Apple Music', lufs: -16, tp: -1, note: 'Apple Music adjusts tracks to about this volume.' },
+  { g: 'Streaming', id: 'amazon', name: 'Amazon Music', lufs: -14, tp: -2, note: 'Same volume as Spotify, with a little extra margin against distortion.' },
+  { g: 'Streaming', id: 'deezer', name: 'Deezer', lufs: -15, tp: -1, note: 'Deezer adjusts tracks to about this volume.' },
+  { g: 'Loud and dynamic', id: 'rel', name: 'Competitive release', lufs: -11, tp: -1, note: 'Louder than streaming, but not squashed. Platforms will turn it down.' },
+  { g: 'Loud and dynamic', id: 'club', name: 'Club / DJ', lufs: -9, tp: -1, note: 'Very loud. Tracks with big quiet-to-loud swings may sound squashed.' },
+  { g: 'Loud and dynamic', id: 'dyn', name: 'Dynamic / audiophile', lufs: -18, tp: -1, note: 'Quieter, with room for loud and soft parts. Streaming services will turn it up.' },
+  { g: 'Loud and dynamic', id: 'custom', name: 'Custom', spec: 'Your own values', note: 'Set your own loudness and ceiling.' },
+];
+
+const store = {
+  get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+};
+let sel = PRESETS.find(p => p.id === store.get('ln_preset')) || PRESETS[0];
+let src = null, res = null, dlUrl = null, busy = false;
+
+const worker = new Worker(URL.createObjectURL(new Blob([$('#dsp').textContent], { type: 'text/javascript' })));
+const target = () => sel.id === 'custom' ? { lufs: +$('#tl').value, tp: +$('#tc').value } : sel;
+const msg = (t, err) => { const m = $('#msg'); m.textContent = t; m.className = err ? 'err' : ''; };
+
+// Sample rate from the file header, so decoding does not resample to the device rate
+function sniffRate(u) {
+  if (u.length < 32) return 0;
+  const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
+  const tag = o => String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]);
+  let rate = 0;
+  if (tag(0) === 'RIFF') rate = dv.getUint32(24, true);
+  else if (tag(0) === 'fLaC') rate = u[18] << 12 | u[19] << 4 | u[20] >> 4;
+  else if (tag(0) === 'FORM') {
+    for (let o = 12; o + 26 <= u.length;) {
+      const size = dv.getUint32(o + 4);
+      if (tag(o) === 'COMM') { rate = Math.round(dv.getUint32(o + 18) * 2 ** ((dv.getUint16(o + 16) & 0x7fff) - 16383 - 31)); break; }
+      o += 8 + size + (size & 1);
+    }
+  }
+  return rate >= 8000 && rate <= 384000 ? rate : 0;
+}
+
+function cells(tr, list) {
+  tr.replaceChildren(...list.map(([text, cls], i) => {
+    const td = document.createElement('td');
+    td.textContent = text; if (cls) td.className = cls;
+    return td;
+  }));
+}
+
+function render() {
+  document.querySelectorAll('.tile').forEach(b => b.setAttribute('aria-pressed', b.p === sel));
+  $('#note').textContent = sel.note;
+  $('#custom').hidden = sel.id !== 'custom';
+  $('#tlv').textContent = $('#tl').value;
+  $('#tcv').textContent = $('#tc').value;
+  $('#dl').hidden = !res;
+  const locked = !!res;
+  $('#go').disabled = busy || locked;
+  $('#go span').textContent = locked ? 'Choose another preset to normalize again' : 'Normalize';
+  $('#noboost').disabled = busy || locked;
+  if (!src) return;
+  const t = target(), boost = !$('#noboost').checked;
+  const gain = boost ? t.lufs - src.lufs : Math.min(0, t.lufs - src.lufs);
+  $('.opts').hidden = t.lufs <= src.lufs;
+  const ch = src.ch;
+  $('#name').textContent = src.name;
+  $('#fmt').textContent = `${src.fs / 1000} kHz, ${ch === 1 ? 'mono' : ch === 2 ? 'stereo' : ch + ' channels'}, ${Math.floor(src.dur / 60)}:${String(Math.round(src.dur % 60)).padStart(2, '0')}`;
+  $('#gv').textContent = (gain > 0 ? '+' : '') + n1(gain) + ' dB';
+  $('#lim').textContent = src.tp + gain > t.tp ? 'gain needed. Limiter engages to hold the ceiling.' : 'gain needed. No limiting required.';
+  const na = ['-', 'na'];
+  const table = [
+    ['Loudness (LUFS)', [n1(src.lufs)], [String(t.lufs)], res ? [n1(res.lufs), 'r'] : na],
+    ['True peak (dBTP)', [n1(src.tp)], [String(t.tp)], res ? [n1(res.tp), 'r'] : na],
+    ['Loudness range (LU)', [n1(src.lra)], na, res ? [n1(res.lra), 'r'] : na],
+  ];
+  $('#cmp').replaceChildren(...table.map(([label, ...rest]) => {
+    const tr = document.createElement('tr');
+    cells(tr, [[label], ...rest]);
+    return tr;
+  }));
+}
+
+async function load(file) {
+  if (!EXT.test(file.name)) return msg('Unsupported file. Use WAV, FLAC, AIFF or AIF.', true);
+  const id = `${file.name}|${file.size}|${file.lastModified}`;
+  if (src && src.id === id) return msg('That file is already loaded.', true);
+  $('#out').hidden = true; src = res = null;
+  msg('Reading file...');
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer()), rate = sniffRate(bytes), copy = bytes.buffer.slice(0);
+    let ctx;
+    try { ctx = new AudioContext(rate ? { sampleRate: rate } : undefined); } catch { ctx = new AudioContext(); }
+    const buf = await ctx.decodeAudioData(bytes.buffer);
+    ctx.close();
+    const chs = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i).slice());
+    let chs48;
+    if (buf.sampleRate !== 48000) {
+      const c48 = new AudioContext({ sampleRate: 48000 }), b48 = await c48.decodeAudioData(copy);
+      c48.close();
+      chs48 = Array.from({ length: b48.numberOfChannels }, (_, i) => b48.getChannelData(i).slice());
+    }
+    src = { name: file.name, id, fs: buf.sampleRate, ch: chs.length, dur: buf.duration };
+    msg('Analyzing...');
+    worker.postMessage({ type: 'analyze', chs, chs48, fs: buf.sampleRate }, (chs48 ? chs.concat(chs48) : chs).map(c => c.buffer));
+  } catch { msg('Could not decode that file. Check that it is a valid WAV, FLAC or AIFF.', true); }
+}
+
+function normalize() {
+  const t = target();
+  if (busy || res || !isFinite(t.lufs) || !isFinite(t.tp)) return msg('Enter a target LUFS and ceiling.', true);
+  busy = true; res = null; $('#go').disabled = true; render();
+  worker.postMessage({ lufs: t.lufs, tp: t.tp, noBoost: $('#noboost').checked });
+}
+
+worker.onmessage = ({ data: d }) => {
+  if (d.type === 'status') return msg(d.text);
+  if (d.type === 'error') { busy = false; render(); return msg('Processing failed: ' + d.text, true); }
+  if (d.type === 'analyzed') {
+    if (!isFinite(d.lufs)) { src = null; return msg('This track is silent.', true); }
+    Object.assign(src, d);
+    $('#dt').textContent = src.name;
+    $('#ds').textContent = 'Tap to choose another file';
+    $('#out').hidden = false;
+    msg(''); render();
+    return;
+  }
+  busy = false; $('#go').disabled = false;
+  if (dlUrl) URL.revokeObjectURL(dlUrl);
+  dlUrl = URL.createObjectURL(new Blob([d.buf], { type: 'audio/wav' }));
+  const t = target(), a = $('#dl');
+  a.href = dlUrl;
+  a.download = `${src.name.replace(/\.[^.]+$/, '')}_${t.lufs}LUFS.wav`;
+  res = d;
+  render();
+  msg(Math.abs(d.lufs - t.lufs) > 0.3 ? `Reached ${n1(d.lufs)} LUFS. Holding the ceiling at this target needs more limiting than is safe.` : d.reduction ? `Limiter reduced peaks by up to ${n1(d.reduction)} dB.` : '');
+};
+
+const groups = {};
+PRESETS.forEach(p => {
+  if (!groups[p.g]) {
+    const label = Object.assign(document.createElement('p'), { className: 'glabel', textContent: p.g });
+    groups[p.g] = Object.assign(document.createElement('div'), { className: 'grid' });
+    $('#presets').append(label, groups[p.g]);
+  }
+  const b = document.createElement('button'), name = document.createElement('b'), spec = document.createElement('small');
+  b.type = 'button'; b.className = 'tile'; b.p = p;
+  name.textContent = p.name;
+  spec.textContent = p.spec || `${p.lufs} LUFS / ${p.tp} dBTP`;
+  b.append(name, spec);
+  b.onclick = () => { if (p === sel) return; sel = p; res = null; store.set('ln_preset', p.id); render(); };
+  groups[p.g].append(b);
+});
+['#tl', '#tc'].forEach(s => {
+  const k = 'ln_' + s.slice(1), v = store.get(k);
+  if (v) $(s).value = v;
+  $(s).addEventListener('input', () => { store.set(k, $(s).value); res = null; render(); });
+});
+$('#noboost').onchange = render;
+$('#go').onclick = normalize;
+$('#file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) load(f); };
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
+render();
+</script>
