@@ -121,7 +121,7 @@ audio{width:100%;height:var(--h);margin-top:.75rem;color-scheme:dark}
     <input id="file" type="file" accept=".wav,.flac,.aiff,.aif">
     <svg class="i"><use href="#i-up"/></svg>
     <b id="dt">Drop a file or tap to choose</b>
-    <small id="ds">WAV, FLAC, AIFF or AIF</small>
+    <small id="ds">WAV, FLAC, AIFF or AIF, up to 15 minutes</small>
   </label>
   <p id="msg" role="status"></p>
 </section>
@@ -400,6 +400,26 @@ function sniffRate(u) {
   return rate >= 8000 && rate <= 384000 ? rate : 0;
 }
 
+const MAX_SEC = 15 * 60;
+const clock = t => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+
+// Duration from the header (0 if unknown), so an over-long file is rejected before it is decoded
+function sniffDur(u, rate) {
+  if (!rate || u.length < 32) return 0;
+  const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
+  const tag = o => String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]);
+  if (tag(0) === 'fLaC') return ((u[21] & 15) * 2 ** 32 + dv.getUint32(22)) / rate;
+  const be = tag(0) === 'FORM';
+  for (let o = 12; o + 12 <= u.length;) {
+    const size = dv.getUint32(o + 4, !be);
+    if (be && tag(o) === 'COMM') return dv.getUint32(o + 10) / rate;
+    if (!be && tag(o) === 'data') { const br = dv.getUint32(28, true); return br ? Math.min(size, u.length - o - 8) / br : 0; }
+    o += 8 + size + (size & 1);
+  }
+  return 0;
+}
+const tooLong = t => msg(`That track is ${clock(t)} long. The limit is 15 minutes.`, true);
+
 function cells(tr, list) {
   tr.replaceChildren(...list.map(([text, cls], i) => {
     const td = document.createElement('td');
@@ -493,9 +513,13 @@ async function load(file) {
   $('#out').hidden = true; src = res = null; freeResult();
   msg('Reading file...');
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer()), rate = sniffRate(bytes), copy = bytes.buffer.slice(0);
+    const bytes = new Uint8Array(await file.arrayBuffer()), rate = sniffRate(bytes);
+    const hdr = sniffDur(bytes, rate);
+    if (hdr > MAX_SEC) return tooLong(hdr);
+    const copy = bytes.buffer.slice(0);
     // Files above 48 kHz decode straight to 48 kHz (one decode, one analysis); anything lower stays native
     let buf = await decode(bytes.buffer, rate > 48000 ? 48000 : rate);
+    if (buf.duration > MAX_SEC) return tooLong(buf.duration); // backstop when the header has no length
     const fs = rate || buf.sampleRate;
     if (buf.sampleRate > 48000) buf = await decode(copy, 48000);
     const chs = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i).slice());
