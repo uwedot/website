@@ -400,7 +400,9 @@ function sniffRate(u) {
   return rate >= 8000 && rate <= 384000 ? rate : 0;
 }
 
-const MAX_SEC = 15 * 60;
+// Limits scale with the device: phones and low-memory machines get less headroom than desktops
+const LOW = matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4;
+const MAX_SEC = (LOW ? 10 : 15) * 60, MAX_BYTES = (LOW ? 350 : 500) * 2 ** 20;
 const clock = t => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
 
 // Duration from the header (0 if unknown), so an over-long file is rejected before it is decoded
@@ -418,7 +420,7 @@ function sniffDur(u, rate) {
   }
   return 0;
 }
-const tooLong = t => msg(`That track is ${clock(t)} long. The limit is 15 minutes.`, true);
+const tooLong = t => msg(`That track is ${clock(t)} long. The limit is ${MAX_SEC / 60} minutes${LOW ? ' on this device' : ''}.`, true);
 
 function cells(tr, list) {
   tr.replaceChildren(...list.map(([text, cls], i) => {
@@ -508,6 +510,7 @@ async function decode(data, rate) {
 
 async function load(file) {
   if (!EXT.test(file.name)) return msg('Unsupported file. Use WAV, FLAC, AIFF or AIF.', true);
+  if (file.size > MAX_BYTES) return msg(`That file is ${Math.round(file.size / 2 ** 20)} MB. The limit is ${MAX_BYTES / 2 ** 20} MB${LOW ? ' on this device' : ''}.`, true);
   const id = `${file.name}|${file.size}|${file.lastModified}`;
   if (src && src.id === id) return msg('That file is already loaded.', true);
   $('#out').hidden = true; src = res = null; freeResult();
@@ -520,6 +523,7 @@ async function load(file) {
     // Files above 48 kHz decode straight to 48 kHz (one decode, one analysis); anything lower stays native
     let buf = await decode(bytes.buffer, rate > 48000 ? 48000 : rate);
     if (buf.duration > MAX_SEC) return tooLong(buf.duration); // backstop when the header has no length
+    if (buf.duration * buf.numberOfChannels > MAX_SEC * 2) return msg(`A ${buf.numberOfChannels}-channel track of ${clock(buf.duration)} is too much audio${LOW ? ' for this device' : ''}. The limit is ${MAX_SEC / 60} minutes of stereo.`, true);
     const fs = rate || buf.sampleRate;
     if (buf.sampleRate > 48000) buf = await decode(copy, 48000);
     const chs = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i).slice());
@@ -590,5 +594,6 @@ const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
+$('#ds').textContent = `WAV, FLAC, AIFF or AIF, up to ${MAX_SEC / 60} minutes`;
 render();
 </script>
