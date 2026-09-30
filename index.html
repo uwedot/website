@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#121212" />
+  <meta name="theme-color" content="#0a0a0a" />
   <meta name="color-scheme" content="dark" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MISTAPE" />
@@ -16,7 +16,7 @@
   <link rel="manifest" href="icos/site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap" />
   <title>MISTAPE</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -33,24 +33,7 @@
 
 <nav class="nav" aria-label="Site navigation">
   <div class="nav-logo">
-    <span class="nav-logo-name">MISTAPE</span>
-    <span class="nav-logo-sub">Unreleased songs</span>
-  </div>
-
-  <div class="nav-dropdown-container">
-    <button type="button" id="nav-tab-btn" class="nav-dropdown-btn"
-            aria-haspopup="true" aria-expanded="false">
-      <span id="nav-btn-text">Unreleased</span>
-      <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <polyline points="6,9 12,15 18,9" />
-      </svg>
-    </button>
-    <div id="nav-tab-menu" class="nav-dropdown-menu" role="menu">
-      <div class="nav-dropdown-item active" data-tab="all"    role="menuitem">Unreleased</div>
-      <div class="nav-dropdown-item"        data-tab="grails" role="menuitem">Grails</div>
-      <div class="nav-dropdown-item"        data-tab="recent" role="menuitem">Recent</div>
-    </div>
+    <span class="nav-logo-name">MIS<span>TAPE</span></span>
   </div>
 
   <div class="nav-stats" aria-label="Stats">
@@ -63,11 +46,7 @@
     <div class="search-wrap">
       <label for="search-box" class="sr-only">Search songs</label>
       <div class="search-inner">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <circle cx="11" cy="11" r="8" />
-          <path d="m21 21-4.35-4.35" />
-        </svg>
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
         <input id="search-box" class="search-box" type="search"
                placeholder="Search songs…"
                autocomplete="off" spellcheck="false" />
@@ -77,11 +56,7 @@
     <div class="filter-dropdown-container">
       <button type="button" id="quality-filter-btn" class="filter-dots-btn"
               aria-haspopup="true" aria-expanded="false" aria-label="Filter by quality">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="5"  cy="12" r="1.5" />
-          <circle cx="12" cy="12" r="1.5" />
-          <circle cx="19" cy="12" r="1.5" />
-        </svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
       </button>
       <div id="quality-filter-menu" class="filter-dropdown-menu" role="menu">
         <div class="filter-item active" data-quality="unavail"  role="menuitemcheckbox" aria-checked="true">Not available</div>
@@ -91,6 +66,19 @@
         <div class="filter-item active" data-quality="cd"       role="menuitemcheckbox" aria-checked="true">CD quality</div>
         <div class="filter-item active" data-quality="lossless" role="menuitemcheckbox" aria-checked="true">Lossless</div>
       </div>
+    </div>
+  </div>
+
+  <div class="nav-dropdown-container">
+    <button type="button" id="nav-tab-btn" class="nav-dropdown-btn"
+            aria-haspopup="true" aria-expanded="false">
+      <span id="nav-btn-text">Unreleased</span>
+      <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+    </button>
+    <div id="nav-tab-menu" class="nav-dropdown-menu" role="menu">
+      <div class="nav-dropdown-item active" data-tab="all"    role="menuitem">Unreleased</div>
+      <div class="nav-dropdown-item"        data-tab="grails" role="menuitem">Grails</div>
+      <div class="nav-dropdown-item"        data-tab="recent" role="menuitem">Recent</div>
     </div>
   </div>
 
@@ -119,14 +107,8 @@
   <div class="player-controls">
     <button type="button" id="player-play-btn"
             class="player-btn player-play" aria-label="Play">
-      <svg id="player-play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M6.75 5.596a.75.75 0 0 1 1.084-.67l11.5 6.404a.75.75 0 0 1 0 1.34l-11.5 6.404a.75.75 0 0 1-1.084-.67V5.596Z" />
-      </svg>
-      <svg id="player-pause-icon" viewBox="0 0 24 24" fill="currentColor"
-           aria-hidden="true" style="display:none">
-        <rect x="5.5" y="4.5" width="4" height="15" rx="1.25" />
-        <rect x="14.5" y="4.5" width="4" height="15" rx="1.25" />
-      </svg>
+      <svg id="player-play-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" /></svg>
+      <svg id="player-pause-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><rect x="14" y="4" width="4" height="16" rx="1" /><rect x="6" y="4" width="4" height="16" rx="1" /></svg>
     </button>
   </div>
 
@@ -143,11 +125,7 @@
   </div>
 
   <div class="player-volume-wrap">
-    <svg class="player-vol-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M13.5 4.063a.75.75 0 0 0-1.188-.61L7.38 7H4.5A1.5 1.5 0 0 0 3 8.5v7A1.5 1.5 0 0 0 4.5 17h2.88l4.932 3.547A.75.75 0 0 0 13.5 19.937V4.063Z" />
-      <path d="M16.22 8.22a.75.75 0 0 1 1.06 0 7.5 7.5 0 0 1 0 10.607.75.75 0 0 1-1.06-1.06 6 6 0 0 0 0-8.486.75.75 0 0 1 0-1.06Z" />
-      <path d="M17.985 5.985a.75.75 0 0 1 1.061 0 11.25 11.25 0 0 1 0 15.91.75.75 0 1 1-1.06-1.061 9.75 9.75 0 0 0 0-13.788.75.75 0 0 1 0-1.061Z" opacity="0.5" />
-    </svg>
+    <svg class="player-vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /></svg>
     <div class="player-volume" id="player-volume"
          role="slider" aria-label="Volume"
          aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" tabindex="0">
@@ -159,9 +137,7 @@
 
   <button type="button" id="player-close-btn"
           class="player-btn player-close" aria-label="Close player">
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" />
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
   </button>
 </div>
 

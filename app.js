@@ -11,7 +11,11 @@ const UnavailRe = /unavail|not avail/i;
 const ButtonLike = '.nav-dropdown-item, .filter-item, .era-row, .note-toggle';
 const ArrowDir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
 const LoadingHtml = '<div class="loading-msg">Loading songs…</div>';
-const LinksBtnHtml = '<button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false"><span>Links</span><svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg></button>';
+const LinksBtnHtml = '<button type="button" class="song-dropdown-btn" aria-haspopup="true" aria-expanded="false"><span>Links</span><svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>';
+
+const IconAttrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+const PlusIcon = `<svg ${IconAttrs}><path d="M5 12h14"/><path class="v" d="M12 5v14"/></svg>`;
+const ExtIcon = `<svg ${IconAttrs}><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`;
 
 const TabMarkers = {
   grails: ['⭐', '✨'],
@@ -372,7 +376,7 @@ function SongHtml([Name, Quality, LinkString, Notes, LeakDate, AvailLen, RecentE
 
   let LinksHtml = '';
   if (Links.length === 1) {
-    LinksHtml = Anchor('song-link-btn', Links[0], 'View');
+    LinksHtml = Anchor('song-link-btn', Links[0], `View${ExtIcon}`);
   } else if (Links.length > 1) {
     const Items = Links.map((Url, I) => Anchor('song-dropdown-item', Url, `Link ${I + 1}`)).join('');
     LinksHtml = `<div class="song-dropdown">${LinksBtnHtml}<div class="song-dropdown-menu" role="menu">${Items}</div></div>`;
@@ -388,7 +392,7 @@ function SongHtml([Name, Quality, LinkString, Notes, LeakDate, AvailLen, RecentE
     (Version ? Div('song-version-pill', Version[1]) : '') +
     (DisplayQuality ? Div(`song-quality ${GetQualityClass(DisplayQuality)}`, DisplayQuality) : '') +
     (AvailLen ? Div(`song-type ${GetAvailableLengthClass(AvailLen)}`, AvailLen) : '');
-  const NoteToggle = Notes ? '<div class="note-toggle" role="button" tabindex="0" aria-label="Show note"></div>' : '';
+  const NoteToggle = Notes ? `<div class="note-toggle" role="button" tabindex="0" aria-label="Show note">${PlusIcon}</div>` : '';
 
   return `<div class="song-item" role="listitem">${Div('song-num', Num)}<div class="song-body">${TopRow}<div class="song-name" title="${EscapeHtml(Name)}">${EscapeHtml(DisplayName)}</div><div class="song-pills">${Pills}</div></div><div class="song-btns">${PlayBtn}${LinksHtml}${NoteToggle}</div></div>${Notes ? Div('song-note', Notes) : ''}`;
 }
@@ -397,7 +401,7 @@ const SongsHtml = Songs => Songs.map((Song, I) => SongHtml(Song, I + 1)).join(''
 
 function EraHtml(Era, Songs) {
   const Desc = State.EraDescriptions[NormaliseKey(Era)];
-  return `<div class="era-wrap" role="listitem"><div class="era-row" role="button" tabindex="0" aria-expanded="false" data-era="${EscapeHtml(Era)}">${Div('era-row-name', Era)}<div class="era-row-right">${Div('era-pill', Songs.length)}<svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg></div></div><div class="songs-panel">${Desc ? Div('era-desc-block', Desc) : ''}<div class="songs-inner" role="list" aria-label="${EscapeHtml(Era)} songs"></div></div></div>`;
+  return `<div class="era-wrap" role="listitem"><div class="era-row" role="button" tabindex="0" aria-expanded="false" data-era="${EscapeHtml(Era)}">${Div('era-row-name', Era)}<div class="era-row-right">${Div('era-pill', Songs.length)}<svg class="era-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div></div><div class="songs-panel">${Desc ? Div('era-desc-block', Desc) : ''}<div class="songs-inner" role="list" aria-label="${EscapeHtml(Era)} songs"></div></div></div>`;
 }
 
 function BuildVisibleEras(Filter) {
