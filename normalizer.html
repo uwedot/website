@@ -288,22 +288,19 @@ function limiterGain(pk, G, ceil, fs) {
   return g;
 }
 
-function wav(chs, fs, bits) {
-  const n = chs[0].length, c = chs.length, B = bits / 8, len = n * c * B, fl = bits === 32;
+function wav(chs, fs) {
+  const n = chs[0].length, c = chs.length, len = n * c * 3, m = 8388607;
   const buf = new ArrayBuffer(44 + len), v = new DataView(buf);
   const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
   str(0, 'RIFF'); v.setUint32(4, 36 + len, true); str(8, 'WAVEfmt ');
-  v.setUint32(16, 16, true); v.setUint16(20, fl ? 3 : 1, true); v.setUint16(22, c, true);
-  v.setUint32(24, fs, true); v.setUint32(28, fs * c * B, true); v.setUint16(32, c * B, true);
-  v.setUint16(34, bits, true); str(36, 'data'); v.setUint32(40, len, true);
-  const m = 2 ** (bits - 1) - 1;
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, c, true);
+  v.setUint32(24, fs, true); v.setUint32(28, fs * c * 3, true); v.setUint16(32, c * 3, true);
+  v.setUint16(34, 24, true); str(36, 'data'); v.setUint32(40, len, true);
   let o = 44;
   for (let i = 0; i < n; i++) for (let k = 0; k < c; k++) {
-    if (fl) { v.setFloat32(o, chs[k][i], true); o += 4; continue; }
-    let x = Math.round(chs[k][i] * m + (bits === 16 ? Math.random() - Math.random() : 0)); // TPDF dither at 16-bit
+    let x = Math.round(chs[k][i] * m);
     x = x > m ? m : x < -m - 1 ? -m - 1 : x;
-    if (bits === 16) { v.setInt16(o, x, true); o += 2; }
-    else { v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255); o += 3; }
+    v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255); o += 3;
   }
   return buf;
 }
@@ -345,7 +342,7 @@ function run(o) {
   let reduction = 0;
   if (g) { let m = 1; for (let i = 0; i < N; i++) if (g[i] < m) m = g[i]; reduction = -db(m); }
   postMessage({ type: 'status', text: 'Encoding WAV...' });
-  const buf = wav(out, fs, o.bits || 24);
+  const buf = wav(out, fs);
   return { type: 'done', job: o.job, buf, lufs: res.lufs, lra: res.lra, tp, reduction, trim, curve: ds(res.curve) };
 }
 
@@ -389,7 +386,7 @@ const msg = (t, err) => { const m = $('#msg'); m.textContent = t; m.className = 
 
 // Sample rate, bit depth and length from the header (0 when unknown). RIFF chunks are walked, since
 // JUNK, bext or LIST chunks can precede 'fmt ' and move the fields.
-// Output bit depth: 16 or 24 as in the source, 32 (float) for 32-bit sources
+// Source bit depth, for the file info line (exports are always 24-bit)
 const outBits = b => b >= 32 ? 32 : b > 16 ? 24 : b > 0 ? 16 : 24;
 function sniff(u) {
   const none = { rate: 0, dur: 0, bits: 0, ch: 0 };
@@ -554,7 +551,7 @@ function normalize() {
   if (!isFinite(t.lufs) || !isFinite(t.tp)) return msg('Enter a target LUFS and ceiling.', true);
   busy = true; res = null; $('#go').disabled = true; render();
   msg('Normalizing...');
-  worker.postMessage({ job: gen, lufs: t.lufs, tp: t.tp, noBoost: $('#noboost').checked, bits: src.bits });
+  worker.postMessage({ job: gen, lufs: t.lufs, tp: t.tp, noBoost: $('#noboost').checked });
 }
 
 const onWorkerError = e => {
